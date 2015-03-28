@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from metakernel import MetaKernel
-from calysto.language.scheme import scheme
+from calysto_scheme import scheme
 import os
 import sys
 import logging
