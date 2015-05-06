@@ -48,4 +48,4 @@ Planned:
 
 Limitations:
 
-* Currently a couple of magnatudes slower than Python
+* Currently a couple of magnitudes slower than Python
