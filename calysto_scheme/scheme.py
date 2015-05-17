@@ -119,7 +119,7 @@ class Symbol(object):
         elif hasattr(self.name, attr):
             return getattr(self.name, attr)
         else:
-            raise AttributeError
+            raise AttributeError("no such attribute '%s' on '%s'" % (attr, self.name))
 
 SYMBOLS = {}
 CHARS = {}
