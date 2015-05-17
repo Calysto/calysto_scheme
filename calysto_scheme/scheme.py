@@ -13,6 +13,7 @@
 
 from __future__ import division, print_function
 
+from collections import Iterable
 import inspect
 import fractions
 import functools
@@ -977,9 +978,7 @@ def atom_q(item):
     return number_q(item) or symbol_q(item) or string_q(item)
 
 def iter_q(item):
-    # If an item is externally iterable. Scheme in Python
-    # has no such items.
-    return False
+    return isinstance(item, Iterable)
 
 def assq(x, ls):
     while not null_q(ls):
@@ -7655,7 +7654,10 @@ def listify(arg_list):
                 if true_q(string_q(car(arg_list))):
                     return cons(string_to_list(car(arg_list)), listify(cdr(arg_list)))
                 else:
-                    raise Exception("symbol_Map: " + format("cannot use object type '~a' in map", *[get_type(car(arg_list))]))
+                    if true_q(iter_q(car(arg_list))):
+                        return cons(vector_to_list([x for x in iter(car(arg_list))]), listify(cdr(arg_list)))
+                    else:
+                        raise Exception("symbol_Map: " + format("cannot use object type '~a' in map", *[get_type(car(arg_list))]))
 
 def iterate():
     iterator = symbol_undefined
