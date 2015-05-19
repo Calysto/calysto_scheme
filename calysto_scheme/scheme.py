@@ -639,7 +639,7 @@ def divide(*args):
                 current = fractions.Fraction(current, arg)
             return current
     except:
-        return functools.reduce(operator.div, args)
+        return functools.reduce(operator.truediv, args)
 
 def Equal(o1, o2):
     if boolean_q(o1) or boolean_q(o2):
