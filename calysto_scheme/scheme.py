@@ -182,7 +182,15 @@ class cons(object):
 
     def __len__(self):
         if isinstance(self.cdr, cons):
-            return 1 + len(self.cdr)
+            current = self
+            count = 0
+            while isinstance(current, cons):
+                count += 1
+                current = current.cdr
+            if null_q(current):
+                return count
+            else:
+                raise AttributeError("list is not a proper list")
         else:
             return 1
 
