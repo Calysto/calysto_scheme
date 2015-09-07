@@ -233,7 +233,10 @@ MAIN FEATURES
     def repr(self, item):
         if isinstance(item, list): # a scheme vector
             items = " ".join(map(self.repr, item))
-            return "#%d(%s)" % (len(item), items)
+            try:
+                return "#%d(%s)" % (len(item), items)
+            except Exception as e:
+                return str(e)
         elif isinstance(item, scheme.cons): # a scheme list
             if isinstance(item.car, scheme.Symbol):
                 ## HACK: fix me; represent procedues and environments as objs?

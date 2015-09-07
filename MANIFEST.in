@@ -1,0 +1,4 @@
+include setup.py
+recursive-include calysto_scheme *.py
+include README.md
+recursive-include calysto_scheme/images *.png
