@@ -21,7 +21,7 @@
 ;; > (run start-rm)
 
 ;;----------------------------------------------------------------------------
-;; used by scheme CPS, DS, RM, and C# RM code
+;; used by scheme CPS, DS, RM, and Host RM code
 
 (define REP-k
   (lambda-cont2 (v fail)
@@ -48,7 +48,7 @@
 ;;----------------------------------------------------------------------------
 ;; used only by scheme CPS, DS, and RM code
 
-;; dummy versions of functions defined in C# code
+;; dummy versions of functions defined in host code
 (define-native dlr-proc? (lambda (x) #f))
 (define-native dlr-apply apply)
 (define-native dlr-func (lambda (x) x))
@@ -245,7 +245,7 @@
 	'goodbye))))
 
 ;;----------------------------------------------------------------------------
-;; used only by scheme RM and C# RM code
+;; used only by scheme RM and Host RM code
 
 (define execute-string-top
   (lambda (input source)
@@ -294,7 +294,7 @@
 	    (m exp toplevel-env REP-handler fail REP-k)))))))
 
 ;;----------------------------------------------------------------------------
-;; used only by C# RM code
+;; used only by Host RM code
 
 (define try-parse-handler
   (lambda-handler2 (e fail)
@@ -660,7 +660,7 @@
   (lambda (name formals bodies env)
     (let ((trace-depth 0))
       (lambda-proc (args env2 info handler fail k2)
-      (let ((formals-and-args (process-formals-and-args formals args))
+      (let* ((formals-and-args (process-formals-and-args formals args))
 	    (new-formals (car formals-and-args))
 	    (new-args (cdr formals-and-args)))
 	(if (= (length new-args) (length new-formals))
@@ -695,7 +695,7 @@
   (lambda (name formals runt bodies env)
     (let ((trace-depth 0))
       (lambda-proc (args env2 info handler fail k2)
-        (let ((formals-and-args (process-formals-and-args formals args))
+        (let* ((formals-and-args (process-formals-and-args formals args))
 	      (new-formals (car formals-and-args))
 	      (new-args (cdr formals-and-args)))
 	  (if (>= (length args) (length new-formals))
@@ -1971,7 +1971,7 @@
      ((iter? (car arg-list))
       (cons (vector->list (list-native (car arg-list))) (listify (cdr arg-list))))
      (else (error 'map "cannot use object type '~a' in map" 
-		  (get_type (car arg-list))))))) ;; get_type is defined in C#
+		  (get_type (car arg-list))))))) ;; get_type is defined in host
 
 (define* iterate
   (lambda (proc generator env handler fail k)
@@ -2290,8 +2290,24 @@
 
 (define dict-prim
   (lambda-proc (args env2 info handler fail k2)
+     (make-dict (car args) fail
+	(lambda-cont2 (pairs fail)
+	    (k2 (apply dict (list pairs)) fail)))))
+      
+(define* make-dict
+  (lambda (args fail k2)
     (cond
-      (else (k2 (apply dict args) fail)))))
+     ((null? args) (k2 '() fail))
+     ((association? (car args))
+      (make-dict (cdr args) fail
+	 (lambda-cont2 (pairs fail)
+	     (k2 (cons (list (caar args)
+			     (caddar args))
+		       pairs) fail))))
+     (else
+      (make-dict (cdr args) fail
+	 (lambda-cont2 (pairs fail)
+	     (k2 (cons (car args) pairs) fail)))))))
 
 (define property-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -2537,7 +2553,7 @@
 	    )))
       (make-initial-env-extended (map car primitives) (map cadr primitives) (map caddr primitives)))))
 
-;; this is here as a hook for extending environments in C# etc.
+;; this is here as a hook for extending environments in host etc.
 (define-native make-initial-env-extended
   (lambda (names procs docstrings)
     (make-initial-environment names procs docstrings)))
@@ -2550,7 +2566,7 @@
 (define toplevel-env 'undefined)
 
 ;;------------------------------------------------------------------------
-;; C# support
+;; Host support
 
 (define make-external-proc
   (lambda (external-function-object)
@@ -2568,7 +2584,7 @@
 
 (define process-formals-and-args
   (lambda (params vals)
-    ;; params, perhaps an improper list composed of:
+    ;; params, perhaps an improper list, or even a symbol, composed of:
     ;;    var - x
     ;;    var with default value - (x : 7)
     ;;    extra args - (args : *)
@@ -2594,6 +2610,9 @@
     ;; extra-kwargs: (symbol : dict) or #f
     ;; return params and args, stripped of associations
     (cond
+     ((symbol? params) ;; rest
+      (process-params-by-kw oparams assocs extra-args extra-kwargs 
+			    (cons (list params positional-vals) bindings) #f))
      ((null? positional-vals) 
       (process-params-by-kw oparams assocs extra-args extra-kwargs bindings #f))
      ((not (pair? params)) ;; rest
