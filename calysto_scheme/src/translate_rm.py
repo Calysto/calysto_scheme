@@ -86,7 +86,7 @@ class Translator(object):
         elif name == "map":
             return "Map"
         elif name == "=":
-            return "Equal"
+            return "numeric_equal"
         elif name == "<=":
             return "LessThanEqual"
         elif name == "<":
@@ -886,7 +886,7 @@ public class PJScheme:Scheme
         elif (name == "eq?"):
             return "Eq";
         elif (name == "equal?"):
-            return "Equal";
+            return "equal_q";
         elif name == "map":
             return "map"
         elif name == "apply":

@@ -644,9 +644,7 @@ def divide(*args):
     except:
         return functools.reduce(operator.truediv, args)
 
-def Equal(o1, o2):
-    if boolean_q(o1) or boolean_q(o2):
-        return boolean_q(o1) and boolean_q(o2) and o1 is o2
+def numeric_equal(o1, o2):
     return o1 == o2
 
 def equal_q(o1, o2):

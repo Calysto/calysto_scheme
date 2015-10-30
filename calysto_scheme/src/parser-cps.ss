@@ -70,6 +70,11 @@
 
 ;;--------------------------------------------------------------------------
 
+(define id?
+  (lambda (exp)
+    (or (symbol? exp)
+	(association? exp))))
+
 (define-datatype aexpression aexpression?
   (lit-aexp
     (datum anything?)
@@ -125,23 +130,23 @@
     (exps (list-of aexpression?))
     (info source-info?))
   (lambda-aexp
-    (formals (list-of symbol?))
+    (formals (list-of id?))
     (bodies (list-of aexpression?))
     (info source-info?))
   (mu-lambda-aexp
-    (formals (list-of symbol?))
-    (runt symbol?)
+    (formals (list-of id?))
+    (runt id?)
     (bodies (list-of aexpression?))
     (info source-info?))
   (trace-lambda-aexp
     (name symbol?)
-    (formals (list-of symbol?))
+    (formals (list-of id?))
     (bodies (list-of aexpression?))
     (info source-info?))
   (mu-trace-lambda-aexp
     (name symbol?)
-    (formals (list-of symbol?))
-    (runt symbol?)
+    (formals (list-of id?))
+    (runt id?)
     (bodies (list-of aexpression?))
     (info source-info?))
   (app-aexp
@@ -175,6 +180,7 @@
   (lambda (formals)
     (cond
       ((symbol? formals) '())
+      ((association? formals) '())
       ((pair? (cdr formals)) (cons (car formals) (head (cdr formals))))
       (else (list (car formals))))))
 
@@ -182,6 +188,7 @@
   (lambda (formals)
     (cond
       ((symbol? formals) formals)
+      ((association? formals) formals)
       ((pair? (cdr formals)) (last (cdr formals)))
       (else (cdr formals)))))
 
@@ -814,65 +821,6 @@
 		(if (not (,type-tester-name r))
 		  (error 'cases "~a is not a valid ~a" r ',type-name)
 		  (cond ,@new-clauses)))))))))
-
-;;----------------------------------------------------------------------------
-;; temporary
-
-(define-native dd1
-  "(define-datatype thing thing?
-     (thing0)
-     (thing1
-       (f1 thing1-field1?))
-     (thing2
-       (f1 thing2-field1?)
-       (f2 thing2-field2?))
-     (thing3
-       (f1 thing3-field1?)
-       (f2 (list-of thing3-field2?))
-       (f3 thing3-field3?)))")
-
-(define-native cases1
-  "(cases thing (cons x y)
-     (thing0 () b1)
-     (thing1 (f1) b1 b2 b3)
-     (thing2 (f1 f2 . f3) b1 b2 b3)
-     (thing3 args b1 b2 b3)
-     (else d1 d2 d3))")
-
-(define-native dd2
-  "(define-datatype expression expression?
-     (var-exp
-       (id symbol?))
-     (if-exp
-       (test-exp expression?)
-       (then-exp expression?)
-       (else-exp expression?))
-     (lambda-exp
-       (formals (list-of symbol?))
-       (bodies (list-of expression?)))
-     (app-exp
-       (operator expression?)
-       (operands (list-of expression?))))")
-
-(define-native cases2
-  "(cases expression exp
-     (var-exp (id info)
-       (lookup-value id env info handler fail k))
-     (if-exp (test-exp then-exp else-exp info)
-       (m test-exp env handler fail
-	  (lambda (bool fail)
-	    (if bool
-	      (m then-exp env handler fail k)
-	      (m else-exp env handler fail k)))))
-      (lambda-exp (formals bodies info)
-	(k (closure formals bodies env) fail))
-      (app-exp (operator operands info)
-	(m* operands env handler fail
-	  (lambda (args fail)
-	    (m operator env handler fail
-	      (lambda (proc fail)
-		(proc args env info handler fail k))))))
-      (else (error 'm \"bad abstract syntax: ~s\" exp)))")
 
 ;;----------------------------------------------------------------------------
 
