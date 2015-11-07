@@ -432,6 +432,13 @@ class PythonTranslator(Translator):
         return super(PythonTranslator, self).to_ignore() + ["highlight-expression"]
                 
     def translate(self, filename):
+        with open('Scheme.py', 'rb') as fid:
+            for line in fid:
+                line = line.decode('utf-8')
+                if line.startswith('__version__'):
+                    __version__ = line.strip().split()[-1][1:-1]
+                    break
+
         self.fp = open(filename, "w")
         self.preamble()
         for symbol in self.symbols:
@@ -443,7 +450,7 @@ class PythonTranslator(Translator):
             self.process_statement(statement, [], 0)
         self.Print(0, "")
         self.Print(0, "if __name__ == '__main__':")
-        self.Print(4, "print('Calysto Scheme, version 3.0.0')")
+        self.Print(4, "print('Calysto Scheme, version %s')" % __version__)
         self.Print(4, "print('----------------------------')")
         self.Print(4, "print('Use (exit) to exit')")
         self.Print(4, "GLOBALS['toplevel_env'] = make_toplevel_env()")

@@ -7894,15 +7894,7 @@ def make_external_proc(external_function_object):
     return make_proc(b_proc_166_d, external_function_object)
 
 def process_formals_and_args(params, args):
-    positional_args = symbol_undefined
-    assocs = symbol_undefined
-    extra_args = symbol_undefined
-    extra_kwargs = symbol_undefined
-    extra_kwargs = get_extra_kwargs(params)
-    extra_args = get_extra_args(params)
-    assocs = get_all_keyword_associations(args)
-    positional_args = get_all_positional_args(args)
-    return process_args_by_pos(params, params, positional_args, assocs, extra_args, extra_kwargs, symbol_emptylist)
+    return cons(params, args)
 
 def process_args_by_pos(oparams, params, positional_args, assocs, extra_args, extra_kwargs, bindings):
     if true_q(null_q(positional_args)):
@@ -8431,7 +8423,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 3.0.0')
+    print('Calysto Scheme, version 1.0.0')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
