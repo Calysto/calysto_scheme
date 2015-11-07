@@ -39,7 +39,7 @@ if svem_flag in sys.argv:
     # Die, setuptools, die.
     sys.argv.remove(svem_flag)
 
-with open('calysto_scheme/__init__.py', 'rb') as fid:
+with open('calysto_scheme/scheme.py', 'rb') as fid:
     for line in fid:
         line = line.decode('utf-8')
         if line.startswith('__version__'):

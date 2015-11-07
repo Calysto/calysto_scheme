@@ -2584,12 +2584,12 @@
 
 (define process-formals-and-args
   (lambda (params args)
-    (cons params args)))
-    ;; (let ((positional-args (get-all-positional-args args))
-    ;; 	  (assocs (get-all-keyword-associations args))
-    ;; 	  (extra-args (get-extra-args params))
-    ;; 	  (extra-kwargs (get-extra-kwargs params)))
-    ;;   (process-args-by-pos params params positional-args assocs extra-args extra-kwargs '()))))
+    ;;(cons params args)))
+    (let ((positional-args (get-all-positional-args args))
+    	  (assocs (get-all-keyword-associations args))
+    	  (extra-args (get-extra-args params))
+    	  (extra-kwargs (get-extra-kwargs params)))
+      (process-args-by-pos params params positional-args assocs extra-args extra-kwargs '()))))
 
 (define process-args-by-pos
   (lambda (oparams params positional-args assocs extra-args extra-kwargs bindings)

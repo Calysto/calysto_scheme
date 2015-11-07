@@ -18,6 +18,8 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
+__version__ = "1.0.0"
+
 #############################################################
 # Python implementation notes:
 #
@@ -1110,12 +1112,11 @@ def next_item(iter_item):
         return symbol_emptylist
 
 def load_native(filename):
-    GLOBALS["handler_reg"] = REP_handler
-    GLOBALS["k2_reg"] = REP_k
-    GLOBALS['env2_reg'] = toplevel_env
-    GLOBALS['filenames_reg'] = List(filename)
-    GLOBALS['pc'] = load_files
-    trampoline()
+    result = execute_rm('(load "%s")' % filename, symbol_stdin)
+    if true_q(exception_q(result)):
+        handle_exception(result)
+        return False # continue?
+    return True # continue?
 
 def getitem_native(dictionary, item):
     return dictionary[item]

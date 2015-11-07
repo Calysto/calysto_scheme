@@ -26,6 +26,8 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
+__version__ = "1.0.0"
+
 #############################################################
 # Python implementation notes:
 #
@@ -1118,12 +1120,11 @@ def next_item(iter_item):
         return symbol_emptylist
 
 def load_native(filename):
-    GLOBALS["handler_reg"] = REP_handler
-    GLOBALS["k2_reg"] = REP_k
-    GLOBALS['env2_reg'] = toplevel_env
-    GLOBALS['filenames_reg'] = List(filename)
-    GLOBALS['pc'] = load_files
-    trampoline()
+    result = execute_rm('(load "%s")' % filename, symbol_stdin)
+    if true_q(exception_q(result)):
+        handle_exception(result)
+        return False # continue?
+    return True # continue?
 
 def getitem_native(dictionary, item):
     return dictionary[item]
@@ -7893,7 +7894,15 @@ def make_external_proc(external_function_object):
     return make_proc(b_proc_166_d, external_function_object)
 
 def process_formals_and_args(params, args):
-    return cons(params, args)
+    positional_args = symbol_undefined
+    assocs = symbol_undefined
+    extra_args = symbol_undefined
+    extra_kwargs = symbol_undefined
+    extra_kwargs = get_extra_kwargs(params)
+    extra_args = get_extra_args(params)
+    assocs = get_all_keyword_associations(args)
+    positional_args = get_all_positional_args(args)
+    return process_args_by_pos(params, params, positional_args, assocs, extra_args, extra_kwargs, symbol_emptylist)
 
 def process_args_by_pos(oparams, params, positional_args, assocs, extra_args, extra_kwargs, bindings):
     if true_q(null_q(positional_args)):
@@ -8430,7 +8439,8 @@ if __name__ == '__main__':
     import sys
     for filename in sys.argv[1:]:
         if filename.startswith('-'): continue
-        load_native(filename)
+        if load_native(filename): continue
+        break
     if '-i' in sys.argv[1:] or sys.argv[1:] == []:
         read_eval_print_loop_rm()
         print()
