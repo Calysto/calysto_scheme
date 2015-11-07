@@ -582,7 +582,7 @@ def procedure_q(item):
     return pair_q(item) and (car(item) is symbol_procedure)
 
 def symbol_q(item):
-    return isinstance(item, Symbol)
+    return isinstance(item, Symbol) or association_q(item)
 
 def vector_q(item):
     return isinstance(item, list)
@@ -1451,10 +1451,6 @@ symbol_typeof = make_symbol("typeof")
 symbol_use_lexical_address = make_symbol("use-lexical-address")
 symbol_use_tracing = make_symbol("use-tracing")
 symbol_get_id = make_symbol("get-id")
-symbol_process_params_by_kw = make_symbol("process-params-by-kw")
-symbol_clean_up_args = make_symbol("clean-up-args")
-symbol__star_star = make_symbol("**")
-symbol__ = make_symbol("_")
 symbol_empty = make_symbol("empty")
 symbol_instantiate_hat = make_symbol("instantiate^")
 symbol_substitution = make_symbol("substitution")
@@ -1730,7 +1726,7 @@ def b_cont_12_d(adatum, senv, info, handler, fail, k):
     formals_list = symbol_undefined
     name = symbol_undefined
     name = untag_atom_hat(cadr_hat(adatum))
-    formals_list = (value_reg if list_q(value_reg) else cons(last(value_reg), head(value_reg)))
+    formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
     GLOBALS['k_reg'] = make_cont2(b_cont2_16_d, name, value_reg, info, k)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
@@ -1740,7 +1736,7 @@ def b_cont_12_d(adatum, senv, info, handler, fail, k):
 
 def b_cont_13_d(adatum, senv, info, handler, fail, k):
     formals_list = symbol_undefined
-    formals_list = (value_reg if list_q(value_reg) else cons(last(value_reg), head(value_reg)))
+    formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
     GLOBALS['k_reg'] = make_cont2(b_cont2_17_d, value_reg, info, k)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
@@ -2160,7 +2156,7 @@ def b_cont2_15_d(adatum, senv, info, handler, k):
     GLOBALS['pc'] = aparse_all
 
 def b_cont2_16_d(name, formals, info, k):
-    if true_q(list_q(formals)):
+    if true_q((list_q(formals)) and (not(association_q(formals)))):
         GLOBALS['value1_reg'] = trace_lambda_aexp(name, formals, value1_reg, info)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -2170,7 +2166,7 @@ def b_cont2_16_d(name, formals, info, k):
         GLOBALS['pc'] = apply_cont2
 
 def b_cont2_17_d(formals, info, k):
-    if true_q(list_q(formals)):
+    if true_q((list_q(formals)) and (not(association_q(formals)))):
         GLOBALS['value1_reg'] = lambda_aexp(formals, value1_reg, info)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -7265,7 +7261,7 @@ def m():
                                                                 runt = list_ref(exp_reg, 2)
                                                                 formals = list_ref(exp_reg, 1)
                                                                 GLOBALS['value2_reg'] = fail_reg
-                                                                GLOBALS['value1_reg'] = mu_closure(formals, runt, bodies, env_reg)
+                                                                GLOBALS['value1_reg'] = mu_closure(formals, get_symbol(runt), bodies, env_reg)
                                                                 GLOBALS['k_reg'] = k
                                                                 GLOBALS['pc'] = apply_cont2
                                                             else:
@@ -7291,7 +7287,7 @@ def m():
                                                                         formals = list_ref(exp_reg, 2)
                                                                         name = list_ref(exp_reg, 1)
                                                                         GLOBALS['value2_reg'] = fail_reg
-                                                                        GLOBALS['value1_reg'] = mu_trace_closure(name, formals, runt, bodies, env_reg)
+                                                                        GLOBALS['value1_reg'] = mu_trace_closure(name, formals, get_symbol(runt), bodies, env_reg)
                                                                         GLOBALS['k_reg'] = k
                                                                         GLOBALS['pc'] = apply_cont2
                                                                     else:
@@ -7894,22 +7890,15 @@ def make_external_proc(external_function_object):
     return make_proc(b_proc_166_d, external_function_object)
 
 def process_formals_and_args(params, args):
-    return cons(params, args)
+    return cons(process_formals(params), process_args(args, params))
 
-def process_args_by_pos(oparams, params, positional_args, assocs, extra_args, extra_kwargs, bindings):
-    if true_q(null_q(positional_args)):
-        return process_params_by_kw(oparams, assocs, extra_args, extra_kwargs, bindings, False)
-    else:
-        if true_q(null_q(params)):
-            return process_params_by_kw(oparams, assocs, extra_args, extra_kwargs, bindings, positional_args)
-        else:
-            var = symbol_undefined
-            arg = symbol_undefined
-            arg = get_val(car(positional_args))
-            var = get_id(car(params))
-            return process_args_by_pos(oparams, cdr(params), cdr(positional_args), assocs, extra_args, extra_kwargs, snoc(List(var, arg), bindings))
+def process_formals(params):
+    return Map(get_symbol, params)
 
-def get_id(item):
+def process_args(args, params):
+    return args
+
+def get_symbol(item):
     if true_q(association_q(item)):
         return car(item)
     else:
@@ -7918,126 +7907,8 @@ def get_id(item):
         else:
             raise Exception("symbol_get_id: " + format("invalid id ~a", *[item]))
 
-def get_val(item):
-    if true_q(association_q(item)):
-        return caddr(item)
-    else:
-        return item
-
-def process_params_by_kw(params, assocs, extra_args, extra_kwargs, bindings, rest):
-    if true_q(null_q(assocs)):
-        return clean_up_params(params, params, bindings, rest, symbol_emptylist)
-    else:
-        symbol = symbol_undefined
-        arg = symbol_undefined
-        bound = symbol_undefined
-        symbol = get_id(car(assocs))
-        arg = get_val(car(assocs))
-        bound = assq(symbol, bindings)
-        if true_q(bound):
-            raise Exception("symbol_process_params_by_kw: " + format("Parameter ~a has multiple values", *[symbol]))
-        else:
-            return process_params_by_kw(params, cdr(assocs), extra_args, extra_kwargs, cons(List(symbol, arg), bindings), rest)
-
-def clean_up_params(oparams, params, bindings, rest, clean_params):
-    if true_q(null_q(params)):
-        return clean_up_args(oparams, clean_params, bindings, rest, symbol_emptylist)
-    else:
-        return clean_up_params(oparams, cdr(params), bindings, rest, snoc(get_id(car(params)), clean_params))
-
-def clean_up_args(oparams, clean_params, bindings, rest, clean_args):
-    if true_q(null_q(oparams)):
-        if true_q(numeric_equal(length(bindings), 0)):
-            if true_q(rest):
-                return cons(clean_params, append(clean_args, rest))
-            else:
-                return cons(clean_params, clean_args)
-        else:
-            raise Exception("symbol_clean_up_args: " + format("Extra bindings:", *[bindings]))
-    else:
-        symbol = symbol_undefined
-        bound = symbol_undefined
-        symbol = get_id(car(oparams))
-        bound = assq(symbol, bindings)
-        if true_q(bound):
-            return clean_up_args(cdr(oparams), clean_params, remove_from_bindings(car(bound), bindings), rest, cons(cadr(bound), clean_args))
-        else:
-            if true_q(association_q(car(oparams))):
-                return clean_up_args(cdr(oparams), clean_params, bindings, rest, cons(caddar(oparams), clean_args))
-            else:
-                raise Exception("symbol_clean_up_args: " + format("No default value for ~a", *[symbol]))
-
-def remove_from_bindings(symbol, bindings):
-    if true_q(null_q(bindings)):
-        return symbol_emptylist
-    else:
-        if true_q((symbol) is (caar(bindings))):
-            return cdr(bindings)
-        else:
-            return cons(car(bindings), remove_from_bindings(symbol, cdr(bindings)))
-
-def get_extra_args(params):
-    if true_q(null_q(params)):
-        return False
-    else:
-        if true_q(association_q(car(params))):
-            if true_q((caddr(car(params))) is (symbol_multiply)):
-                return List(caar(params), symbol_emptylist)
-            else:
-                return get_extra_args(cdr(params))
-        else:
-            return get_extra_args(cdr(params))
-
-def get_extra_kwargs(params):
-    if true_q(null_q(params)):
-        return False
-    else:
-        if true_q(association_q(car(params))):
-            if true_q((caddr(car(params))) is (symbol__star_star)):
-                return List(caar(params), symbol_emptylist)
-            else:
-                return get_extra_kwargs(cdr(params))
-        else:
-            return get_extra_kwargs(cdr(params))
-
 def association_q(x):
     return (list_q(x)) and (numeric_equal(length(x), 3)) and ((cadr(x)) is (symbol_colon))
-
-def association_pattern_q(pattern, x):
-    if true_q(not((list_q(x)) and (numeric_equal(length(x), 3)) and ((cadr(x)) is (symbol_colon)))):
-        return False
-    else:
-        if true_q(((car(pattern)) is (symbol__)) and ((caddr(pattern)) is (symbol__))):
-            return True
-        else:
-            if true_q(((car(pattern)) is (symbol__)) and ((caddr(pattern)) is (caddr(x)))):
-                return True
-            else:
-                if true_q(((car(pattern)) is (car(x))) and ((caddr(pattern)) is (symbol__))):
-                    return True
-                else:
-                    return False
-
-def get__star_association_args(args):
-    if true_q(null_q(args)):
-        return symbol_emptylist
-    else:
-        if true_q(association_pattern_q(List(symbol_multiply, symbol_colon, symbol__), car(args))):
-            return caddar(args)
-        else:
-            return get__star_association_args(cdr(args))
-
-def get_positional_args(args):
-    if true_q(null_q(args)):
-        return symbol_emptylist
-    else:
-        if true_q(association_pattern_q(List(symbol__, symbol_colon, symbol__), car(args))):
-            return symbol_emptylist
-        else:
-            return cons(car(args), get_positional_args(cdr(args)))
-
-def get_all_positional_args(args):
-    return append(get_positional_args(args), get__star_association_args(args))
 
 def make_associations(dict):
     if true_q(null_q(dict)):
@@ -8048,23 +7919,6 @@ def make_associations(dict):
         value = cadar(dict)
         keyword = caar(dict)
         return cons(List(keyword, symbol_colon, value), make_associations(cdr(dict)))
-
-def get_all_keyword_associations(args):
-    if true_q(null_q(args)):
-        return symbol_emptylist
-    else:
-        if true_q(association_pattern_q(List(symbol_multiply, symbol_colon, symbol__), car(args))):
-            return get_all_keyword_associations(cdr(args))
-        else:
-            if true_q(association_pattern_q(List(symbol__star_star, symbol_colon, symbol__), car(args))):
-                dict = symbol_undefined
-                dict = caddar(args)
-                return append(make_associations(dict), get_all_keyword_associations(cdr(args)))
-            else:
-                if true_q(association_pattern_q(List(symbol__, symbol_colon, symbol__), car(args))):
-                    return cons(car(args), get_all_keyword_associations(cdr(args)))
-                else:
-                    return get_all_keyword_associations(cdr(args))
 
 def pattern_q(x):
     return (null_q(x)) or (number_q(x)) or (boolean_q(x)) or (symbol_q(x)) or ((pair_q(x)) and (pattern_q(car(x))) and (pattern_q(cdr(x))))

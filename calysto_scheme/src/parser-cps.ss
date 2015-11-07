@@ -404,25 +404,25 @@
 	 (unannotate-cps (cadr^ adatum)
 	    (lambda-cont (formals)
 	        (let ((formals-list
-			(if (list? formals)
+			(if (and (list? formals) (not (association? formals)))
 			    formals
 			    (cons (last formals) (head formals)))))
 		  (aparse-all (cddr^ adatum) (cons formals-list senv) handler fail
 		      (lambda-cont2 (bodies fail)
-			 (if (list? formals)
+			 (if (and (list? formals) (not (association? formals)))
 			     (k (lambda-aexp formals bodies info) fail)
 			     (k (mu-lambda-aexp (head formals) (last formals) bodies info) fail))))))))
 	((trace-lambda?^ adatum)
 	 (unannotate-cps (caddr^ adatum)
 	      (lambda-cont (formals)
 		(let ((formals-list
-			(if (list? formals)
+			(if (and (list? formals) (not (association? formals)))
 			    formals
 			    (cons (last formals) (head formals))))
 		      (name (untag-atom^ (cadr^ adatum))))
 		  (aparse-all (cdddr^ adatum) (cons formals-list senv) handler fail
 		      (lambda-cont2 (bodies fail)
-			 (if (list? formals)
+			 (if (and (list? formals) (not (association? formals)))
 			     (k (trace-lambda-aexp name formals bodies info) fail)
 			     (k (mu-trace-lambda-aexp name (head formals) (last formals) bodies info) fail))))))))
 	((try?^ adatum)

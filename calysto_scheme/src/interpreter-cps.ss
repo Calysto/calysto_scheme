@@ -463,11 +463,11 @@
       (lambda-aexp (formals bodies info)
 	(k (closure formals bodies env) fail))
       (mu-lambda-aexp (formals runt bodies info)
-	(k (mu-closure formals runt bodies env) fail))
+	(k (mu-closure formals (get-symbol runt) bodies env) fail))
       (trace-lambda-aexp (name formals bodies info)
 	  (k (trace-closure name formals bodies env) fail))
       (mu-trace-lambda-aexp (name formals runt bodies info)
-	(k (mu-trace-closure name formals runt bodies env) fail))
+	(k (mu-trace-closure name formals (get-symbol runt) bodies env) fail))
       (try-catch-aexp (body cvar cexps info)
 	(let ((new-handler (try-catch-handler cvar cexps env handler k)))
 	  (m body env new-handler fail k)))
@@ -2584,156 +2584,28 @@
 
 (define process-formals-and-args
   (lambda (params args)
-    (cons params args)))
-    ;; (let ((positional-args (get-all-positional-args args))
-    ;; 	  (assocs (get-all-keyword-associations args))
-    ;; 	  (extra-args (get-extra-args params))
-    ;; 	  (extra-kwargs (get-extra-kwargs params)))
-    ;;   (process-args-by-pos params params positional-args assocs extra-args extra-kwargs '()))))
+    (cons
+     (process-formals params)
+     (process-args args params))))
 
-(define process-args-by-pos
-  (lambda (oparams params positional-args assocs extra-args extra-kwargs bindings)
-    ;; Make bindings for all positional args
-    ;; ------------------------------------------
-    (cond
-     ((null? positional-args) ;; no more positional args
-      (process-params-by-kw oparams assocs extra-args extra-kwargs bindings #f))
-     ((null? params) ;; Maybe extra positional-args as rest
-      (process-params-by-kw oparams assocs extra-args extra-kwargs bindings positional-args))
-     (else
-      (let ((var (get-id (car params)))
-	    (arg (get-val (car positional-args))))
-	(process-args-by-pos oparams (cdr params) (cdr positional-args) 
-			       assocs extra-args extra-kwargs 
-			       (snoc (list var arg) bindings)))))))
+(define process-formals
+  (lambda (params)
+    (map get-symbol params)))
 
-(define get-id
+(define process-args
+  (lambda (args params)
+    args))
+
+(define get-symbol
   (lambda (item)
     (cond
      ((association? item) (car item))
      ((symbol? item) item)
      (else (error 'get-id "invalid id ~a" item)))))
 
-(define get-val
-  (lambda (item)
-    (if (association? item) 
-	(caddr item)
-	item)))
-
-(define process-params-by-kw 
-  (lambda (params assocs extra-args extra-kwargs bindings rest)
-    ;; Make bindings for all kwargs
-    ;; ------------------------------------------
-    (cond
-     ((null? assocs)
-      (clean-up-params params params bindings rest '()))
-     (else
-      (let* ((symbol (get-id (car assocs)))
-	     (arg (get-val (car assocs)))
-	     (bound (assq symbol bindings)))
-	(if bound
-	    (error 'process-params-by-kw "Parameter ~a has multiple values" symbol)
-	    (process-params-by-kw params (cdr assocs) extra-args extra-kwargs 
-				  (cons (list symbol arg) bindings) rest)))))))
-
-(define clean-up-params
-  (lambda (oparams params bindings rest clean-params)
-    ;; Replace params with just id
-    ;; ---------------------------------
-    (if (null? params) 
-	(clean-up-args oparams clean-params bindings rest '())
-	(clean-up-params oparams (cdr params) bindings rest
-			 (snoc (get-id (car params))
-			       clean-params)))))
-(define clean-up-args
-  (lambda (oparams clean-params bindings rest clean-args)
-    ;; Return bound values for each param
-    ;; --------------------------------------------
-    ;; return values (or get from default if not specified)
-    ;; params can be improper list
-    (if (null? oparams) ;; FIXME: make sure nothing left in bindings
-	(if (= (length bindings) 0)
-	    (if rest
-		(cons clean-params (append clean-args rest))
-		(cons clean-params clean-args))
-	    (error 'clean-up-args "Extra bindings:" bindings))
-	(let* ((symbol (get-id (car oparams)))
-	       (bound (assq symbol bindings)))
-	  (cond
-	   (bound
-	    (clean-up-args (cdr oparams)
-			   clean-params
-			   (remove-from-bindings (car bound) bindings) 
-			   rest
-			   (cons (cadr bound) clean-args)))
-	   ((association? (car oparams))
-	    (clean-up-args (cdr oparams)
-			   clean-params
-			   bindings
-			   rest
-			   (cons (caddar oparams) clean-args)))
-	   (else
-	    (error 'clean-up-args "No default value for ~a" symbol)))))))
-	    
-(define remove-from-bindings
-  (lambda (symbol bindings)
-    (cond
-     ((null? bindings) '())
-     ((eq? symbol (caar bindings))
-      (cdr bindings))
-     (else (cons (car bindings)
-		 (remove-from-bindings symbol (cdr bindings)))))))
-
-(define get-extra-args
-  (lambda (params)
-    (cond
-      ((null? params) #f)
-      ((association? (car params))
-       (if (eq? (caddr (car params)) '*)
-	   (list (caar params) '()) ;; return symbol/list
-	   (get-extra-args (cdr params))))
-      (else (get-extra-args (cdr params))))))
-
-(define get-extra-kwargs
-  (lambda (params)
-    (cond
-      ((null? params) #f)
-      ((association? (car params))
-       (if (eq? (caddr (car params)) '**)
-	   (list (caar params) '()) ;; return symbol/dict
-	   (get-extra-kwargs (cdr params))))
-      (else (get-extra-kwargs (cdr params))))))
-
 (define association?
   (lambda (x)
     (and (list? x) (= (length x) 3) (eq? (cadr x) ':))))
-
-(define association-pattern?
-  (lambda (pattern x)
-    (cond
-      ((not (and (list? x) (= (length x) 3) (eq? (cadr x) ':))) #f)
-      ((and (eq? (car pattern) '_) (eq? (caddr pattern) '_)) #t)
-      ((and (eq? (car pattern) '_) (eq? (caddr pattern) (caddr x))) #t)
-      ((and (eq? (car pattern) (car x)) (eq? (caddr pattern) '_)) #t)
-      (else #f))))
-
-(define get-*-association-args
-  (lambda (args)
-    (cond
-      ((null? args) '())
-      ((association-pattern? '(* : _) (car args)) (caddar args))
-      (else (get-*-association-args (cdr args))))))
-
-(define get-positional-args
-  (lambda (args)
-    (cond
-      ((null? args) '())
-      ((association-pattern? '(_ : _) (car args)) '())
-      (else (cons (car args) (get-positional-args (cdr args)))))))
-
-(define get-all-positional-args
-  (lambda (args)
-    (append (get-positional-args args) (get-*-association-args args))))
 
 (define make-associations
   (lambda (dict)
@@ -2742,16 +2614,4 @@
       (else (let ((keyword (caar dict))
 		  (value (cadar dict)))
 	      (cons (list keyword ': value) (make-associations (cdr dict))))))))
-
-(define get-all-keyword-associations
-  (lambda (args)
-    (cond
-      ((null? args) '())
-      ((association-pattern? '(* : _) (car args)) (get-all-keyword-associations (cdr args)))
-      ((association-pattern? '(** : _) (car args))
-       (let ((dict (caddar args)))
-	 (append (make-associations dict) (get-all-keyword-associations (cdr args)))))
-      ((association-pattern? '(_ : _) (car args))
-       (cons (car args) (get-all-keyword-associations (cdr args))))
-      (else (get-all-keyword-associations (cdr args))))))
 

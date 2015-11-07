@@ -574,7 +574,7 @@ def procedure_q(item):
     return pair_q(item) and (car(item) is symbol_procedure)
 
 def symbol_q(item):
-    return isinstance(item, Symbol)
+    return isinstance(item, Symbol) or association_q(item)
 
 def vector_q(item):
     return isinstance(item, list)
