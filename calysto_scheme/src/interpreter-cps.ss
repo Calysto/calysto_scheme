@@ -627,7 +627,7 @@
 (define closure
   (lambda (formals bodies env)
     (lambda-proc (args env2 info handler fail k2)
-      (let* ((formals-and-args (process-formals-and-args formals args))
+      (let* ((formals-and-args (process-formals-and-args formals args info handler fail))
 	     (new-formals (car formals-and-args))
 	     (new-args (cdr formals-and-args)))
 	(if (= (length new-args) (length new-formals))
@@ -637,9 +637,11 @@
 (define mu-closure
   (lambda (formals runt bodies env)
     (lambda-proc (args env2 info handler fail k2)
-      (let* ((formals-and-args (process-formals-and-args formals args))
-	     (new-formals (car formals-and-args))
-	     (new-args (cdr formals-and-args)))
+;;      (let* ((formals-and-args (process-formals-and-args formals args info handler fail))
+;;	     (new-formals (car formals-and-args))
+;;	     (new-args (cdr formals-and-args)))
+     (let ((new-formals formals)
+	   (new-args args))
 	(if (>= (length new-args) (length new-formals))
 	    (let ((new-env
 		   (extend env
@@ -660,7 +662,7 @@
   (lambda (name formals bodies env)
     (let ((trace-depth 0))
       (lambda-proc (args env2 info handler fail k2)
-      (let* ((formals-and-args (process-formals-and-args formals args))
+      (let* ((formals-and-args (process-formals-and-args formals args info handler fail))
 	    (new-formals (car formals-and-args))
 	    (new-args (cdr formals-and-args)))
 	(if (= (length new-args) (length new-formals))
@@ -695,9 +697,11 @@
   (lambda (name formals runt bodies env)
     (let ((trace-depth 0))
       (lambda-proc (args env2 info handler fail k2)
-        (let* ((formals-and-args (process-formals-and-args formals args))
-	      (new-formals (car formals-and-args))
-	      (new-args (cdr formals-and-args)))
+;;        (let* ((formals-and-args (process-formals-and-args formals args info handler fail))
+;;	      (new-formals (car formals-and-args))
+;;	      (new-args (cdr formals-and-args)))
+       (let ((new-formals formals)
+	     (new-args args))
 	  (if (>= (length args) (length new-formals))
 	      (let ((new-env
 		     (extend env
@@ -2573,35 +2577,84 @@
     (lambda-proc (args env2 info handler fail k2)
       (k2 (apply* external-function-object args) fail))))
 
-;; Named parameters and varargs:
-
-;; 1. First we gather positional, kwargs, a place for extra
-;;    args, extra kwargs
-;; 2. Go through positional, and assign bindings
-;; 3. Go through kwargs and assign bindings
-;; 4. Go through bindings, use default if one
-;; 5. Return params and args in proper order, no associations (clean-up)
+;; Named parameters, default values, and varargs:
 
 (define process-formals-and-args
-  (lambda (params args)
+  (lambda (params args info handler fail)
     (cons
-     (process-formals params)
-     (process-args args params))))
+     (process-formals params info handler fail)
+     (process-args args params info handler fail))))
 
 (define process-formals
-  (lambda (params)
+  (lambda (params info handler fail)
     (map get-symbol params)))
 
 (define process-args
-  (lambda (args params)
-    args))
+  (lambda (args params info handler fail)
+    ;;(printf "args: ~a params: ~a~%" args params)
+    ;; args))
+    ;; FIXME: (a) ()
+    (let ((retval (get-values-for-params 
+		   params 
+		   (get-arg-associations args params #f info handler fail)
+		   '() info handler fail)))
+      ;;(printf "retval: ~a~%" retval)
+      retval)))
+
+(define get-values-for-params
+  (lambda (params associations used info handler fail)
+    ;; go down params and get values for each
+    ;;(printf "get-values-for-params params: ~a~%" params)
+    ;;(printf "get-values-for-params associations: ~a~%" associations)
+    (cond
+     ((null? params) 
+      (if (and (not (null? associations))
+	       (association? (car associations))
+	       (eq? (caar associations) '*))
+	  (list (get-value (car associations)))
+	  '()))
+     (else 
+      (cons (get-value-from-associations (car params) associations info handler fail)
+	    (get-values-for-params (cdr params)
+				   associations
+				   (cons (car params) used) info handler fail))))))
+
+(define get-value-from-associations
+  (lambda (param associations info handler fail)
+    (let* ((symbol (get-symbol param))
+	   (value (assq symbol associations)))
+      (cond 
+       (value (get-value value))
+       ((association? param) (get-value param))
+       (else (runtime-error (format "missing parameter: ~a" param) info handler fail))))))
+
+(define get-arg-associations
+  (lambda (args params must-be-association info handler fail)
+    (cond
+     ((null? args) '())
+     ((association? (car args)) ;; named arg
+      (cons (car args)
+	    (get-arg-associations (cdr args) params #t info handler fail)))
+     (must-be-association 
+      (runtime-error (format "non-keyword arg following keyword arg: ~a" (car args)) info handler fail))
+     ((null? params) ;; should be a runt FIXME
+      (list (association '* args))) ;; return args, which should values
+     (else (cons
+	    (association (get-symbol (car params)) (car args))
+	    (get-arg-associations (cdr args) (cdr params) #f info handler fail))))))
 
 (define get-symbol
   (lambda (item)
     (cond
      ((association? item) (car item))
      ((symbol? item) item)
-     (else (error 'get-id "invalid id ~a" item)))))
+     (else (error 'get-symbol "invalid symbol ~a" item)))))
+
+(define get-value
+  (lambda (item)
+    (cond
+     ((association? item) (caddr item))
+     (else item))))
 
 (define association?
   (lambda (x)
@@ -2613,5 +2666,5 @@
       ((null? dict) '())
       (else (let ((keyword (caar dict))
 		  (value (cadar dict)))
-	      (cons (list keyword ': value) (make-associations (cdr dict))))))))
+	      (cons (association keyword value) (make-associations (cdr dict))))))))
 

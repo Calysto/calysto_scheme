@@ -831,13 +831,6 @@ def trampoline():
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2            
             except Exception as e:
-                #arginfo = inspect.getargvalues(sys.exc_info()[2].tb_frame)
-                #extra = "\nArguments:\n"
-                #for arg in arginfo.args:
-                #    extra += "   %s = %s\n" % (arg, repr(arginfo.locals[arg]))
-                #extra += "\nLocals:\n"
-                #for arg in arginfo.locals:
-                #    extra += "   %s = %s\n" % (arg, repr(arginfo.locals[arg]))
                 exception_reg = make_exception("UnhandledException", str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
     return final_reg

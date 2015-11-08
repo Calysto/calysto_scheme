@@ -839,13 +839,6 @@ def trampoline():
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2            
             except Exception as e:
-                #arginfo = inspect.getargvalues(sys.exc_info()[2].tb_frame)
-                #extra = "\nArguments:\n"
-                #for arg in arginfo.args:
-                #    extra += "   %s = %s\n" % (arg, repr(arginfo.locals[arg]))
-                #extra += "\nLocals:\n"
-                #for arg in arginfo.locals:
-                #    extra += "   %s = %s\n" % (arg, repr(arginfo.locals[arg]))
                 exception_reg = make_exception("UnhandledException", str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
     return final_reg
@@ -1450,7 +1443,7 @@ symbol_symbol = make_symbol("symbol")
 symbol_typeof = make_symbol("typeof")
 symbol_use_lexical_address = make_symbol("use-lexical-address")
 symbol_use_tracing = make_symbol("use-tracing")
-symbol_get_id = make_symbol("get-id")
+symbol_get_symbol = make_symbol("get-symbol")
 symbol_empty = make_symbol("empty")
 symbol_instantiate_hat = make_symbol("instantiate^")
 symbol_substitution = make_symbol("substitution")
@@ -3128,7 +3121,7 @@ def b_proc_1_d(bodies, formals, env):
     formals_and_args = symbol_undefined
     new_formals = symbol_undefined
     new_args = symbol_undefined
-    formals_and_args = process_formals_and_args(formals, args_reg)
+    formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
     new_formals = car(formals_and_args)
     new_args = cdr(formals_and_args)
     if true_q(numeric_equal(length(new_args), length(new_formals))):
@@ -3141,12 +3134,10 @@ def b_proc_1_d(bodies, formals, env):
         GLOBALS['pc'] = runtime_error
 
 def b_proc_2_d(bodies, formals, runt, env):
-    formals_and_args = symbol_undefined
     new_formals = symbol_undefined
     new_args = symbol_undefined
-    formals_and_args = process_formals_and_args(formals, args_reg)
-    new_formals = car(formals_and_args)
-    new_args = cdr(formals_and_args)
+    new_args = args_reg
+    new_formals = formals
     if true_q(GreaterThanEqual(length(new_args), length(new_formals))):
         new_env = symbol_undefined
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
@@ -3162,7 +3153,7 @@ def b_proc_3_d(bodies, name, trace_depth, formals, env):
     formals_and_args = symbol_undefined
     new_formals = symbol_undefined
     new_args = symbol_undefined
-    formals_and_args = process_formals_and_args(formals, args_reg)
+    formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
     new_formals = car(formals_and_args)
     new_args = cdr(formals_and_args)
     if true_q(numeric_equal(length(new_args), length(new_formals))):
@@ -3177,12 +3168,10 @@ def b_proc_3_d(bodies, name, trace_depth, formals, env):
         GLOBALS['pc'] = runtime_error
 
 def b_proc_4_d(bodies, name, trace_depth, formals, runt, env):
-    formals_and_args = symbol_undefined
     new_formals = symbol_undefined
     new_args = symbol_undefined
-    formals_and_args = process_formals_and_args(formals, args_reg)
-    new_formals = car(formals_and_args)
-    new_args = cdr(formals_and_args)
+    new_args = args_reg
+    new_formals = formals
     if true_q(GreaterThanEqual(length(args_reg), length(new_formals))):
         new_env = symbol_undefined
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
@@ -7889,14 +7878,61 @@ def reset_toplevel_env():
 def make_external_proc(external_function_object):
     return make_proc(b_proc_166_d, external_function_object)
 
-def process_formals_and_args(params, args):
-    return cons(process_formals(params), process_args(args, params))
+def process_formals_and_args(params, args, info, handler, fail):
+    return cons(process_formals(params, info, handler, fail), process_args(args, params, info, handler, fail))
 
-def process_formals(params):
+def process_formals(params, info, handler, fail):
     return Map(get_symbol, params)
 
-def process_args(args, params):
-    return args
+def process_args(args, params, info, handler, fail):
+    retval = symbol_undefined
+    retval = get_values_for_params(params, get_arg_associations(args, params, False, info, handler, fail), symbol_emptylist, info, handler, fail)
+    return retval
+
+def get_values_for_params(params, associations, used, info, handler, fail):
+    if true_q(null_q(params)):
+        if true_q((not(null_q(associations))) and (association_q(car(associations))) and ((caar(associations)) is (symbol_multiply))):
+            return List(get_value(car(associations)))
+        else:
+            return symbol_emptylist
+    else:
+        return cons(get_value_from_associations(car(params), associations, info, handler, fail), get_values_for_params(cdr(params), associations, cons(car(params), used), info, handler, fail))
+
+def get_value_from_associations(param, associations, info, handler, fail):
+    symbol = symbol_undefined
+    value = symbol_undefined
+    symbol = get_symbol(param)
+    value = assq(symbol, associations)
+    if true_q(value):
+        return get_value(value)
+    else:
+        if true_q(association_q(param)):
+            return get_value(param)
+        else:
+            GLOBALS['fail_reg'] = fail
+            GLOBALS['handler_reg'] = handler
+            GLOBALS['info_reg'] = info
+            GLOBALS['msg_reg'] = format("missing parameter: ~a", param)
+            GLOBALS['pc'] = runtime_error
+
+def get_arg_associations(args, params, must_be_association, info, handler, fail):
+    if true_q(null_q(args)):
+        return symbol_emptylist
+    else:
+        if true_q(association_q(car(args))):
+            return cons(car(args), get_arg_associations(cdr(args), params, True, info, handler, fail))
+        else:
+            if true_q(must_be_association):
+                GLOBALS['fail_reg'] = fail
+                GLOBALS['handler_reg'] = handler
+                GLOBALS['info_reg'] = info
+                GLOBALS['msg_reg'] = format("non-keyword arg following keyword arg: ~a", car(args))
+                GLOBALS['pc'] = runtime_error
+            else:
+                if true_q(null_q(params)):
+                    return List(association(symbol_multiply, args))
+                else:
+                    return cons(association(get_symbol(car(params)), car(args)), get_arg_associations(cdr(args), cdr(params), False, info, handler, fail))
 
 def get_symbol(item):
     if true_q(association_q(item)):
@@ -7905,7 +7941,13 @@ def get_symbol(item):
         if true_q(symbol_q(item)):
             return item
         else:
-            raise Exception("symbol_get_id: " + format("invalid id ~a", *[item]))
+            raise Exception("symbol_get_symbol: " + format("invalid symbol ~a", *[item]))
+
+def get_value(item):
+    if true_q(association_q(item)):
+        return caddr(item)
+    else:
+        return item
 
 def association_q(x):
     return (list_q(x)) and (numeric_equal(length(x), 3)) and ((cadr(x)) is (symbol_colon))
@@ -7918,7 +7960,7 @@ def make_associations(dict):
         value = symbol_undefined
         value = cadar(dict)
         keyword = caar(dict)
-        return cons(List(keyword, symbol_colon, value), make_associations(cdr(dict)))
+        return cons(association(keyword, value), make_associations(cdr(dict)))
 
 def pattern_q(x):
     return (null_q(x)) or (number_q(x)) or (boolean_q(x)) or (symbol_q(x)) or ((pair_q(x)) and (pattern_q(car(x))) and (pattern_q(cdr(x))))

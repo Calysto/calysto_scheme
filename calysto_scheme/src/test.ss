@@ -14,12 +14,12 @@
 	    (set! right (+ right 1)))
 	  (begin
 	    (printf "F")
-	    (set! report (cons (format "~a:\n      was: ~s\nshould be: ~s" name ans exp) report))
+	    (set! report (cons (format "~a:\nshould be: ~s\n      was: ~s" name ans exp) report))
 	    (set! wrong (+ wrong 1)))))))
 
 (define verify2
-  (lambda (ans exp)
-    (verify 'test ans equal? exp)))
+  (lambda (name ans exp)
+    (verify name ans equal? exp)))
 
 (printf "Scheme Unit tests~%")
 
@@ -350,36 +350,36 @@
 (verify 'my-even (my-even? 42) eq? #t)
 (verify 'my-odd (my-odd? 43) eq? #t)
 (verify 'my-even (my-even? 43) eq? #f)
-(verify2 '(0 1 4 9 16 25 36 49 64 81) (collect (* n n) for n in (range 10)))
-(verify2 '(25 64 121 196 289) (collect (* n n) for n in (range 5 20 3)))
-(verify2 '(36 49 64 81) (collect (* n n) for n in (range 10) if (> n 5)))
-(verify2 5 (begin (define hello 0)
+(verify2 'test-1 '(0 1 4 9 16 25 36 49 64 81) (collect (* n n) for n in (range 10)))
+(verify2 'test-2 '(25 64 121 196 289) (collect (* n n) for n in (range 5 20 3)))
+(verify2 'test-3 '(36 49 64 81) (collect (* n n) for n in (range 10) if (> n 5)))
+(verify2 'test-4 5 (begin (define hello 0)
 		 (for 5 times do (set! hello (+ hello 1)))
 		 hello))
-(verify2 'done (for sym in '(a b c d) do (define x 1) (set! x sym) x))
-(verify2 'done (for n in (range 10 20 2) do n))
-(verify2 'done (for n at (i j) in matrix2d do (list n 'coords: i j)))
-(verify2 'done (for n at (i j k) in matrix3d do (list n 'coords: i j k)))
-(verify2 120 (! 5))
-(verify2 3628800 (nth 10 facts))
-(verify2 10946 (nth 20 fibs))
-(verify2 '(1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+(verify2 'test-5 'done (for sym in '(a b c d) do (define x 1) (set! x sym) x))
+(verify2 'test-6 'done (for n in (range 10 20 2) do n))
+(verify2 'test-7 'done (for n at (i j) in matrix2d do (list n 'coords: i j)))
+(verify2 'test-8 'done (for n at (i j k) in matrix3d do (list n 'coords: i j k)))
+(verify2 'test-9 120 (! 5))
+(verify2 'test-10 3628800 (nth 10 facts))
+(verify2 'test-11 10946 (nth 20 fibs))
+(verify2 'test-12 '(1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
 	    6765 10946 17711 28657 46368 75025 121393 196418 317811 514229 832040)
         (first 30 fibs))
 
 (define test-mu-lambda
   (lambda ()
-    (verify2 '(1 2 3 4 5)
+    (verify2 'test-13 '(1 2 3 4 5)
       ((lambda x x) 1 2 3 4 5))
-    (verify2 '(1 (2 3 4 5))
+    (verify2 'test-13-1 '(1 (2 3 4 5))
       ((lambda (x . y) (list x y)) 1 2 3 4 5))
-    (verify2 '(1 2 (3 4 5))
+    (verify2 'test-14 '(1 2 (3 4 5))
       ((lambda (a b . z) (list a b z)) 1 2 3 4 5))
-    (verify2 '(1 2 (3))
+    (verify2 'test-15 '(1 2 (3))
       ((lambda (a b . z) (list a b z)) 1 2 3))
-    (verify2 '(1 2 ())
+    (verify2 'test-16 '(1 2 ())
       ((lambda (a b . z) (list a b z)) 1 2))
-    (verify2 "not enough arguments given"
+    (verify2 'test-17 "not enough arguments given"
       (try ((lambda (a b . z) (list a b z)) 1)
 	       (catch e e "not enough arguments given")))
     ))
@@ -391,85 +391,85 @@
     (define (f3 . x) (list x))
     (define (f4 a b c . x) (list a b c x))
     (define (f5 a b c x) (list a b c x))
-    (verify2 '((1 2 3) (42) ((1 2 3)) (1 2 3 (4 5)) (1 2 3 4))
+    (verify2 'test-18 '((1 2 3) (42) ((1 2 3)) (1 2 3 (4 5)) (1 2 3 4))
       (list (f1 1 2 3) (f2) (f3 1 2 3) (f4 1 2 3 4 5) (f5 1 2 3 4)))))
 
 (define test-call/cc
   (lambda ()
-    (verify2 40
+    (verify2 'test-19 40
       (* 10 (call/cc (lambda (k) 4))))
-    (verify2 40
+    (verify2 'test-20 40
       (* 10 (call/cc (lambda (k) (+ 1 (k 4))))))
-    (verify2 50
+    (verify2 'test-21 50
       (* 10 (call/cc (lambda (k) (+ 1 (call/cc (lambda (j) (+ 2 (j (k 5))))))))))
-    (verify2 60
+    (verify2 'test-22 60
       (* 10 (call/cc (lambda (k) (+ 1 (call/cc (lambda (j) (+ 2 (k (j 5))))))))))))
 
 (define test-try
   (lambda ()
-    (verify2 3
+    (verify2 'test-23 3
       (try 3))
-    (verify2 3
+    (verify2 'test-24 3
       (try 3 (finally 'yes 4)))
-    (verify2 'yes
+    (verify2 'test-25 'yes
       (try (raise 'yes) (catch e e)))
-    (verify2 'yes
+    (verify2 'test-26 'yes
       (try (try (raise 'yes)) (catch e e)))
-    (verify2 'oops
+    (verify2 'test-27 'oops
       (try (try (begin 'one (raise 'oops) 'two)) (catch e e)))
-    (verify2 40
+    (verify2 'test-28 40
       (* 10 (try (begin 'one (raise 'oops) 'two)
             (catch ex 3 4))))
-    (verify2 50
+    (verify2 'test-29 50
       (* 10 (try (begin 'one 'two 5)
             (catch ex 3 4))))
-    (verify2 40
+    (verify2 'test-30 40
       (* 10 (try (begin 'one (raise 'oops) 5)
             (catch ex (list 'ex: ex) 4))))
-    (verify2 'oops
+    (verify2 'test-31 'oops
       (try (* 10 (try (begin 'one (raise 'oops) 5)
             (catch ex (list 'ex: ex) (raise ex) 4))) (catch e e)))
-    (verify2 'oops
+    (verify2 'test-32 'oops
       (try (* 10 (try (begin 'one (raise 'oops) 5)
               (catch ex (list 'ex: ex) (raise ex) 4)
               (finally 'two 7))) (catch e e)))
-    (verify2 77
+    (verify2 'test-33 77
       (try (* 10 (try (begin 'one (raise 'oops) 5)
 		      (catch ex (list 'ex: ex) (raise 'bar) 4)))
 	   (catch x 'hello 77)))
-    (verify2 3
+    (verify2 'test-34 3
       (try 3 (finally 'hi 4)))
-    (verify2 5
+    (verify2 'test-35 5
       (div 10 2))
-    (verify2 "division by zero"
+    (verify2 'test-36 "division by zero"
       (try (div 10 0) (catch e (cadr e))))
-    (verify2 "division by zero"
+    (verify2 'test-37 "division by zero"
       (try (let ((x (try (div 10 0)))) x) (catch e (cadr e))))
-    (verify2 5
+    (verify2 'test-38 5
       (let ((x (try (div 10 2) (catch e -1)))) x))
-    (verify2 -1
+    (verify2 'test-39 -1
       (let ((x (try (div 10 0) (catch e -1)))) x))
-    (verify2 5
+    (verify2 'test-40 5
       (let ((x (try (div 10 2) (catch e -1) (finally 'closing-files 42))))  x))
-    (verify2 -1
+    (verify2 'test-41 -1
       (let ((x (try (div 10 0) (catch e -1) (finally 'closing-files 42))))  x))
-    (verify2 5
+    (verify2 'test-42 5
       (let ((x (try (div 10 2) (finally 'closing-files 42))))  x))
-    (verify2 'foo
+    (verify2 'test-43 'foo
       (try (let ((x (try (div 10 0) (catch e -1 (raise 'foo)) (finally 'closing-files 42))))  x) (catch e e)))
-    (verify2 'ack
+    (verify2 'test-44 'ack
       (try (let ((x (try (div 10 0)
                 (catch e -1 (raise 'foo))
                 (finally 'closing-files (raise 'ack) 42))))
        x) (catch e e)))
-    (verify2 99
+    (verify2 'test-45 99
       (try (let ((x (try (div 10 0)
                      (catch e -1 (raise 'foo))
                      (finally 'closing-files (raise 'ack) 42))))
             x)
        (catch e (if (equal? e 'ack) 99 (raise 'doug)))
        (finally 'closing-outer-files)))
-    (verify2 'doug
+    (verify2 'test-46 'doug
       (try (try (let ((x (try (div 10 0)
                      (catch e -1 (raise 'foo))
                      (finally 'closing-files (raise 'ack) 42))))
@@ -480,7 +480,7 @@
 
 (define test-loop
   (lambda ()
-    (verify2 'blastoff! (try (let loop ((n 5))
+    (verify2 'test-47 'blastoff! (try (let loop ((n 5))
                             n
                             (if (= n 0)
                                 (raise 'blastoff!))
@@ -488,22 +488,22 @@
                 (catch e e)))))
 
 (define (test-macros)
-  (verify2 #t
+  (verify2 'test-48 #t
     (let ((bool 5))
       (or (= bool 4) (= bool 5))))
-  (verify2 6
+  (verify2 'test-49 6
     (let ((bool 5))
       (or (= bool 4) 6)))
-  (verify2 #f
+  (verify2 'test-50 #f
     (let ((bool 5))
       (and (= bool 5) (> bool 0) (= bool 4))))
-  (verify2 5
+  (verify2 'test-51 5
     (let ((r 5))
       (case 'banana
 	(apple 'no)
 	((cherry banana) 1 2 r)
 	(else 'no))))
-  (verify2 '((6) orange 5)
+  (verify2 'test-52 '((6) orange 5)
     (let ((r 5))
       (record-case (cons 'banana (cons 'orange (cons (* 2 3) '())))
 	(apple (a b c) (list c b a r))
@@ -548,6 +548,24 @@
 (verify 'define-datatype-8 (un-parse (lambda-exp 'a (var-exp 'a))) equal? '(a (var-exp a)))
 (verify 'define-datatype-8 (un-parse (app-exp (lambda-exp 'a (var-exp 'a)) (var-exp 'a))) equal? '((lambda-exp a (var-exp a)) (var-exp a)))
 
+;; ---------------------------------------------------------------
+;; named parameters and defaults
+
+(verify2 'default-1 1 ((lambda ((n : 1)) n)))
+(verify2 'default-2 2 ((lambda ((n : 2)) n)))
+(verify2 'default-3 3 ((lambda ((n : 1)) n) 3))
+
+(verify2 'named-1 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 3))
+(verify2 'named-2 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 (c : 3)))
+(verify2 'named-3 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (b : 2) (c : 3)))
+(verify2 'named-4 '(1 2 3) ((lambda (a b c) (list a b c)) (a : 1) (b : 2) (c : 3)))
+(verify2 'named-5 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (c : 3) (b : 2)))
+
+(verify2 'default-named-1 3 ((lambda ((n : 1)) n) (n : 3)))
+
+;; ---------------------------------------------------------------
+;; choose
+
 (define distinct?
   (lambda (nums)
     (or (null? nums)
@@ -579,6 +597,8 @@
 
 (verify 'choose (floors2) equal? '((baker: 3) (cooper: 2) (fletcher: 4) (miller: 5) (smith: 1)))
 
+;; ---------------------------------------------------------------
+;; results
 (newline)
 (for-each (lambda (m) (printf "~a ~%" m)) (reverse report))
 (printf "~%Results:~%    right = ~s~%    wrong = ~s ~%" right wrong)
