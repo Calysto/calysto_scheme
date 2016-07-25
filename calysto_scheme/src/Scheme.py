@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 #############################################################
 # Python implementation notes:
@@ -972,7 +972,7 @@ def vector_set_b(vec, pos, value):
 def eqv_q(a, b):
     if number_q(a) and number_q(b):
         # but be same type, and value
-        return type(a) == type(b) and eq_q(a, b)
+        return type(a) == type(b) and a == b
     elif char_q(a) and char_q(b):
         return a.char == b.char
     else:

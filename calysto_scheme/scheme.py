@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 #############################################################
 # Python implementation notes:
@@ -980,7 +980,7 @@ def vector_set_b(vec, pos, value):
 def eqv_q(a, b):
     if number_q(a) and number_q(b):
         # but be same type, and value
-        return type(a) == type(b) and eq_q(a, b)
+        return type(a) == type(b) and a == b
     elif char_q(a) and char_q(b):
         return a.char == b.char
     else:
@@ -1667,23 +1667,23 @@ def b_cont_3_d(x, info, k):
     GLOBALS['x_reg'] = cdr(x)
     GLOBALS['pc'] = annotate_cps
 
-def b_cont_4_d(k):
-    GLOBALS['value_reg'] = list_to_vector(value_reg)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont
-
-def b_cont_5_d(v1, k):
+def b_cont_4_d(v1, k):
     GLOBALS['value_reg'] = cons(v1, value_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_6_d(x, k):
-    GLOBALS['k_reg'] = make_cont(b_cont_5_d, value_reg, k)
+def b_cont_5_d(x, k):
+    GLOBALS['k_reg'] = make_cont(b_cont_4_d, value_reg, k)
     GLOBALS['x_reg'] = cdr(x)
     GLOBALS['pc'] = unannotate_cps
 
+def b_cont_6_d(k):
+    GLOBALS['value_reg'] = list_to_vector(value_reg)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont
+
 def b_cont_7_d(x, k):
-    GLOBALS['k_reg'] = make_cont(b_cont_5_d, value_reg, k)
+    GLOBALS['k_reg'] = make_cont(b_cont_4_d, value_reg, k)
     GLOBALS['x_reg'] = caddr(x)
     GLOBALS['pc'] = unannotate_cps
 
@@ -1720,7 +1720,7 @@ def b_cont_12_d(adatum, senv, info, handler, fail, k):
     name = symbol_undefined
     name = untag_atom_hat(cadr_hat(adatum))
     formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
-    GLOBALS['k_reg'] = make_cont2(b_cont2_16_d, name, value_reg, info, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_9_d, name, value_reg, info, k)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = cons(formals_list, senv)
@@ -1730,20 +1730,14 @@ def b_cont_12_d(adatum, senv, info, handler, fail, k):
 def b_cont_13_d(adatum, senv, info, handler, fail, k):
     formals_list = symbol_undefined
     formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
-    GLOBALS['k_reg'] = make_cont2(b_cont2_17_d, value_reg, info, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_18_d, value_reg, info, k)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = cons(formals_list, senv)
     GLOBALS['adatum_list_reg'] = cddr_hat(adatum)
     GLOBALS['pc'] = aparse_all
 
-def b_cont_14_d(aclauses, name, info, fail, k):
-    GLOBALS['value2_reg'] = fail
-    GLOBALS['value1_reg'] = define_syntax_aexp(name, value_reg, aclauses, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont_15_d(senv, info, handler, fail, k):
+def b_cont_14_d(senv, info, handler, fail, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
@@ -1751,11 +1745,17 @@ def b_cont_15_d(senv, info, handler, fail, k):
     GLOBALS['adatum_reg'] = replace_info(value_reg, info)
     GLOBALS['pc'] = aparse
 
-def b_cont_16_d(senv, info, handler, fail, k):
-    GLOBALS['k_reg'] = make_cont(b_cont_15_d, senv, info, handler, fail, k)
+def b_cont_15_d(senv, info, handler, fail, k):
+    GLOBALS['k_reg'] = make_cont(b_cont_14_d, senv, info, handler, fail, k)
     GLOBALS['info_reg'] = symbol_none
     GLOBALS['x_reg'] = value_reg
     GLOBALS['pc'] = annotate_cps
+
+def b_cont_16_d(aclauses, name, info, fail, k):
+    GLOBALS['value2_reg'] = fail
+    GLOBALS['value1_reg'] = define_syntax_aexp(name, value_reg, aclauses, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
 
 def b_cont_17_d(adatum, senv, info, handler, fail, k):
     if true_q(original_source_info_q(adatum)):
@@ -1781,13 +1781,13 @@ def b_cont_18_d(adatum, senv, info, handler, fail, k):
 
 def b_cont_19_d(info, fail, k):
     GLOBALS['value2_reg'] = fail
-    GLOBALS['value1_reg'] = lit_aexp(cadr(value_reg), info)
+    GLOBALS['value1_reg'] = lit_aexp(value_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
 def b_cont_20_d(info, fail, k):
     GLOBALS['value2_reg'] = fail
-    GLOBALS['value1_reg'] = lit_aexp(value_reg, info)
+    GLOBALS['value1_reg'] = lit_aexp(cadr(value_reg), info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
@@ -1904,55 +1904,55 @@ def b_cont_33_d(depth, k):
     GLOBALS['ax_reg'] = value_reg
     GLOBALS['pc'] = qq_expand_cps
 
-def b_cont_34_d(ax, k):
-    GLOBALS['value_reg'] = append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont
-
-def b_cont_35_d(k):
+def b_cont_34_d(k):
     GLOBALS['value_reg'] = append(List(symbol_cons), append(List(append(List(symbol_quote), List(symbol_quasiquote))), List(value_reg)))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_36_d(v1, k):
-    GLOBALS['value_reg'] = append(List(symbol_List), List(append(List(symbol_append), append(List(v1), List(value_reg)))))
+def b_cont_35_d(ax, k):
+    GLOBALS['value_reg'] = append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_37_d(ax, depth, k):
-    GLOBALS['k_reg'] = make_cont(b_cont_36_d, value_reg, k)
-    GLOBALS['depth_reg'] = depth
-    GLOBALS['ax_reg'] = cdr_hat(ax)
-    GLOBALS['pc'] = qq_expand_cps
-
-def b_cont_38_d(k):
+def b_cont_36_d(k):
     GLOBALS['value_reg'] = append(List(symbol_List), List(value_reg))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_39_d(ax, k):
-    GLOBALS['value_reg'] = append(List(symbol_List), List(append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))))
+def b_cont_37_d(v1, k):
+    GLOBALS['value_reg'] = append(List(symbol_List), List(append(List(symbol_append), append(List(v1), List(value_reg)))))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_40_d(k):
+def b_cont_38_d(ax, depth, k):
+    GLOBALS['k_reg'] = make_cont(b_cont_37_d, value_reg, k)
+    GLOBALS['depth_reg'] = depth
+    GLOBALS['ax_reg'] = cdr_hat(ax)
+    GLOBALS['pc'] = qq_expand_cps
+
+def b_cont_39_d(k):
     GLOBALS['value_reg'] = append(List(symbol_List), List(append(List(symbol_cons), append(List(append(List(symbol_quote), List(symbol_quasiquote))), List(value_reg)))))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont
 
-def b_cont_41_d(args, handler, fail, k2):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_76_d, args, handler, k2)
-    GLOBALS['fail_reg'] = fail
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = initial_contours(cadr(args))
-    GLOBALS['adatum_reg'] = value_reg
-    GLOBALS['pc'] = aparse
+def b_cont_40_d(ax, k):
+    GLOBALS['value_reg'] = append(List(symbol_List), List(append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))))
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont
 
-def b_cont_42_d(handler, fail, k2):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_77_d, handler, k2)
+def b_cont_41_d(handler, fail, k2):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_76_d, handler, k2)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = initial_contours(toplevel_env)
+    GLOBALS['adatum_reg'] = value_reg
+    GLOBALS['pc'] = aparse
+
+def b_cont_42_d(args, handler, fail, k2):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_77_d, args, handler, k2)
+    GLOBALS['fail_reg'] = fail
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = initial_contours(cadr(args))
     GLOBALS['adatum_reg'] = value_reg
     GLOBALS['pc'] = aparse
 
@@ -2088,67 +2088,16 @@ def b_cont2_6_d(adatum, senv, info, handler, k):
     GLOBALS['pc'] = aparse_all
 
 def b_cont2_7_d(info, k):
-    GLOBALS['value1_reg'] = choose_aexp(value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_8_d(info, k):
     GLOBALS['value1_reg'] = raise_aexp(value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_9_d(cexps, cvar, body, info, k):
-    GLOBALS['value1_reg'] = try_catch_finally_aexp(body, cvar, cexps, value1_reg, info)
+def b_cont2_8_d(info, k):
+    GLOBALS['value1_reg'] = choose_aexp(value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_10_d(adatum, cvar, senv, body, info, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_9_d, value1_reg, cvar, body, info, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = senv
-    GLOBALS['adatum_list_reg'] = try_catch_finally_exps_hat(adatum)
-    GLOBALS['pc'] = aparse_all
-
-def b_cont2_11_d(adatum, senv, info, handler, k):
-    cvar = symbol_undefined
-    cvar = catch_var_hat(adatum)
-    GLOBALS['k_reg'] = make_cont2(b_cont2_10_d, adatum, cvar, senv, value1_reg, info, handler, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = cons(List(cvar), senv)
-    GLOBALS['adatum_list_reg'] = catch_exps_hat(adatum)
-    GLOBALS['pc'] = aparse_all
-
-def b_cont2_12_d(body, info, k):
-    GLOBALS['value1_reg'] = try_finally_aexp(body, value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_13_d(adatum, senv, info, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_12_d, value1_reg, info, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = senv
-    GLOBALS['adatum_list_reg'] = try_finally_exps_hat(adatum)
-    GLOBALS['pc'] = aparse_all
-
-def b_cont2_14_d(cvar, body, info, k):
-    GLOBALS['value1_reg'] = try_catch_aexp(body, cvar, value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_15_d(adatum, senv, info, handler, k):
-    cvar = symbol_undefined
-    cvar = catch_var_hat(adatum)
-    GLOBALS['k_reg'] = make_cont2(b_cont2_14_d, cvar, value1_reg, info, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = cons(List(cvar), senv)
-    GLOBALS['adatum_list_reg'] = catch_exps_hat(adatum)
-    GLOBALS['pc'] = aparse_all
-
-def b_cont2_16_d(name, formals, info, k):
+def b_cont2_9_d(name, formals, info, k):
     if true_q((list_q(formals)) and (not(association_q(formals)))):
         GLOBALS['value1_reg'] = trace_lambda_aexp(name, formals, value1_reg, info)
         GLOBALS['k_reg'] = k
@@ -2158,7 +2107,63 @@ def b_cont2_16_d(name, formals, info, k):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
 
-def b_cont2_17_d(formals, info, k):
+def b_cont2_10_d(body, info, k):
+    GLOBALS['value1_reg'] = try_finally_aexp(body, value1_reg, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_11_d(adatum, senv, info, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_10_d, value1_reg, info, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = senv
+    GLOBALS['adatum_list_reg'] = try_finally_exps_hat(adatum)
+    GLOBALS['pc'] = aparse_all
+
+def b_cont2_12_d(cexps, cvar, body, info, k):
+    GLOBALS['value1_reg'] = try_catch_finally_aexp(body, cvar, cexps, value1_reg, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_13_d(adatum, cvar, senv, body, info, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_12_d, value1_reg, cvar, body, info, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = senv
+    GLOBALS['adatum_list_reg'] = try_catch_finally_exps_hat(adatum)
+    GLOBALS['pc'] = aparse_all
+
+def b_cont2_14_d(adatum, senv, info, handler, k):
+    cvar = symbol_undefined
+    cvar = catch_var_hat(adatum)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_13_d, adatum, cvar, senv, value1_reg, info, handler, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = cons(List(cvar), senv)
+    GLOBALS['adatum_list_reg'] = catch_exps_hat(adatum)
+    GLOBALS['pc'] = aparse_all
+
+def b_cont2_15_d(cvar, body, info, k):
+    GLOBALS['value1_reg'] = try_catch_aexp(body, cvar, value1_reg, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_16_d(adatum, senv, info, handler, k):
+    cvar = symbol_undefined
+    cvar = catch_var_hat(adatum)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_15_d, cvar, value1_reg, info, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = cons(List(cvar), senv)
+    GLOBALS['adatum_list_reg'] = catch_exps_hat(adatum)
+    GLOBALS['pc'] = aparse_all
+
+def b_cont2_17_d(info, k):
+    GLOBALS['value1_reg'] = begin_aexp(value1_reg, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_18_d(formals, info, k):
     if true_q((list_q(formals)) and (not(association_q(formals)))):
         GLOBALS['value1_reg'] = lambda_aexp(formals, value1_reg, info)
         GLOBALS['k_reg'] = k
@@ -2167,11 +2172,6 @@ def b_cont2_17_d(formals, info, k):
         GLOBALS['value1_reg'] = mu_lambda_aexp(head(formals), last(formals), value1_reg, info)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
-
-def b_cont2_18_d(info, k):
-    GLOBALS['value1_reg'] = begin_aexp(value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
 
 def b_cont2_19_d(adatum, info, k):
     GLOBALS['value1_reg'] = define_b_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
@@ -2183,30 +2183,30 @@ def b_cont2_20_d(adatum, info, k):
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_21_d(adatum, info, k):
-    GLOBALS['value1_reg'] = define_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_22_d(adatum, info, k):
-    GLOBALS['value1_reg'] = define_aexp(define_var_hat(adatum), "", value1_reg, info)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_23_d(info, k):
+def b_cont2_21_d(info, k):
     GLOBALS['value1_reg'] = callback_aexp(value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_24_d(info, k):
-    GLOBALS['value1_reg'] = func_aexp(value1_reg, info)
+def b_cont2_22_d(adatum, info, k):
+    GLOBALS['value1_reg'] = define_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_25_d(adatum, info, k):
+def b_cont2_23_d(adatum, info, k):
+    GLOBALS['value1_reg'] = define_aexp(define_var_hat(adatum), "", value1_reg, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_24_d(adatum, info, k):
     var_info = symbol_undefined
     var_info = get_source_info(cadr_hat(adatum))
     GLOBALS['value1_reg'] = association_aexp(untag_atom_hat(car_hat(adatum)), value1_reg, var_info, info)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_25_d(info, k):
+    GLOBALS['value1_reg'] = func_aexp(value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
@@ -2217,34 +2217,34 @@ def b_cont2_26_d(adatum, info, k):
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_27_d(v1, v2, info, k):
-    GLOBALS['value1_reg'] = if_aexp(v1, v2, value1_reg, info)
+def b_cont2_27_d(v1, info, k):
+    GLOBALS['value1_reg'] = if_aexp(v1, value1_reg, lit_aexp(False, symbol_none), info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_28_d(adatum, senv, v1, info, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_27_d, v1, value1_reg, info, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['senv_reg'] = senv
-    GLOBALS['adatum_reg'] = cadddr_hat(adatum)
-    GLOBALS['pc'] = aparse
-
-def b_cont2_29_d(adatum, senv, info, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_28_d, adatum, senv, value1_reg, info, handler, k)
+def b_cont2_28_d(adatum, senv, info, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_27_d, value1_reg, info, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = senv
     GLOBALS['adatum_reg'] = caddr_hat(adatum)
     GLOBALS['pc'] = aparse
 
-def b_cont2_30_d(v1, info, k):
-    GLOBALS['value1_reg'] = if_aexp(v1, value1_reg, lit_aexp(False, symbol_none), info)
+def b_cont2_29_d(v1, v2, info, k):
+    GLOBALS['value1_reg'] = if_aexp(v1, v2, value1_reg, info)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
+def b_cont2_30_d(adatum, senv, v1, info, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_29_d, v1, value1_reg, info, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['senv_reg'] = senv
+    GLOBALS['adatum_reg'] = cadddr_hat(adatum)
+    GLOBALS['pc'] = aparse
+
 def b_cont2_31_d(adatum, senv, info, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_30_d, value1_reg, info, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_30_d, adatum, senv, value1_reg, info, handler, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = senv
@@ -2485,13 +2485,7 @@ def b_cont2_58_d(fexps, env, handler, k):
     GLOBALS['exps_reg'] = fexps
     GLOBALS['pc'] = eval_sequence
 
-def b_cont2_59_d(aclauses, clauses, k):
-    set_binding_value_b(value1_reg, make_pattern_macro_hat(clauses, aclauses))
-    GLOBALS['value1_reg'] = void_value
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_60_d(docstring, var, k):
+def b_cont2_59_d(docstring, var, k):
     if true_q(procedure_object_q(value1_reg)):
         set_global_value_b(var, dlr_func(value1_reg))
     else:
@@ -2501,22 +2495,13 @@ def b_cont2_60_d(docstring, var, k):
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_61_d(docstring, rhs_value, k):
-    set_binding_value_b(value1_reg, rhs_value)
-    set_binding_docstring_b(value1_reg, docstring)
+def b_cont2_60_d(aclauses, clauses, k):
+    set_binding_value_b(value1_reg, make_pattern_macro_hat(clauses, aclauses))
     GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_62_d(docstring, var, env, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_61_d, docstring, value1_reg, k)
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['env_reg'] = env
-    GLOBALS['var_reg'] = var
-    GLOBALS['pc'] = lookup_binding_in_first_frame
-
-def b_cont2_63_d(rhs_value, k):
+def b_cont2_61_d(rhs_value, k):
     old_value = symbol_undefined
     old_value = binding_value(value1_reg)
     set_binding_value_b(value1_reg, rhs_value)
@@ -2527,21 +2512,21 @@ def b_cont2_63_d(rhs_value, k):
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_64_d(rhs_value, k):
+def b_cont2_62_d(rhs_value, k):
     old_value = symbol_undefined
     old_value = dlr_env_lookup(value1_reg)
     set_global_value_b(value1_reg, rhs_value)
     new_fail = symbol_undefined
-    new_fail = make_fail(b_fail_4_d, old_value, value1_reg, value2_reg)
+    new_fail = make_fail(b_fail_3_d, old_value, value1_reg, value2_reg)
     GLOBALS['value2_reg'] = new_fail
     GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_65_d(var, var_info, env, handler, k):
-    GLOBALS['sk_reg'] = make_cont2(b_cont2_63_d, value1_reg, k)
+def b_cont2_63_d(var, var_info, env, handler, k):
+    GLOBALS['sk_reg'] = make_cont2(b_cont2_61_d, value1_reg, k)
     GLOBALS['dk_reg'] = make_cont3(b_cont3_4_d, value1_reg, k)
-    GLOBALS['gk_reg'] = make_cont2(b_cont2_64_d, value1_reg, k)
+    GLOBALS['gk_reg'] = make_cont2(b_cont2_62_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['var_info_reg'] = var_info
@@ -2549,22 +2534,42 @@ def b_cont2_65_d(var, var_info, env, handler, k):
     GLOBALS['var_reg'] = var
     GLOBALS['pc'] = lookup_variable
 
-def b_cont2_66_d(var, k):
-    GLOBALS['value1_reg'] = association(var, value1_reg)
+def b_cont2_64_d(docstring, rhs_value, k):
+    set_binding_value_b(value1_reg, rhs_value)
+    set_binding_docstring_b(value1_reg, docstring)
+    GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_67_d(k):
+def b_cont2_65_d(docstring, var, env, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_64_d, docstring, value1_reg, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['env_reg'] = env
+    GLOBALS['var_reg'] = var
+    GLOBALS['pc'] = lookup_binding_in_first_frame
+
+def b_cont2_66_d(k):
     GLOBALS['value1_reg'] = binding_docstring(value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_68_d(k):
+def b_cont2_67_d(k):
     GLOBALS['value1_reg'] = help(dlr_env_lookup(value1_reg))
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_69_d(else_exp, then_exp, env, handler, k):
+def b_cont2_68_d(var, k):
+    GLOBALS['value1_reg'] = association(var, value1_reg)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_69_d(k):
+    GLOBALS['value1_reg'] = callback(value1_reg)
+    GLOBALS['k_reg'] = k
+    GLOBALS['pc'] = apply_cont2
+
+def b_cont2_70_d(else_exp, then_exp, env, handler, k):
     if true_q(value1_reg):
         GLOBALS['k_reg'] = k
         GLOBALS['fail_reg'] = value2_reg
@@ -2579,11 +2584,6 @@ def b_cont2_69_d(else_exp, then_exp, env, handler, k):
         GLOBALS['env_reg'] = env
         GLOBALS['exp_reg'] = else_exp
         GLOBALS['pc'] = m
-
-def b_cont2_70_d(k):
-    GLOBALS['value1_reg'] = callback(value1_reg)
-    GLOBALS['k_reg'] = k
-    GLOBALS['pc'] = apply_cont2
 
 def b_cont2_71_d(k):
     GLOBALS['value1_reg'] = dlr_func(value1_reg)
@@ -2618,19 +2618,19 @@ def b_cont2_75_d(trace_depth, k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_76_d(args, handler, k2):
-    GLOBALS['k_reg'] = k2
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['env_reg'] = cadr(args)
-    GLOBALS['exp_reg'] = value1_reg
-    GLOBALS['pc'] = m
-
-def b_cont2_77_d(handler, k2):
+def b_cont2_76_d(handler, k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = toplevel_env
+    GLOBALS['exp_reg'] = value1_reg
+    GLOBALS['pc'] = m
+
+def b_cont2_77_d(args, handler, k2):
+    GLOBALS['k_reg'] = k2
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['env_reg'] = cadr(args)
     GLOBALS['exp_reg'] = value1_reg
     GLOBALS['pc'] = m
 
@@ -2903,7 +2903,7 @@ def b_cont3_4_d(rhs_value, k):
     old_value = get_external_member(value1_reg, value2_reg)
     set_external_member_b(value1_reg, value2_reg, rhs_value)
     new_fail = symbol_undefined
-    new_fail = make_fail(b_fail_3_d, value2_reg, value1_reg, old_value, value3_reg)
+    new_fail = make_fail(b_fail_4_d, value2_reg, value1_reg, old_value, value3_reg)
     GLOBALS['value2_reg'] = new_fail
     GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k
@@ -2921,13 +2921,13 @@ def apply_cont4():
 def b_cont4_1_d(src, start, k):
     GLOBALS['k_reg'] = make_cont(b_cont_8_d, value2_reg, value3_reg, value4_reg, k)
     GLOBALS['info_reg'] = make_info(src, start, value2_reg)
-    GLOBALS['x_reg'] = list_to_vector(value1_reg)
+    GLOBALS['x_reg'] = value1_reg
     GLOBALS['pc'] = annotate_cps
 
 def b_cont4_2_d(src, start, k):
     GLOBALS['k_reg'] = make_cont(b_cont_8_d, value2_reg, value3_reg, value4_reg, k)
     GLOBALS['info_reg'] = make_info(src, start, value2_reg)
-    GLOBALS['x_reg'] = value1_reg
+    GLOBALS['x_reg'] = list_to_vector(value1_reg)
     GLOBALS['pc'] = annotate_cps
 
 def b_cont4_3_d(src, start, v, k):
@@ -3046,13 +3046,13 @@ def b_fail_2_d(binding, old_value, fail):
     GLOBALS['fail_reg'] = fail
     GLOBALS['pc'] = apply_fail
 
-def b_fail_3_d(components, dlr_obj, old_value, fail):
-    set_external_member_b(dlr_obj, components, old_value)
+def b_fail_3_d(old_value, var, fail):
+    set_global_value_b(var, old_value)
     GLOBALS['fail_reg'] = fail
     GLOBALS['pc'] = apply_fail
 
-def b_fail_4_d(old_value, var, fail):
-    set_global_value_b(var, old_value)
+def b_fail_4_d(components, dlr_obj, old_value, fail):
+    set_external_member_b(dlr_obj, components, old_value)
     GLOBALS['fail_reg'] = fail
     GLOBALS['pc'] = apply_fail
 
@@ -3203,13 +3203,13 @@ def b_proc_7_d():
 
 def b_proc_8_d():
     if true_q(length_one_q(args_reg)):
-        GLOBALS['k_reg'] = make_cont(b_cont_42_d, handler_reg, fail_reg, k2_reg)
+        GLOBALS['k_reg'] = make_cont(b_cont_41_d, handler_reg, fail_reg, k2_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['x_reg'] = car(args_reg)
         GLOBALS['pc'] = annotate_cps
     else:
         if true_q(length_two_q(args_reg)):
-            GLOBALS['k_reg'] = make_cont(b_cont_41_d, args_reg, handler_reg, fail_reg, k2_reg)
+            GLOBALS['k_reg'] = make_cont(b_cont_42_d, args_reg, handler_reg, fail_reg, k2_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['x_reg'] = car(args_reg)
             GLOBALS['pc'] = annotate_cps
@@ -5783,12 +5783,12 @@ def unannotate_cps():
             GLOBALS['pc'] = unannotate_cps
         else:
             if true_q(pair_q(x_reg)):
-                GLOBALS['k_reg'] = make_cont(b_cont_6_d, x_reg, k_reg)
+                GLOBALS['k_reg'] = make_cont(b_cont_5_d, x_reg, k_reg)
                 GLOBALS['x_reg'] = car(x_reg)
                 GLOBALS['pc'] = unannotate_cps
             else:
                 if true_q(vector_q(x_reg)):
-                    GLOBALS['k_reg'] = make_cont(b_cont_4_d, k_reg)
+                    GLOBALS['k_reg'] = make_cont(b_cont_6_d, k_reg)
                     GLOBALS['x_reg'] = vector_to_list(x_reg)
                     GLOBALS['pc'] = unannotate_cps
                 else:
@@ -5950,7 +5950,7 @@ def read_sexp():
                                                 if true_q((car(temp_1)) is (symbol_lparen)):
                                                     tokens = symbol_undefined
                                                     tokens = rest_of(tokens_reg)
-                                                    GLOBALS['k_reg'] = make_cont4(b_cont4_2_d, src_reg, start, k_reg)
+                                                    GLOBALS['k_reg'] = make_cont4(b_cont4_1_d, src_reg, start, k_reg)
                                                     GLOBALS['expected_terminator_reg'] = symbol_rparen
                                                     GLOBALS['tokens_reg'] = tokens
                                                     GLOBALS['pc'] = read_sexp_sequence
@@ -5958,13 +5958,13 @@ def read_sexp():
                                                     if true_q((car(temp_1)) is (symbol_lbracket)):
                                                         tokens = symbol_undefined
                                                         tokens = rest_of(tokens_reg)
-                                                        GLOBALS['k_reg'] = make_cont4(b_cont4_2_d, src_reg, start, k_reg)
+                                                        GLOBALS['k_reg'] = make_cont4(b_cont4_1_d, src_reg, start, k_reg)
                                                         GLOBALS['expected_terminator_reg'] = symbol_rbracket
                                                         GLOBALS['tokens_reg'] = tokens
                                                         GLOBALS['pc'] = read_sexp_sequence
                                                     else:
                                                         if true_q((car(temp_1)) is (symbol_lvector)):
-                                                            GLOBALS['k_reg'] = make_cont4(b_cont4_1_d, src_reg, start, k_reg)
+                                                            GLOBALS['k_reg'] = make_cont4(b_cont4_2_d, src_reg, start, k_reg)
                                                             GLOBALS['tokens_reg'] = rest_of(tokens_reg)
                                                             GLOBALS['pc'] = read_vector_sequence
                                                         else:
@@ -6325,12 +6325,12 @@ def aparse():
                 GLOBALS['pc'] = apply_cont2
         else:
             if true_q(vector_q_hat(adatum_reg)):
-                GLOBALS['k_reg'] = make_cont(b_cont_20_d, info, fail_reg, k_reg)
+                GLOBALS['k_reg'] = make_cont(b_cont_19_d, info, fail_reg, k_reg)
                 GLOBALS['x_reg'] = adatum_reg
                 GLOBALS['pc'] = unannotate_cps
             else:
                 if true_q(quote_q_hat(adatum_reg)):
-                    GLOBALS['k_reg'] = make_cont(b_cont_19_d, info, fail_reg, k_reg)
+                    GLOBALS['k_reg'] = make_cont(b_cont_20_d, info, fail_reg, k_reg)
                     GLOBALS['x_reg'] = adatum_reg
                     GLOBALS['pc'] = unannotate_cps
                 else:
@@ -6353,12 +6353,12 @@ def aparse():
                                     GLOBALS['pc'] = expand_once_hat
                                 else:
                                     if true_q(if_then_q_hat(adatum_reg)):
-                                        GLOBALS['k_reg'] = make_cont2(b_cont2_31_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                        GLOBALS['k_reg'] = make_cont2(b_cont2_28_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                         GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                         GLOBALS['pc'] = aparse
                                     else:
                                         if true_q(if_else_q_hat(adatum_reg)):
-                                            GLOBALS['k_reg'] = make_cont2(b_cont2_29_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                            GLOBALS['k_reg'] = make_cont2(b_cont2_31_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                             GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                             GLOBALS['pc'] = aparse
                                         else:
@@ -6375,34 +6375,34 @@ def aparse():
                                                     GLOBALS['pc'] = aparse
                                                 else:
                                                     if true_q(association_q_hat(adatum_reg)):
-                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_25_d, adatum_reg, info, k_reg)
+                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_24_d, adatum_reg, info, k_reg)
                                                         GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                         GLOBALS['pc'] = aparse
                                                     else:
                                                         if true_q(func_q_hat(adatum_reg)):
-                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_24_d, info, k_reg)
+                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_25_d, info, k_reg)
                                                             GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                             GLOBALS['pc'] = aparse
                                                         else:
                                                             if true_q(callback_q_hat(adatum_reg)):
-                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_23_d, info, k_reg)
+                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_21_d, info, k_reg)
                                                                 GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                 GLOBALS['pc'] = aparse
                                                             else:
                                                                 if true_q(define_q_hat(adatum_reg)):
                                                                     if true_q(mit_style_define_q_hat(adatum_reg)):
-                                                                        GLOBALS['k_reg'] = make_cont(b_cont_16_d, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                                                        GLOBALS['k_reg'] = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                         GLOBALS['datum_reg'] = adatum_reg
                                                                         GLOBALS['macro_reg'] = mit_define_transformer_hat
                                                                         GLOBALS['pc'] = apply_macro
                                                                     else:
                                                                         if true_q(numeric_equal(length_hat(adatum_reg), 3)):
-                                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_22_d, adatum_reg, info, k_reg)
+                                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_23_d, adatum_reg, info, k_reg)
                                                                             GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                                             GLOBALS['pc'] = aparse
                                                                         else:
                                                                             if true_q((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))):
-                                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_21_d, adatum_reg, info, k_reg)
+                                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_22_d, adatum_reg, info, k_reg)
                                                                                 GLOBALS['adatum_reg'] = cadddr_hat(adatum_reg)
                                                                                 GLOBALS['pc'] = aparse
                                                                             else:
@@ -6411,7 +6411,7 @@ def aparse():
                                                                 else:
                                                                     if true_q(define_b_q_hat(adatum_reg)):
                                                                         if true_q(mit_style_define_q_hat(adatum_reg)):
-                                                                            GLOBALS['k_reg'] = make_cont(b_cont_16_d, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                                                            GLOBALS['k_reg'] = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                             GLOBALS['datum_reg'] = adatum_reg
                                                                             GLOBALS['macro_reg'] = mit_define_transformer_hat
                                                                             GLOBALS['pc'] = apply_macro
@@ -6434,7 +6434,7 @@ def aparse():
                                                                             aclauses = symbol_undefined
                                                                             aclauses = cddr_hat(adatum_reg)
                                                                             name = define_var_hat(adatum_reg)
-                                                                            GLOBALS['k_reg'] = make_cont(b_cont_14_d, aclauses, name, info, fail_reg, k_reg)
+                                                                            GLOBALS['k_reg'] = make_cont(b_cont_16_d, aclauses, name, info, fail_reg, k_reg)
                                                                             GLOBALS['x_reg'] = aclauses
                                                                             GLOBALS['pc'] = unannotate_cps
                                                                         else:
@@ -6447,7 +6447,7 @@ def aparse():
                                                                                         GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                                         GLOBALS['pc'] = aparse
                                                                                     else:
-                                                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_18_d, info, k_reg)
+                                                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_17_d, info, k_reg)
                                                                                         GLOBALS['adatum_list_reg'] = cdr_hat(adatum_reg)
                                                                                         GLOBALS['pc'] = aparse_all
                                                                             else:
@@ -6467,17 +6467,17 @@ def aparse():
                                                                                                 GLOBALS['pc'] = aparse
                                                                                             else:
                                                                                                 if true_q((numeric_equal(length_hat(adatum_reg), 3)) and (catch_q_hat(caddr_hat(adatum_reg)))):
-                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_15_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_16_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                     GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                     GLOBALS['pc'] = aparse
                                                                                                 else:
                                                                                                     if true_q((numeric_equal(length_hat(adatum_reg), 3)) and (finally_q_hat(caddr_hat(adatum_reg)))):
-                                                                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_13_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                        GLOBALS['k_reg'] = make_cont2(b_cont2_11_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                         GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                         GLOBALS['pc'] = aparse
                                                                                                     else:
                                                                                                         if true_q((numeric_equal(length_hat(adatum_reg), 4)) and (catch_q_hat(caddr_hat(adatum_reg))) and (finally_q_hat(cadddr_hat(adatum_reg)))):
-                                                                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_11_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                            GLOBALS['k_reg'] = make_cont2(b_cont2_14_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                             GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                             GLOBALS['pc'] = aparse
                                                                                                         else:
@@ -6485,12 +6485,12 @@ def aparse():
                                                                                                             GLOBALS['pc'] = aparse_error
                                                                                         else:
                                                                                             if true_q(raise_q_hat(adatum_reg)):
-                                                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_8_d, info, k_reg)
+                                                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_7_d, info, k_reg)
                                                                                                 GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                                                 GLOBALS['pc'] = aparse
                                                                                             else:
                                                                                                 if true_q(choose_q_hat(adatum_reg)):
-                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_7_d, info, k_reg)
+                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_8_d, info, k_reg)
                                                                                                     GLOBALS['adatum_list_reg'] = cdr_hat(adatum_reg)
                                                                                                     GLOBALS['pc'] = aparse_all
                                                                                                 else:
@@ -6705,14 +6705,14 @@ def process_macro_clauses_hat():
 
 def qq_expand_cps():
     if true_q(quasiquote_q_hat(ax_reg)):
-        GLOBALS['k_reg'] = make_cont(b_cont_35_d, k_reg)
+        GLOBALS['k_reg'] = make_cont(b_cont_34_d, k_reg)
         GLOBALS['depth_reg'] = (depth_reg) + (1)
         GLOBALS['ax_reg'] = cdr_hat(ax_reg)
         GLOBALS['pc'] = qq_expand_cps
     else:
         if true_q((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))):
             if true_q(GreaterThan(depth_reg, 0)):
-                GLOBALS['k_reg'] = make_cont(b_cont_34_d, ax_reg, k_reg)
+                GLOBALS['k_reg'] = make_cont(b_cont_35_d, ax_reg, k_reg)
                 GLOBALS['depth_reg'] = (depth_reg) - (1)
                 GLOBALS['ax_reg'] = cdr_hat(ax_reg)
                 GLOBALS['pc'] = qq_expand_cps
@@ -6744,14 +6744,14 @@ def qq_expand_cps():
 
 def qq_expand_list_cps():
     if true_q(quasiquote_q_hat(ax_reg)):
-        GLOBALS['k_reg'] = make_cont(b_cont_40_d, k_reg)
+        GLOBALS['k_reg'] = make_cont(b_cont_39_d, k_reg)
         GLOBALS['depth_reg'] = (depth_reg) + (1)
         GLOBALS['ax_reg'] = cdr_hat(ax_reg)
         GLOBALS['pc'] = qq_expand_cps
     else:
         if true_q((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))):
             if true_q(GreaterThan(depth_reg, 0)):
-                GLOBALS['k_reg'] = make_cont(b_cont_39_d, ax_reg, k_reg)
+                GLOBALS['k_reg'] = make_cont(b_cont_40_d, ax_reg, k_reg)
                 GLOBALS['depth_reg'] = (depth_reg) - (1)
                 GLOBALS['ax_reg'] = cdr_hat(ax_reg)
                 GLOBALS['pc'] = qq_expand_cps
@@ -6768,7 +6768,7 @@ def qq_expand_list_cps():
                         GLOBALS['pc'] = apply_cont
         else:
             if true_q(vector_q_hat(ax_reg)):
-                GLOBALS['k_reg'] = make_cont(b_cont_38_d, k_reg)
+                GLOBALS['k_reg'] = make_cont(b_cont_36_d, k_reg)
                 GLOBALS['pc'] = qq_expand_cps
             else:
                 if true_q(not(pair_q_hat(ax_reg))):
@@ -6776,11 +6776,11 @@ def qq_expand_list_cps():
                     GLOBALS['pc'] = apply_cont
                 else:
                     if true_q(null_q_hat(cdr_hat(ax_reg))):
-                        GLOBALS['k_reg'] = make_cont(b_cont_38_d, k_reg)
+                        GLOBALS['k_reg'] = make_cont(b_cont_36_d, k_reg)
                         GLOBALS['ax_reg'] = car_hat(ax_reg)
                         GLOBALS['pc'] = qq_expand_list_cps
                     else:
-                        GLOBALS['k_reg'] = make_cont(b_cont_37_d, ax_reg, depth_reg, k_reg)
+                        GLOBALS['k_reg'] = make_cont(b_cont_38_d, ax_reg, depth_reg, k_reg)
                         GLOBALS['ax_reg'] = car_hat(ax_reg)
                         GLOBALS['pc'] = qq_expand_list_cps
 
@@ -7144,7 +7144,7 @@ def m():
                     if true_q((car(exp_reg)) is (symbol_callback_aexp)):
                         exp = symbol_undefined
                         exp = list_ref(exp_reg, 1)
-                        GLOBALS['k_reg'] = make_cont2(b_cont2_70_d, k)
+                        GLOBALS['k_reg'] = make_cont2(b_cont2_69_d, k)
                         GLOBALS['exp_reg'] = exp
                         GLOBALS['pc'] = m
                     else:
@@ -7155,7 +7155,7 @@ def m():
                             else_exp = list_ref(exp_reg, 3)
                             then_exp = list_ref(exp_reg, 2)
                             test_exp = list_ref(exp_reg, 1)
-                            GLOBALS['k_reg'] = make_cont2(b_cont2_69_d, else_exp, then_exp, env_reg, handler_reg, k)
+                            GLOBALS['k_reg'] = make_cont2(b_cont2_70_d, else_exp, then_exp, env_reg, handler_reg, k)
                             GLOBALS['exp_reg'] = test_exp
                             GLOBALS['pc'] = m
                         else:
@@ -7164,9 +7164,9 @@ def m():
                                 var_info = symbol_undefined
                                 var_info = list_ref(exp_reg, 2)
                                 var = list_ref(exp_reg, 1)
-                                GLOBALS['sk_reg'] = make_cont2(b_cont2_67_d, k)
+                                GLOBALS['sk_reg'] = make_cont2(b_cont2_66_d, k)
                                 GLOBALS['dk_reg'] = make_cont3(b_cont3_5_d, k)
-                                GLOBALS['gk_reg'] = make_cont2(b_cont2_68_d, k)
+                                GLOBALS['gk_reg'] = make_cont2(b_cont2_67_d, k)
                                 GLOBALS['var_info_reg'] = var_info
                                 GLOBALS['var_reg'] = var
                                 GLOBALS['pc'] = lookup_variable
@@ -7176,7 +7176,7 @@ def m():
                                     exp = symbol_undefined
                                     exp = list_ref(exp_reg, 2)
                                     var = list_ref(exp_reg, 1)
-                                    GLOBALS['k_reg'] = make_cont2(b_cont2_66_d, var, k)
+                                    GLOBALS['k_reg'] = make_cont2(b_cont2_68_d, var, k)
                                     GLOBALS['exp_reg'] = exp
                                     GLOBALS['pc'] = m
                                 else:
@@ -7187,7 +7187,7 @@ def m():
                                         var_info = list_ref(exp_reg, 3)
                                         rhs_exp = list_ref(exp_reg, 2)
                                         var = list_ref(exp_reg, 1)
-                                        GLOBALS['k_reg'] = make_cont2(b_cont2_65_d, var, var_info, env_reg, handler_reg, k)
+                                        GLOBALS['k_reg'] = make_cont2(b_cont2_63_d, var, var_info, env_reg, handler_reg, k)
                                         GLOBALS['exp_reg'] = rhs_exp
                                         GLOBALS['pc'] = m
                                     else:
@@ -7198,7 +7198,7 @@ def m():
                                             rhs_exp = list_ref(exp_reg, 3)
                                             docstring = list_ref(exp_reg, 2)
                                             var = list_ref(exp_reg, 1)
-                                            GLOBALS['k_reg'] = make_cont2(b_cont2_62_d, docstring, var, env_reg, handler_reg, k)
+                                            GLOBALS['k_reg'] = make_cont2(b_cont2_65_d, docstring, var, env_reg, handler_reg, k)
                                             GLOBALS['exp_reg'] = rhs_exp
                                             GLOBALS['pc'] = m
                                         else:
@@ -7209,7 +7209,7 @@ def m():
                                                 rhs_exp = list_ref(exp_reg, 3)
                                                 docstring = list_ref(exp_reg, 2)
                                                 var = list_ref(exp_reg, 1)
-                                                GLOBALS['k_reg'] = make_cont2(b_cont2_60_d, docstring, var, k)
+                                                GLOBALS['k_reg'] = make_cont2(b_cont2_59_d, docstring, var, k)
                                                 GLOBALS['exp_reg'] = rhs_exp
                                                 GLOBALS['pc'] = m
                                             else:
@@ -7220,7 +7220,7 @@ def m():
                                                     aclauses = list_ref(exp_reg, 3)
                                                     clauses = list_ref(exp_reg, 2)
                                                     name = list_ref(exp_reg, 1)
-                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_59_d, aclauses, clauses, k)
+                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_60_d, aclauses, clauses, k)
                                                     GLOBALS['env_reg'] = macro_env
                                                     GLOBALS['var_reg'] = name
                                                     GLOBALS['pc'] = lookup_binding_in_first_frame
@@ -8319,7 +8319,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.0.0')
+    print('Calysto Scheme, version 1.0.1')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
