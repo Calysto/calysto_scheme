@@ -1,4 +1,13 @@
-include setup.py
-recursive-include calysto_scheme *.py
-include README.md
-recursive-include calysto_scheme/images *.png
+include *.txt
+include *.rst
+include *.md
+include calysto_scheme/images/*.png
+include Makefile
+recursive-include docs *.rst
+recursive-include docs *.png
+recursive-include docs *.py
+prune .git
+prune docs/build
+prune dist
+prune build
+prune docs
