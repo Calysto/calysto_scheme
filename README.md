@@ -12,13 +12,15 @@ Calysto Scheme is written in Scheme, and then translated into Python (and other 
 You can install Calysto Scheme with Python3:
 
 ```
-pip3 install --upgrade calysto-scheme
+pip3 install --upgrade calysto-scheme --user
+python -m matlab_kernel install --user
 ```
 
 or in the system kernel folder with:
 
 ```
 sudo pip3 install --upgrade calysto-scheme
+sudo python -m matlab_kernel install
 ```
 
 Use it in the console, qtconsole, or notebook with IPython 3:
@@ -31,7 +33,7 @@ ipython notebook --kernel calysto_scheme
 
 Requires:
 
-* ipython-3.0
+* ipython=>3.0
 * Python2 or Python3
 * metakernel (installed automatically)
 
