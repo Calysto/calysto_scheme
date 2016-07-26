@@ -25,6 +25,15 @@ class CalystoScheme(MetaKernel):
         'pygments_lexer': 'scheme',
     }
 
+    kernel_json = {
+        "argv": [sys.executable,
+                 "-m", "calysto_scheme",
+                 "-f", "{connection_file}"],
+        "display_name": "Calysto Scheme %i" % (3 if PY3 else 2),
+        "language": "scheme",
+        "codemirror_mode": "scheme",
+        "name": "calysto_scheme"
+    }
     identifier_regex = r'[\w\.][\w\.\?\!\-\>\<]*'
     function_call_regex = r'\(([\w\.][\w\.\?\!\-\>\>]*)[^\)\()]*\Z'
     magic_prefixes = dict(magic='%', shell='!', help='?')
@@ -38,12 +47,12 @@ class CalystoScheme(MetaKernel):
         scheme.ENVIRONMENT["input"] = self.raw_input
 
     def get_usage(self):
-        return """Calysto Scheme 
+        return """Calysto Scheme
 =========================================
 
 Calysto Scheme offers a combination of convenient shell features,
 special commands and a history mechanism for both input (command
-history) and output (results caching, similar to Mathematica). 
+history) and output (results caching, similar to Mathematica).
 
 MAIN FEATURES
 -------------
@@ -208,20 +217,20 @@ MAIN FEATURES
                      "help", "define-syntax", "begin", "lambda", "trace-lambda",
                      "try", "catch", "finally", "raise", "choose"]:
             help_text = {
-                "define": "(define NAME [DOCSTRING] VALUE) define a global variable (special form)", 
-                "define!": "(define! NAME [DOCSTRING] VALUE) define a variable in the host system (special form)", 
-                "func": "(func PROCEDURE) for wrapping Scheme procedures as a system function (special form)", 
-                "callback": "(callback PROCEDURE) returns a host system function for system callbacks (special form)", 
+                "define": "(define NAME [DOCSTRING] VALUE) define a global variable (special form)",
+                "define!": "(define! NAME [DOCSTRING] VALUE) define a variable in the host system (special form)",
+                "func": "(func PROCEDURE) for wrapping Scheme procedures as a system function (special form)",
+                "callback": "(callback PROCEDURE) returns a host system function for system callbacks (special form)",
                 "if": "(if TEXT-EXPR TRUE-EXPR FALSE-EXPR) (special form)",
-                "help": "(help ITEM) (special form)", 
-                "define-syntax": "(define-syntax NAME NAME-TEST ...) (special form)", 
-                "begin": "(begin EXPR...) (special form)", 
-                "lambda": "(lambda (VAR...) EXPR...) or (lambda VAR EXPR...) (special form)", 
+                "help": "(help ITEM) (special form)",
+                "define-syntax": "(define-syntax NAME NAME-TEST ...) (special form)",
+                "begin": "(begin EXPR...) (special form)",
+                "lambda": "(lambda (VAR...) EXPR...) or (lambda VAR EXPR...) (special form)",
                 "trace-lambda": "(trace-lambda NAME (VAR...) EXPR...) or (trace-lambda NAME VAR EXPR...) (special form)",
-                "try": "(try EXPR (catch EXCEPTION NAME ...)...) (special form)", 
-                "catch": "(try EXPR (catch EXCEPTION NAME ...) ...) (special form)", 
-                "finally": "(try EXPR (catch EXCEPTION NAME ...)... (finally ...)) (special form)", 
-                "raise": "(raise EXCEPTION) (special form)", 
+                "try": "(try EXPR (catch EXCEPTION NAME ...)...) (special form)",
+                "catch": "(try EXPR (catch EXCEPTION NAME ...) ...) (special form)",
+                "finally": "(try EXPR (catch EXCEPTION NAME ...)... (finally ...)) (special form)",
+                "raise": "(raise EXCEPTION) (special form)",
                 "choose": "Use (choose ITEM...) to setup non-deterministic interpreter, or use (choose) to go to next choice (special form)"
             }
             return help_text[expr]
@@ -247,7 +256,7 @@ MAIN FEATURES
             else: # a pair
                 retval = []
                 current = item
-                while isinstance(current, scheme.cons): 
+                while isinstance(current, scheme.cons):
                     ## HACK: fix me; represent procedues and environments as objs?
                     if hasattr(current.car, "name"):
                         if current.car.name == "procedure":
@@ -257,7 +266,7 @@ MAIN FEATURES
                     retval.append(self.repr(current.car))
                     current = current.cdr
                 retval = " ".join(retval)
-                if not (isinstance(current, scheme.Symbol) and 
+                if not (isinstance(current, scheme.Symbol) and
                         current.name == "()"):
                     retval += " . " + self.repr(current)
                 return "(%s)" % retval

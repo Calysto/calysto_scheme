@@ -1,3 +1,4 @@
-from ipykernel.kernelapp import IPKernelApp
-from .kernel import CalystoScheme
-IPKernelApp.launch_instance(kernel_class=CalystoScheme)
+from calysto_scheme.kernel import CalystoScheme
+
+if __name__ == "__main__":
+    CalystoScheme.run_as_main()

@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 #############################################################
 # Python implementation notes:
