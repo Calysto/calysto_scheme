@@ -13,15 +13,17 @@ You can install Calysto Scheme with Python3:
 
 ```
 pip3 install --upgrade calysto-scheme --user
-python -m matlab_kernel install --user
+python3 -m matlab_kernel install --user
 ```
 
 or in the system kernel folder with:
 
 ```
 sudo pip3 install --upgrade calysto-scheme
-sudo python -m matlab_kernel install
+sudo python3 -m matlab_kernel install
 ```
+
+Change pip3/python3 to use a different pip or Python. The version of Python used will determine how Calysto Scheme is run.
 
 Use it in the console, qtconsole, or notebook with IPython 3:
 
