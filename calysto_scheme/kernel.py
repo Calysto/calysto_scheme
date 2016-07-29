@@ -14,7 +14,7 @@ else:
 
 class CalystoScheme(MetaKernel):
     implementation = 'scheme'
-    implementation_version = '1.0'
+    implementation_version = scheme.__version__
     language = 'scheme'
     language_version = '3.0'
     banner = "Calysto Scheme"

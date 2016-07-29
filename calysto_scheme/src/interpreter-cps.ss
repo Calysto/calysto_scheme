@@ -1898,6 +1898,15 @@
        (runtime-error (format "vector->list called on incorrect vector structure ~s" (car args)) info handler fail))
       (else (k2 (apply vector->list args) fail)))))
 
+(define vector-length-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to vector-length" info handler fail))
+      ((not (vector? (car args)))
+       (runtime-error (format "vector-length called on incorrect vector structure ~s" (car args)) info handler fail))
+      (else (k2 (apply vector-length args) fail)))))
+
 ;; dir
 (define dir-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -2518,7 +2527,8 @@
 	    (list 'use-stack-trace use-stack-trace-prim "(use-stack-trace BOOLEAN): set stack-trace usage on/off")
 	    (list 'vector vector-prim "(vector [ITEMS]...): return ITEMs as a vector")
 	    (list 'vector-ref vector-ref-prim "(vector-ref VECTOR INDEX): ")
-	    (list 'vector-set! vector-set!-prim "(vector-set! VECTOR INDEX VALUE): ")
+	    (list 'vector-length vector-length-prim "(vector-length VECTOR): returns length of VECTOR")
+	    (list 'vector-set! vector-set!-prim "(vector-set! VECTOR INDEX VALUE): sets the item at INDEX of VECTOR")
 	    (list 'void void-prim "(void): The null value symbol")
 	    (list 'zero? zero?-prim "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise")
 	    (list 'current-directory current-directory-prim "(current-directory [PATH]): get the current directory, or set it if PATH is given (alias cd)")
