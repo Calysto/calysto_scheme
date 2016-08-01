@@ -73,6 +73,8 @@
 (define-native getitem-native (lambda (dict x) 'unknown))
 (define-native setitem-native (lambda (dict x value) 'unknown))
 (define-native list-native (lambda (v) v))
+(define-native python-eval (lambda v v))
+(define-native python-exec (lambda v v))
 
 (define use-lexical-address
   (lambda args
@@ -762,6 +764,16 @@
 (define zero?-prim
   (lambda-proc (args env2 info handler fail k2)
       (k2 (= (car args) 0) fail)))
+
+;; python-eval
+(define python-eval-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (k2 (dlr-apply python-eval args) fail)))
+
+;; python-eval
+(define python-exec-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (k2 (dlr-apply python-exec args) fail)))
 
 ;; exit
 (define exit-prim
@@ -2531,6 +2543,8 @@
 	    (list 'vector-set! vector-set!-prim "(vector-set! VECTOR INDEX VALUE): sets the item at INDEX of VECTOR")
 	    (list 'void void-prim "(void): The null value symbol")
 	    (list 'zero? zero?-prim "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise")
+	    (list 'python-eval python-eval-prim "(python-eval PYTHON-EXPRESSION [globals [locals]]): return the result of evaluating PYTHON-EXPRESSION string")
+	    (list 'python-exec python-exec-prim "(python-exec PYTHON-STATEMENTS [globals [locals]]): return the result of evaluating PYTHON-STATEMENTS string")
 	    (list 'current-directory current-directory-prim "(current-directory [PATH]): get the current directory, or set it if PATH is given (alias cd)")
 	    (list 'cd current-directory-prim "(cd [PATH]): get the current directory, or set it if PATH is given (alias current-directory)")
 	    (list 'round round-prim "(round NUMBER): round NUMBER to the nearest integer (may return float)")

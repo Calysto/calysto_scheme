@@ -345,7 +345,13 @@ MAIN FEATURES
 
     def do_is_complete(self, code):
         # status: 'complete', 'incomplete', 'invalid', or 'unknown'
-        if scheme.ready_to_eval(code):
+        if code.startswith("%"):
+            ## force requirement to end with an empty line
+            if code.endswith("\n"):
+                return {'status' : 'complete'}
+            else:
+                return {'status' : 'incomplete'}
+        elif scheme.ready_to_eval(code):
             return {'status' : 'complete'}
         else:
             return {'status' : 'incomplete',

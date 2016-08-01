@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 #############################################################
 # Python implementation notes:
@@ -1037,7 +1037,10 @@ def set_global_value_b(variable, value):
     ENVIRONMENT[variable.name] = value
 
 def dlr_env_lookup(variable):
-    return ENVIRONMENT[variable.name]
+    if variable.name in ENVIRONMENT:
+        return ENVIRONMENT[variable.name]
+    else:
+        raise Exception("no such global variable: '%s'" % variable.name)
 
 def dlr_object_contains(obj, components):
     # components: (math sqrt)
@@ -1120,6 +1123,12 @@ def setitem_native(dictionary, item, value):
 
 def contains_native(dictionary, item):
     return item in dictionary
+
+def python_eval(*args):
+    return eval(*args)
+
+def python_exec(*args):
+    return exec(*args)
 
 def highlight_expression(exp):
     info = symbol_undefined
