@@ -10,7 +10,7 @@ scheme-ds.ss: reader-cps.ss environments-cps.ss parser-cps.ss \
 	echo "(delete-file \"scheme-ds.ss\")" >> compile-ds.ss
 	echo "(ds-transform-file \"scheme-cps.ss\" \"scheme-ds.ss\")" >> compile-ds.ss
 	echo "(exit)" >> compile-ds.ss
-	petite compile-ds.ss
+	scheme compile-ds.ss
 
 scheme-rm.ss: scheme-ds.ss rm-transformer.ss
 	echo "(load \"rm-transformer.ss\")" > compile-rm.ss
@@ -18,14 +18,14 @@ scheme-rm.ss: scheme-ds.ss rm-transformer.ss
 	echo "(compile-level-output)" >> compile-rm.ss
 	echo "(rm-transform-file \"scheme-ds.ss\" \"scheme-rm.ss\")" >> compile-rm.ss
 	echo "(exit)" >> compile-rm.ss
-	petite compile-rm.ss
+	scheme compile-rm.ss
 
 run: scheme-rm.ss 
 	echo "(case-sensitive #t)" > scheme-run.ss
 	echo "(load \"scheme-rm.ss\")" >> scheme-run.ss
 	echo "(load \"no-csharp-support.ss\")" >> scheme-run.ss
 	echo "(begin (display (run start)) (newline))" >> scheme-run.ss
-	petite scheme-run.ss
+	scheme scheme-run.ss
 
 clean:
 	$(RM) *.exe *~ scheme-ds.ss scheme-rm.ss compile-rm.ss compile-ds.ss make-fact.ss \

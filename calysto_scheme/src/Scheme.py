@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.8"
+__version__ = "1.0.9"
 
 #############################################################
 # Python implementation notes:
@@ -1140,6 +1140,9 @@ def highlight_expression(exp):
                 raise DebugException([get_start_line(info), get_start_char(info), get_end_line(info), get_end_char(info)])
         else:
             printf("call: ~s~%", aunparse(exp))
+
+symbol_emptylist = make_symbol("()") # will be redefined; ok
+SCHEMEPATH = List(".")
 
 # end of Scheme.py
 #############################################################

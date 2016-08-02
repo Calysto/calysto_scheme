@@ -75,6 +75,14 @@
 (define-native list-native (lambda (v) v))
 (define-native python-eval (lambda v v))
 (define-native python-exec (lambda v v))
+(define-native SCHEMEPATH (list "."))
+
+(define path-join 
+  (lambda (path filename)
+    (cond
+     ((null? path) filename)
+     (else (path-join (cdr path) 
+		      (string-append (car path) "/" filename))))))
 
 (define use-lexical-address
   (lambda args
@@ -1057,9 +1065,20 @@
   (lambda (filenames env2 info handler fail k)
     (if (null? filenames)
       (k void-value fail)
-      (load-file (car filenames) env2 info handler fail
+      (find-file-and-load SCHEMEPATH (car filenames) env2 info handler fail
 	(lambda-cont2 (v fail)
 	  (load-files (cdr filenames) env2 info handler fail k))))))
+
+;; load file from paths
+(define* find-file-and-load
+  (lambda (paths filename env2 info handler fail k)
+    (cond
+     ((null? paths) 
+      (runtime-error (format "attempted to load nonexistent file '~a'" filename) info handler fail))
+     (else (let ((path (path-join (list (car paths)) filename)))
+	     (if (file-exists? path)
+ 		 (load-file path env2 info handler fail k)
+		 (find-file-and-load (cdr paths) filename env2 info handler fail k)))))))
 
 ;; length
 (define length-prim
@@ -2578,6 +2597,7 @@
  	    (list 'typeof typeof-prim "(typeof ITEM): returns type of ITEM")
  	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-tracing use-tracing-prim "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given")
+	    (list 'SCHEMEPATH SCHEMEPATH "List of search directories used with load")
 	    )))
       (make-initial-env-extended (map car primitives) (map cadr primitives) (map caddr primitives)))))
 
