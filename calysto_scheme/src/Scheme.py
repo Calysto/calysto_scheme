@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 #############################################################
 # Python implementation notes:
@@ -33,7 +33,7 @@ __version__ = "1.0.9"
 # Lists implement iter, so you can use Python's iter tools
 # (such as [x for x in List(1, 2, 3)])
 #
-# A couple of functions are O(2n) because they have a 
+# A couple of functions are O(2n) because they have a
 # reverse. Should be fixed to be O(n).
 #############################################################
 
@@ -43,7 +43,7 @@ __version__ = "1.0.9"
 ENVIRONMENT = {}
 # Python environment:
 if "str" in dir(__builtins__):
-    ENVIRONMENT.update({key: getattr(__builtins__, key) 
+    ENVIRONMENT.update({key: getattr(__builtins__, key)
                         for key in dir(__builtins__)})
 # IPython environment:
 if "keys" in dir(__builtins__):
@@ -132,7 +132,7 @@ def make_char(c):
 void_value = make_symbol("<void>")
 
 def make_initial_env_extended(names, procs, docstrings):
-    ## If you wish to extend the environment to 
+    ## If you wish to extend the environment to
     ## include native values, do so here:
     return make_initial_environment(names, procs, docstrings)
 
@@ -498,8 +498,8 @@ def length_one_q(ls):
     return isinstance(ls, cons) and (ls.cdr is symbol_emptylist)
 
 def length_two_q(ls):
-    return (isinstance(ls, cons) and 
-            isinstance(ls.cdr, cons) and 
+    return (isinstance(ls, cons) and
+            isinstance(ls.cdr, cons) and
             (ls.cdr.cdr is symbol_emptylist))
 
 def length_at_least_q(n, ls):
@@ -539,7 +539,7 @@ def char_whitespace_q(c):
     return c.char in [' ', '\t', '\n', '\r']
 
 def char_alphabetic_q(c):
-    return (('A' <= c.char <= 'Z') or 
+    return (('A' <= c.char <= 'Z') or
             ('a' <= c.char <= 'z'))
 
 def char_numeric_q(c):
@@ -603,7 +603,7 @@ def fraction_repr(self):
         return str(self.numerator)
     return "%s/%s" % (self.numerator, self.denominator)
 
-fractions.Fraction.__repr__ = fraction_repr 
+fractions.Fraction.__repr__ = fraction_repr
 fractions.Fraction.__str__ = fraction_repr
 
 def modulo(a, b):
@@ -790,7 +790,7 @@ def tagged_list_hat(keyword, op, length):
     def tagged_list(asexp):
         return (list_q_hat(asexp) and
                 op(length_hat(asexp), length) and
-                symbol_q_hat(car_hat(asexp)) and 
+                symbol_q_hat(car_hat(asexp)) and
                 eq_q_hat(car_hat(asexp), keyword))
     return tagged_list
 
@@ -798,7 +798,7 @@ def tagged2_list_hat(keyword, op, length):
     def tagged2_list(asexp):
         return (list_q_hat(asexp) and
                 op(length_hat(asexp), length) and
-                symbol_q_hat(car_hat(asexp)) and 
+                symbol_q_hat(car_hat(asexp)) and
                 eq_q_hat(cadr_hat(asexp), keyword))
     return tagged2_list
 
@@ -829,7 +829,7 @@ def trampoline():
                 raise
             except KeyboardInterrupt:
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
-                pc = apply_handler2            
+                pc = apply_handler2
             except Exception as e:
                 exception_reg = make_exception("UnhandledException", str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
@@ -1141,8 +1141,12 @@ def highlight_expression(exp):
         else:
             printf("call: ~s~%", aunparse(exp))
 
+def string_startswith_q(string, s):
+    return string.startswith(s)
+
 symbol_emptylist = make_symbol("()") # will be redefined; ok
-SCHEMEPATH = List(".")
+path, filename = os.path.split(__file__)
+SCHEMEPATH = List(".", os.path.join(path, "modules"))
 
 # end of Scheme.py
 #############################################################

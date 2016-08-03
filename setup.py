@@ -21,7 +21,7 @@ setup(name='calysto_scheme',
       url="https://github.com/Calysto/calysto_scheme",
       install_requires=["metakernel"],
       packages=find_packages(include=["calysto_scheme", "calysto_scheme.*"]),
-      package_data={'calysto_scheme': ["images/*.png"]},
+      package_data={'calysto_scheme': ["images/*.png", "modules/*.ss"]},
       classifiers = [
           'Framework :: IPython',
           'License :: OSI Approved :: BSD License',

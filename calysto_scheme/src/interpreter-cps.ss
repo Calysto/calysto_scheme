@@ -76,6 +76,7 @@
 (define-native python-eval (lambda v v))
 (define-native python-exec (lambda v v))
 (define-native SCHEMEPATH (list "."))
+(define-native string-startswith? (lambda (string s) #f))
 
 (define path-join 
   (lambda (path filename)
@@ -1073,6 +1074,8 @@
 (define* find-file-and-load
   (lambda (paths filename env2 info handler fail k)
     (cond
+     ((string-startswith? filename "/")
+      (load-file filename env2 info handler fail k))
      ((null? paths) 
       (runtime-error (format "attempted to load nonexistent file '~a'" filename) info handler fail))
      (else (let ((path (path-join (list (car paths)) filename)))
@@ -2597,7 +2600,7 @@
  	    (list 'typeof typeof-prim "(typeof ITEM): returns type of ITEM")
  	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-tracing use-tracing-prim "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given")
-	    (list 'SCHEMEPATH SCHEMEPATH "List of search directories used with load")
+	    (list 'SCHEMEPATH SCHEMEPATH "List of search directories used with (load NAME)")
 	    )))
       (make-initial-env-extended (map car primitives) (map cadr primitives) (map caddr primitives)))))
 
