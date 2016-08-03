@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 #############################################################
 # Python implementation notes:
@@ -1136,7 +1136,10 @@ def python_eval(arg):
     return eval(arg, ENVIRONMENT)
 
 def python_exec(arg):
-    return exec(arg, ENVIRONMENT)
+    if PY3:
+        exec(arg, ENVIRONMENT)
+    else:
+        exec arg in ENVIRONMENT
 
 def highlight_expression(exp):
     info = symbol_undefined
@@ -8394,7 +8397,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.1.0')
+    print('Calysto Scheme, version 1.1.1')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
