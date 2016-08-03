@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.11"
+__version__ = "1.1.0"
 
 #############################################################
 # Python implementation notes:
@@ -1124,11 +1124,11 @@ def setitem_native(dictionary, item, value):
 def contains_native(dictionary, item):
     return item in dictionary
 
-def python_eval(*args):
-    return eval(*args)
+def python_eval(arg):
+    return eval(arg, ENVIRONMENT)
 
-def python_exec(*args):
-    return exec(*args)
+def python_exec(arg):
+    return exec(arg, ENVIRONMENT)
 
 def highlight_expression(exp):
     info = symbol_undefined

@@ -1132,11 +1132,11 @@ def setitem_native(dictionary, item, value):
 def contains_native(dictionary, item):
     return item in dictionary
 
-def python_eval(*args):
-    return eval(*args)
+def python_eval(arg):
+    return eval(arg, ENVIRONMENT)
 
-def python_exec(*args):
-    return exec(*args)
+def python_exec(arg):
+    return exec(arg, ENVIRONMENT)
 
 def highlight_expression(exp):
     info = symbol_undefined
@@ -3221,13 +3221,13 @@ def b_proc_6_d():
 
 def b_proc_7_d():
     GLOBALS['value2_reg'] = fail_reg
-    GLOBALS['value1_reg'] = dlr_apply(python_eval, args_reg)
+    GLOBALS['value1_reg'] = python_eval(car(args_reg))
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_8_d():
     GLOBALS['value2_reg'] = fail_reg
-    GLOBALS['value1_reg'] = dlr_apply(python_exec, args_reg)
+    GLOBALS['value1_reg'] = python_exec(car(args_reg))
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 

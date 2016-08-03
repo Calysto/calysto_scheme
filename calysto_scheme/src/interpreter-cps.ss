@@ -777,12 +777,12 @@
 ;; python-eval
 (define python-eval-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 (dlr-apply python-eval args) fail)))
+    (k2 (python-eval (car args)) fail)))
 
 ;; python-eval
 (define python-exec-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 (dlr-apply python-exec args) fail)))
+    (k2 (python-exec (car args)) fail)))
 
 ;; exit
 (define exit-prim
