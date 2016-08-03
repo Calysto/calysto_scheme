@@ -187,7 +187,7 @@
 		((dlr-object-contains value components)
 		 (dk value components fail))
 		(else (runtime-error (format "'~a' is not a module" new-path) var-info handler fail))))))
-	((string=? path "") (runtime-error (format "unbound module '~a'" var) var-info handler fail))
+	((string=? path "") (runtime-error (format "undefined item in '~a'" var) var-info handler fail))
 	(else (runtime-error (format "unbound variable '~a' in module '~a'" var path) var-info handler fail))))))
 
 ;; adds a new binding for var to the first frame if one doesn't exist

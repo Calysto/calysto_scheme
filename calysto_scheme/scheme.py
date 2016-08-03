@@ -6247,7 +6247,7 @@ def lookup_variable_components():
     else:
         if true_q(string_is__q(path_reg, "")):
             GLOBALS['info_reg'] = var_info_reg
-            GLOBALS['msg_reg'] = format("unbound module '~a'", var)
+            GLOBALS['msg_reg'] = format("undefined item in '~a'", var)
             GLOBALS['pc'] = runtime_error
         else:
             GLOBALS['info_reg'] = var_info_reg
