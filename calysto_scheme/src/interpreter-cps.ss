@@ -1748,7 +1748,7 @@
 		(lambda-cont2 (binding fail)
 		  (let ((module (make-toplevel-env)))
 		    (set-binding-value! binding module)
-		    (load-file filename module 'none handler fail k2)))))))))
+		    (find-file-and-load SCHEMEPATH filename module 'none handler fail k2)))))))))
 
 ;; get-stack-trace-prim
 (define get-stack-trace-prim

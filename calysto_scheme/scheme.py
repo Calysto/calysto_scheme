@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.0.10"
+__version__ = "1.0.11"
 
 #############################################################
 # Python implementation notes:
@@ -2738,7 +2738,8 @@ def b_cont2_86_d(filename, handler, k2):
     GLOBALS['info_reg'] = symbol_none
     GLOBALS['env2_reg'] = module
     GLOBALS['filename_reg'] = filename
-    GLOBALS['pc'] = load_file
+    GLOBALS['paths_reg'] = SCHEMEPATH
+    GLOBALS['pc'] = find_file_and_load
 
 def b_cont2_87_d(args, sym, info, handler, k):
     if true_q(null_q(cdr(args))):
@@ -8393,7 +8394,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.0.10')
+    print('Calysto Scheme, version 1.0.11')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
