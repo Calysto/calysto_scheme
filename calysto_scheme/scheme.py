@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.3"
+__version__ = "1.1.5"
 
 #############################################################
 # Python implementation notes:
@@ -1123,7 +1123,10 @@ def load_native(filename):
     return True # continue?
 
 def getitem_native(dictionary, item):
-    return dictionary[item]
+    try:
+        return dictionary[item]
+    except:
+        return getattr(dictionary, item)
 
 def setitem_native(dictionary, item, value):
     dictionary[item] = value
@@ -8397,7 +8400,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.1.3')
+    print('Calysto Scheme, version 1.1.5')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
