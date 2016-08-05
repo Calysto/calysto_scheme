@@ -1,4 +1,4 @@
-The source code for Calysto Scheme is in (calysto_scheme/src/)[https://github.com/Calysto/calysto_scheme/tree/master/calysto_scheme/src]. Calysto Scheme is written in Scheme and then converted into Python (and possibly other implementation languages, including C#).
+The source code for Calysto Scheme is in [calysto_scheme/src/](https://github.com/Calysto/calysto_scheme/tree/master/calysto_scheme/src). Calysto Scheme is written in Scheme and then converted into Python (and possibly other implementation languages, including C#).
 
 The following files make up Calysto Scheme system:
 
