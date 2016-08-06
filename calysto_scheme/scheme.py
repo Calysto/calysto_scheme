@@ -4834,9 +4834,15 @@ def b_proc_158_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_159_d():
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_99_d, k2_reg)
-    GLOBALS['args_reg'] = car(args_reg)
-    GLOBALS['pc'] = make_dict
+    if true_q(null_q(args_reg)):
+        GLOBALS['value2_reg'] = fail_reg
+        GLOBALS['value1_reg'] = dict()
+        GLOBALS['k_reg'] = k2_reg
+        GLOBALS['pc'] = apply_cont2
+    else:
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_99_d, k2_reg)
+        GLOBALS['args_reg'] = car(args_reg)
+        GLOBALS['pc'] = make_dict
 
 def b_proc_160_d():
     if true_q(not(length_two_q(args_reg))):

@@ -2337,9 +2337,12 @@
 
 (define dict-prim
   (lambda-proc (args env2 info handler fail k2)
-     (make-dict (car args) fail
-	(lambda-cont2 (pairs fail)
-	    (k2 (apply dict (list pairs)) fail)))))
+     (cond
+      ((null? args)
+       (k2 (dict) fail))
+      (else (make-dict (car args) fail
+	      (lambda-cont2 (pairs fail)
+	         (k2 (apply dict (list pairs)) fail)))))))
       
 (define* make-dict
   (lambda (args fail k2)
