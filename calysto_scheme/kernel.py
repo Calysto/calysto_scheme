@@ -292,7 +292,14 @@ MAIN FEATURES
         except:
             return "Unhandled Error: " + code
         if scheme.exception_q(retval):
-            self.Error(scheme.get_traceback_string(retval))
+            traceback = scheme.get_traceback_string(retval)
+            self.Error(traceback)
+            self.kernel_resp.update({
+                "status": "error",
+                'ename' : "RunTimeError",   # Exception name, as a string
+                'evalue' : "1",  # Exception value, as a string
+                'traceback' : traceback.split(), # traceback frames as strings
+            })
             retval = None
         if retval is scheme.void_value:
             retval = None

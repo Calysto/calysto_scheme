@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"
 
 #############################################################
 # Python implementation notes:
@@ -8406,7 +8406,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.1.5')
+    print('Calysto Scheme, version 1.1.6')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
