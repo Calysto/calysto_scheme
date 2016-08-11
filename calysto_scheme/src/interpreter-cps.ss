@@ -174,6 +174,15 @@
 	(let ((retval (format "~%Traceback (most recent call last):~%")))
 	  (string-append retval (format "Raised Exception: ~a~%" (cadr exc)))))))
 
+(define get-exception-values
+  (lambda (exc)
+    ;; (exception ("ReadError" "cannot represent 1/0" stdin 1 1 ()))
+    (if (list? (cadr exc))
+	(let ((error-type (car (cadr exc)))
+	      (message (cadr (cadr exc))))
+	  (list->vector (list error-type message)))
+	(list-vector (list "UnhandledException" (cadr exc))))))
+
 (define format-exception-line
   (lambda (line)
     (if (list? line)

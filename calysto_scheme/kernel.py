@@ -17,7 +17,7 @@ class CalystoScheme(MetaKernel):
     implementation_version = scheme.__version__
     language = 'scheme'
     language_version = '3.0'
-    banner = "Calysto Scheme"
+    banner = "Calysto Scheme %s" % scheme.__version__
     language_info = {
         'mimetype': 'text/x-scheme',
         'name': 'scheme',
@@ -293,12 +293,13 @@ MAIN FEATURES
             return "Unhandled Error: " + code
         if scheme.exception_q(retval):
             traceback = scheme.get_traceback_string(retval)
+            ename, evalue = scheme.get_exception_values(retval)
             self.Error(traceback)
             self.kernel_resp.update({
                 "status": "error",
-                'ename' : "RunTimeError",   # Exception name, as a string
-                'evalue' : "1",  # Exception value, as a string
-                'traceback' : traceback.split(), # traceback frames as strings
+                'ename' : ename,   # Exception name, as a string
+                'evalue' : evalue,  # Exception value, as a string
+                'traceback' : [line + "\n" for line in traceback.split("\n")], # traceback frames as strings
             })
             retval = None
         if retval is scheme.void_value:

@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.6"
+__version__ = "1.1.7"
 
 #############################################################
 # Python implementation notes:
@@ -7039,6 +7039,16 @@ def get_traceback_string(exc):
         retval = format("~%Traceback (most recent call last):~%")
         return string_append(retval, format("Raised Exception: ~a~%", cadr(exc)))
 
+def get_exception_values(exc):
+    if true_q(list_q(cadr(exc))):
+        error_type = symbol_undefined
+        message = symbol_undefined
+        message = cadr(cadr(exc))
+        error_type = car(cadr(exc))
+        return list_to_vector(List(error_type, message))
+    else:
+        return list_vector(List("UnhandledException", cadr(exc)))
+
 def format_exception_line(line):
     if true_q(list_q(line)):
         filename = symbol_undefined
@@ -8406,7 +8416,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.1.6')
+    print('Calysto Scheme, version 1.1.7')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
