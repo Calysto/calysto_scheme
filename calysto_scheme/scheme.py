@@ -26,7 +26,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.7"
+__version__ = "1.1.8"
 
 #############################################################
 # Python implementation notes:
@@ -1129,7 +1129,10 @@ def getitem_native(dictionary, item):
         return getattr(dictionary, item)
 
 def setitem_native(dictionary, item, value):
-    dictionary[item] = value
+    try:
+        dictionary[item] = value
+    except:
+        setitem(dictionary, item, value)
     return value
 
 def contains_native(dictionary, item):
@@ -8416,7 +8419,7 @@ def run(setup, *args):
 
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.1.7')
+    print('Calysto Scheme, version 1.1.8')
     print('----------------------------')
     print('Use (exit) to exit')
     GLOBALS['toplevel_env'] = make_toplevel_env()
