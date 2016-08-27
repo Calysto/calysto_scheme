@@ -18,7 +18,7 @@ import os
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.1.9"
+__version__ = "1.2.0"
 
 #############################################################
 # Python implementation notes:
@@ -539,17 +539,16 @@ def char_whitespace_q(c):
     return c.char in [' ', '\t', '\n', '\r']
 
 def char_alphabetic_q(c):
-    return (('A' <= c.char <= 'Z') or
-            ('a' <= c.char <= 'z'))
+    return str.isalpha(c.char)
 
 def char_numeric_q(c):
-    return '0' <= c.char <= '9'
+    return str.isdigit(c.char)
 
 def char_is__q(c1, c2):
     return c1 == c2
 
 def number_q(item):
-    return isinstance(item, (int, float, fractions.Fraction))
+    return isinstance(item, (int, float, fractions.Fraction, complex))
 
 def null_q(item):
     return item is symbol_emptylist
@@ -558,10 +557,7 @@ def boolean_q(item):
     return isinstance(item, bool)
 
 def true_q(item):
-    if item is False:
-        return False
-    else:
-        return True
+    return False if (item is False) else True
 
 def list_q(item):
     ## return proper_list?

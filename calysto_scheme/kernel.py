@@ -5,12 +5,18 @@ from calysto_scheme import scheme
 import os
 import sys
 import logging
+try:
+    from IPython.core.latex_symbols import latex_symbols
+    #from IPython.utils import io
+except:
+    latex_symbols = []
 
 PY3 = (sys.version_info[0] >= 3)
 if PY3:
     PY_STRINGS = (str,)
 else:
     PY_STRINGS = (str, unicode)
+
 
 class CalystoScheme(MetaKernel):
     implementation = 'scheme'
@@ -34,7 +40,7 @@ class CalystoScheme(MetaKernel):
         "codemirror_mode": "scheme",
         "name": "calysto_scheme"
     }
-    identifier_regex = r'[\w\.][\w\.\?\!\-\>\<]*'
+    identifier_regex = r'\\?[\w\.][\w\.\?\!\-\>\<]*'
     function_call_regex = r'\(([\w\.][\w\.\?\!\-\>\>]*)[^\)\()]*\Z'
     magic_prefixes = dict(magic='%', shell='!', help='?')
     help_suffix = None
@@ -141,8 +147,14 @@ MAIN FEATURES
 
     def get_completions(self, info):
         self.log.debug("get_completitons: info = %s" % info)
+        #for key in info.keys():
+        #    io.rprint("get_completitons: info[%s] = %s" % (key, info[key]))
         token = info["help_obj"]
         matches = []
+        # from latex
+        matches = latex_matches(token)
+        if matches:
+            return matches
         # from the language environment:
         slist = scheme.execute_string_rm("(dir)")
         if not scheme.exception_q(slist):
@@ -364,3 +376,21 @@ MAIN FEATURES
         else:
             return {'status' : 'incomplete',
                     'indent': ' ' * 4}
+
+def latex_matches(text):
+    """
+    Match Latex syntax for unicode characters.
+    After IPython.core.completer
+    """
+    slashpos = text.rfind('\\')
+    if slashpos > -1:
+        s = text[slashpos:]
+        if s in latex_symbols:
+            # Try to complete a full latex symbol to unicode
+            return [latex_symbols[s]]
+        else:
+            # If a user has partially typed a latex symbol, give them
+            # a full list of options \al -> [\aleph, \alpha]
+            matches = [k for k in latex_symbols if k.startswith(s)]
+            return matches
+    return []
