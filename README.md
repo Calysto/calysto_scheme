@@ -13,14 +13,14 @@ You can install Calysto Scheme with Python3:
 
 ```
 pip3 install --upgrade calysto-scheme --user
-python3 -m calysto_kernel install --user
+python3 -m calysto_scheme install --user
 ```
 
 or in the system kernel folder with:
 
 ```
 sudo pip3 install --upgrade calysto-scheme
-sudo python3 -m calysto_kernel install
+sudo python3 -m calysto_scheme install
 ```
 
 Change pip3/python3 to use a different pip or Python. The version of Python used will determine how Calysto Scheme is run.
