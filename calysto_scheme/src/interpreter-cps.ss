@@ -77,6 +77,7 @@
 (define-native python-exec (lambda v v))
 (define-native SCHEMEPATH (list "."))
 (define-native string-startswith? (lambda (string s) #f))
+(define-native expt-native (lambda (base power) (expt base power)))
 
 (define path-join 
   (lambda (path filename)
@@ -797,6 +798,11 @@
 (define exit-prim
   (lambda-proc (args env2 info handler fail k2)
     (halt* end-of-session)))
+
+;; expt
+(define expt-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (k2 (expt-native (car args) (cadr args)) fail)))
 
 (define end-of-session?
   (lambda (x) (eq? x end-of-session)))
@@ -2514,6 +2520,7 @@
 	    (list 'eval eval-prim "(eval LIST): evaluates the LIST as a Scheme expression")
 	    (list 'eval-ast eval-ast-prim "(eval-ast AST): evaluates the Abstract Syntax Tree as a Scheme expression (see parse and parse-string)")
 	    (list 'exit exit-prim "(exit): ")
+	    (list 'expt expt-prim "(expt BASE POWER): raise a base number to a power")
 	    (list 'for-each for-each-prim "(for-each PROCEDURE LIST): apply PROCEDURE to each item in LIST, but don't return results")
 	    (list 'format format-prim "(format STRING ITEM ...): format the string with ITEMS as arguments")
 	    (list 'get get-prim "(get ...): ")

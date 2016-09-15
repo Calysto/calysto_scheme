@@ -515,6 +515,9 @@ def all_numeric_q(ls):
 def list_native(iterable):
     return list(iterable)
 
+def expt_native(base, power):
+    return math.pow(base, power)
+
 ### Questions:
 
 def even_q(n):
