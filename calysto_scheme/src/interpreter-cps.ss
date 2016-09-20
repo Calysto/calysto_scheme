@@ -2657,15 +2657,19 @@
 
 (define process-args
   (lambda (args params info handler fail)
-    ;;(printf "args: ~a params: ~a~%" args params)
-    ;; args))
-    ;; FIXME: (a) ()
-    (let ((retval (get-values-for-params 
-		   params 
-		   (get-arg-associations args params #f info handler fail)
-		   '() info handler fail)))
-      ;;(printf "retval: ~a~%" retval)
-      retval)))
+    args))
+
+;; (define process-args
+;;   (lambda (args params info handler fail)
+;;     ;;(printf "args: ~a params: ~a~%" args params)
+;;     ;; args))
+;;     ;; FIXME: (a) ()
+;;     (let ((retval (get-values-for-params 
+;; 		   params 
+;; 		   (get-arg-associations args params #f info handler fail)
+;; 		   '() info handler fail)))
+;;       ;;(printf "retval: ~a~%" retval)
+;;       retval)))
 
 (define get-values-for-params
   (lambda (params associations used info handler fail)

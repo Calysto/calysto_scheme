@@ -7998,9 +7998,7 @@ def process_formals(params, info, handler, fail):
     return Map(get_symbol, params)
 
 def process_args(args, params, info, handler, fail):
-    retval = symbol_undefined
-    retval = get_values_for_params(params, get_arg_associations(args, params, False, info, handler, fail), symbol_emptylist, info, handler, fail)
-    return retval
+    return args
 
 def get_values_for_params(params, associations, used, info, handler, fail):
     if true_q(null_q(params)):

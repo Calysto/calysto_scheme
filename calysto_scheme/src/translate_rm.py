@@ -284,7 +284,7 @@ class PythonTranslator(Translator):
 ####################################################
 
 """)
-        self.Print(0, file("Scheme.py").read())
+        self.Print(0, open("Scheme.py").read())
 
     def process_function_definition(self, expr, locals, indent):
         ## (define x (lambda (x) (cond ((test? x) (func x)) (else return))))
@@ -1001,7 +1001,7 @@ public class PJScheme:Scheme
             self.Print(indent + 8,  "mi_%s[i] = typeof(PJScheme).GetMethod(String.Format(\"b_%s_{0}_d\", i));" % (mi, mi))
             self.Print(indent + 8,  "if (mi_%s[i] == null) {" % mi)
             self.Print(indent + 12, "throw new Exception(String.Format(\"Undefined mi: mi_%s[{0}]\", i));" % mi)
-	    self.Print(indent + 8,  "}")
+            self.Print(indent + 8,  "}")
             self.Print(indent + 4,  "}")
             self.Print(indent + 4, "")
         self.Print(indent,  "}")
