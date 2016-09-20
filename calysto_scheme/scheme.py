@@ -801,6 +801,15 @@ def tagged_list_hat(keyword, op, length):
                 eq_q_hat(car_hat(asexp), keyword))
     return tagged_list
 
+def tagged_list_or_hat(keyword1, keyword2, op, length):
+    def tagged_list(asexp):
+        return (list_q_hat(asexp) and
+                op(length_hat(asexp), length) and
+                symbol_q_hat(car_hat(asexp)) and
+                (eq_q_hat(car_hat(asexp), keyword1) or
+                 eq_q_hat(car_hat(asexp), keyword2)))
+    return tagged_list
+
 def tagged2_list_hat(keyword, op, length):
     def tagged2_list(asexp):
         return (list_q_hat(asexp) and
@@ -1480,6 +1489,7 @@ symbol_apply_sub_hat = make_symbol("apply-sub^")
 symbol_atom = make_symbol("atom")
 symbol_pair = make_symbol("pair")
 symbol_help = make_symbol("help")
+symbol_λ = make_symbol("λ")
 symbol_b__q_q_q_d = make_symbol("<???>")
 symbol_b_fail_d = make_symbol("<fail>")
 symbol_b_handler_d = make_symbol("<handler>")
@@ -8222,7 +8232,7 @@ define_q_hat = tagged_list_hat(symbol_define, GreaterThanEqual, 3)
 define_b_q_hat = tagged_list_hat(symbol_define_b, GreaterThanEqual, 3)
 define_syntax_q_hat = tagged_list_hat(symbol_define_syntax, GreaterThanEqual, 3)
 begin_q_hat = tagged_list_hat(symbol_begin, GreaterThanEqual, 2)
-lambda_q_hat = tagged_list_hat(symbol_lambda, GreaterThanEqual, 3)
+lambda_q_hat = tagged_list_or_hat(symbol_lambda, symbol_λ, GreaterThanEqual, 3)
 trace_lambda_q_hat = tagged_list_hat(symbol_trace_lambda, GreaterThanEqual, 4)
 raise_q_hat = tagged_list_hat(symbol_raise, numeric_equal, 2)
 choose_q_hat = tagged_list_hat(symbol_choose, GreaterThanEqual, 1)

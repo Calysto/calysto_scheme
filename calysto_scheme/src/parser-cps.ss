@@ -249,6 +249,15 @@
 	   (symbol?^ (car^ asexp))
 	   (eq?^ (car^ asexp) keyword)))))
 
+(define-native tagged-list-or^
+  (lambda (keyword1 keyword2 op len)
+    (lambda (asexp)
+      (and (list?^ asexp)
+	   (op (length^ asexp) len)
+	   (symbol?^ (car^ asexp))
+	   (or (eq?^ (car^ asexp) keyword1)
+	       (eq?^ (car^ asexp) keyword2))))))
+
 (define-native tagged2-list^
   (lambda (keyword op len)
     (lambda (asexp)
@@ -274,7 +283,7 @@
 (define define-var^ (lambda (x) (untag-atom^ (cadr^ x))))
 (define define-docstring^ (lambda (x) (untag-atom^ (caddr^ x))))
 (define begin?^ (tagged-list^ 'begin >= 2))
-(define lambda?^ (tagged-list^ 'lambda >= 3))
+(define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
 (define trace-lambda?^ (tagged-list^ 'trace-lambda >= 4))
 (define raise?^ (tagged-list^ 'raise = 2))
 (define choose?^ (tagged-list^ 'choose >= 1))

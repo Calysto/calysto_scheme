@@ -793,6 +793,15 @@ def tagged_list_hat(keyword, op, length):
                 eq_q_hat(car_hat(asexp), keyword))
     return tagged_list
 
+def tagged_list_or_hat(keyword1, keyword2, op, length):
+    def tagged_list(asexp):
+        return (list_q_hat(asexp) and
+                op(length_hat(asexp), length) and
+                symbol_q_hat(car_hat(asexp)) and
+                (eq_q_hat(car_hat(asexp), keyword1) or
+                 eq_q_hat(car_hat(asexp), keyword2)))
+    return tagged_list
+
 def tagged2_list_hat(keyword, op, length):
     def tagged2_list(asexp):
         return (list_q_hat(asexp) and
