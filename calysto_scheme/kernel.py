@@ -319,7 +319,7 @@ MAIN FEATURES
         return retval
 
     def do_function_direct(self, function_name, arg):
-        return self.do_execute_direct("(%s %s)" % (function_name, arg))
+        return self.do_execute_direct("(%s %s)" % (function_name, self.repr(arg)))
 
     def initialize_debug(self, code):
         self.original_debug_code = code
