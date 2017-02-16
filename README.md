@@ -1,3 +1,5 @@
+# Calysto Scheme
+
 **Calysto Scheme** is a real Scheme programming language, with full support for continuations, including call/cc. It can also use all Python libraries. Also has some extensions that make it more useful (stepper-debugger, choose/fail, stack traces), or make it better integrated with Python.
 
 In Jupyter notebooks, because **Calysto Scheme** uses [MetaKernel](https://github.com/Calysto/metakernel/blob/master/README.rst), it has a fully-supported set of "magics"---meta-commands for additional functionality. This includes running Scheme in parallel. See all of the [MetaKernel Magics](https://github.com/Calysto/metakernel/blob/master/metakernel/magics/README.md).
@@ -9,6 +11,8 @@ Calysto Scheme is written in Scheme, and then translated into Python (and other 
 * [CS245: Programming Languages - 2014, Fall](https://athena.brynmawr.edu/jupyter/hub/dblank/public/CS245%20Programming%20Languages/2014-Fall/Programming%20Languages,%20Syllabus.ipynb)
 * [CS245: Programming Languages - 2016, Fall](https://athena.brynmawr.edu/jupyter/hub/dblank/public/CS245%20Programming%20Languages/2016-Fall/Syllabus.ipynb)
 * Videos: https://www.youtube.com/watch?v=2w-iO701g_w
+
+## Install
 
 You can install Calysto Scheme with Python3:
 
@@ -31,20 +35,22 @@ Use it in the console, qtconsole, or notebook with IPython 3:
 ```
 ipython console --kernel calysto_scheme
 ipython qtconsole --kernel calysto_scheme
-ipython notebook --kernel calysto_scheme
+ipython notebook
 ```
 
-Requires:
+## Requires
 
 * ipython=>3.0
 * Python2 or Python3
 * metakernel (installed automatically)
 
+## Features
+
 Calysto Scheme supports:
 
 * continuations
 * use of all Python libraries
-* choose/fail
+* choose/fail - built in fail and try again
 * produces stack trace (with line numbers), like Python
 * test suite
 
