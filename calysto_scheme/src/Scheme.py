@@ -1071,9 +1071,23 @@ def get_external_member(obj, components):
     return retval
 
 def dlr_apply(f, args):
-    ## FIXME: Handle named params, and (* : ...), (** : ...)
     largs = list_to_vector(args)
-    return f(*largs)
+    fargs = []
+    fkwargs = {}
+    for larg in largs:
+        if association_q(larg):
+            sym = symbol_to_string(car(larg))
+            if sym == "*":
+                ## FIXME: Handle (* : ...)
+                pass
+            elif sym == "**":
+                ## FIXME: Handle (** : ...)
+                pass
+            else:
+                fkwargs[sym] = caddr(larg)
+        else:
+            fargs.append(larg)
+    return f(*fargs, **fkwargs)
 
 def dlr_func(schemeProc):
     def f(*args):
