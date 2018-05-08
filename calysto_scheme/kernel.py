@@ -360,9 +360,8 @@ MAIN FEATURES
                 return "Unhandled Error: " + code
         elif code.startswith("inspect "):
             variable = code[8:].strip()
-            return "%s => %s" % (variable, self.repr(self.get_variable(variable)))
-        else:
-            return None
+            self.Print("%s => %s" % (variable, self.repr(self.get_variable(variable))))
+        return None
 
     def do_is_complete(self, code):
         # status: 'complete', 'incomplete', 'invalid', or 'unknown'
