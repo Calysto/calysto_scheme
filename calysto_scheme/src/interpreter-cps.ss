@@ -588,13 +588,34 @@
 	    (lambda-cont2 (v2 fail)
 	      (k (cons v1 v2) fail))))))))
 
+(define preprocess-defines
+  ;; Changes (define-aexp VAR "" VAL annotations)
+  ;; into: (define-aexp VAR "" none annotations)
+  ;;       (assign-aexp VAR VAL annotations)
+  (lambda (defs-accum exp-accum exp)
+    (cond
+     ((null? exp) (append defs-accum exp-accum))
+     ((eq? 'define-aexp (caar exp))
+      (preprocess-defines
+       (snoc `(define-aexp ,(cadar exp) ,(caddar exp) (lit-aexp () none) none)
+	     defs-accum)
+       (snoc `(assign-aexp ,(cadar exp) ,(car (cdddar exp)) none none)
+	     exp-accum)
+       (cdr exp)))
+     (else (preprocess-defines defs-accum (snoc (car exp) exp-accum) (cdr exp))))))
+
 (define* eval-sequence
+  (lambda (exps env handler fail k)
+    (eval-sequence-detail
+     (preprocess-defines '() '() exps) env handler fail k)))
+
+(define* eval-sequence-detail
   (lambda (exps env handler fail k)
     (if (null? (cdr exps))
       (m (car exps) env handler fail k)
       (m (car exps) env handler fail
 	(lambda-cont2 (result fail)
-	  (eval-sequence (cdr exps) env handler fail k))))))
+	  (eval-sequence-detail (cdr exps) env handler fail k))))))
 
 (define try-catch-handler
   (lambda (cvar cexps env handler k)
