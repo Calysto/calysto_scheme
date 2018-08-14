@@ -514,7 +514,8 @@
 
 (define symbol?^
   (lambda (asexp)
-    (and (atom?^ asexp) (symbol? (untag-atom^ asexp)))))
+    (and (atom?^ asexp)
+	 (symbol? (untag-atom^ asexp)))))
 
 (define string?^
   (lambda (asexp)
