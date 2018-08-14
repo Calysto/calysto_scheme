@@ -297,22 +297,22 @@
 (define try-catch-finally-exps^ (lambda (x) (cdr^ (cadddr^ x))))
 
 (define* aparse
-  (lambda (adatum senv handler fail k)   ;; k receives 2 args: aexp, fail
+  (lambda (adatum senv handler fail k)   ;; k receives 3 args: aexp, senv2, fail
     (let ((info (get-source-info adatum)))
       (cond
-	((literal?^ adatum) (k (lit-aexp (untag-atom^ adatum) info) fail))
+	((literal?^ adatum) (k (lit-aexp (untag-atom^ adatum) info) senv fail))
 	((symbol?^ adatum)
 	 (if *use-lexical-address*
 	     (get-lexical-address (untag-atom^ adatum) senv 0 info fail k)
-	     (k (var-aexp (untag-atom^ adatum) info) fail)))
+	     (k (var-aexp (untag-atom^ adatum) info) senv fail)))
 	((vector?^ adatum)
 	 (unannotate-cps adatum
 	   (lambda-cont (v)
-	     (k (lit-aexp v info) fail))))
+	     (k (lit-aexp v info) senv fail))))
 	((quote?^ adatum)
 	 (unannotate-cps adatum
 	   (lambda-cont (v)
-	     (k (lit-aexp (cadr v) info) fail))))
+	     (k (lit-aexp (cadr v) info) senv fail))))
 	((quasiquote?^ adatum)
 	 (qq-expand-cps (cadr^ adatum) 0
 	   (lambda-cont (v)
@@ -329,39 +329,39 @@
 	     (aparse expansion senv handler fail k))))
 	((if-then?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
-	   (lambda-cont2 (v1 fail)
+	   (lambda-cont3 (v1 senv2 fail)
 	     (aparse (caddr^ adatum) senv handler fail
-	       (lambda-cont2 (v2 fail)
-		 (k (if-aexp v1 v2 (lit-aexp #f 'none) info) fail))))))
+	       (lambda-cont3 (v2 senv2 fail)
+		 (k (if-aexp v1 v2 (lit-aexp #f 'none) info) senv2 fail))))))
 	((if-else?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
-	   (lambda-cont2 (v1 fail)
+	   (lambda-cont3 (v1 senv2 fail)
 	     (aparse (caddr^ adatum) senv handler fail
-	       (lambda-cont2 (v2 fail)
+	       (lambda-cont3 (v2 senv2 fail)
 		 (aparse (cadddr^ adatum) senv handler fail
-		   (lambda-cont2 (v3 fail)
-		     (k (if-aexp v1 v2 v3 info) fail))))))))
+		   (lambda-cont3 (v3 senv2 fail)
+		     (k (if-aexp v1 v2 v3 info) senv2 fail))))))))
 	((help?^ adatum)
 	   (let ((var-info (get-source-info (cadr^ adatum))))
-	     (k (help-aexp (untag-atom^ (cadr^ adatum)) var-info info) fail)))
+	     (k (help-aexp (untag-atom^ (cadr^ adatum)) var-info info) senv fail)))
 	((assignment?^ adatum)
 	 (aparse (caddr^ adatum) senv handler fail
-	   (lambda-cont2 (v fail)
+	   (lambda-cont3 (v senv2 fail)
 	     (let ((var-info (get-source-info (cadr^ adatum))))
-	       (k (assign-aexp (untag-atom^ (cadr^ adatum)) v var-info info) fail)))))
+	       (k (assign-aexp (untag-atom^ (cadr^ adatum)) v var-info info) senv2 fail)))))
 	((association?^ adatum)
 	 (aparse (caddr^ adatum) senv handler fail
-	   (lambda-cont2 (v fail)
+	   (lambda-cont3 (v senv2 fail)
 	     (let ((var-info (get-source-info (cadr^ adatum))))
-	       (k (association-aexp (untag-atom^ (car^ adatum)) v var-info info) fail)))))
+	       (k (association-aexp (untag-atom^ (car^ adatum)) v var-info info) senv2 fail)))))
 	((func?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
-	   (lambda-cont2 (e fail)
-	     (k (func-aexp e info) fail))))
+	   (lambda-cont3 (e senv2 fail)
+	     (k (func-aexp e info) senv2 fail))))
 	((callback?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
-	   (lambda-cont2 (e fail)
-	     (k (callback-aexp e info) fail))))
+	   (lambda-cont3 (e senv2 fail)
+	     (k (callback-aexp e info) senv2 fail))))
 	((define?^ adatum)
 	 (cond
 	   ((mit-style-define?^ adatum)
@@ -372,12 +372,12 @@
 		    (aparse (replace-info expansion info) senv handler fail k))))))
 	   ((= (length^ adatum) 3) ;; (define <var> <body>)
 	    (aparse (caddr^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
-		(k (define-aexp (define-var^ adatum) "" body info) fail))))
+	      (lambda-cont3 (body senv2 fail)
+		(k (define-aexp (define-var^ adatum) "" body info) senv2 fail))))
 	   ((and (= (length^ adatum) 4) (string?^ (caddr^ adatum))) ;; (define <var> <docstring> <body>)
 	    (aparse (cadddr^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
-		(k (define-aexp (define-var^ adatum) (define-docstring^ adatum) body info) fail))))
+	      (lambda-cont3 (body senv2 fail)
+		(k (define-aexp (define-var^ adatum) (define-docstring^ adatum) body info) senv2 fail))))
 	   (else (aparse-error "bad concrete syntax:" adatum handler fail))))
 	((define!?^ adatum)
 	 (cond
@@ -389,26 +389,26 @@
 		    (aparse (replace-info expansion info) senv handler fail k))))))
 	   ((= (length^ adatum) 3) ;; (define! <var> <body>)
 	    (aparse (caddr^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
-		(k (define!-aexp (define-var^ adatum) "" body info) fail))))
+	      (lambda-cont3 (body senv2 fail)
+		(k (define!-aexp (define-var^ adatum) "" body info) senv2 fail))))
 	   ((and (= (length^ adatum) 4) (string?^ (caddr^ adatum))) ;; (define! <var> <docstring> <body>)
 	    (aparse (cadddr^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
-		(k (define!-aexp (define-var^ adatum) (define-docstring^ adatum) body info) fail))))
+	      (lambda-cont3 (body senv2 fail)
+		(k (define!-aexp (define-var^ adatum) (define-docstring^ adatum) body info) senv2 fail))))
 	   (else (aparse-error "bad concrete syntax:" adatum handler fail))))
 	((define-syntax?^ adatum)
 	 (let ((name (define-var^ adatum))
 	       (aclauses (cddr^ adatum)))
 	   (unannotate-cps aclauses
 	     (lambda-cont (clauses)
-	       (k (define-syntax-aexp name clauses aclauses info) fail)))))
+	       (k (define-syntax-aexp name clauses aclauses info) senv fail)))))
 	((begin?^ adatum)
 	 (cond
 	   ((null?^ (cdr^ adatum)) (aparse-error "bad concrete syntax:" adatum handler fail))
 	   ((null?^ (cddr^ adatum)) (aparse (cadr^ adatum) senv handler fail k))
 	   (else (aparse-all (cdr^ adatum) senv handler fail
-		   (lambda-cont2 (exps fail)
-		     (k (begin-aexp exps info) fail))))))
+		   (lambda-cont3 (exps senv2 fail)
+		     (k (begin-aexp exps info) senv2 fail))))))
 	((lambda?^ adatum)
 	 (unannotate-cps (cadr^ adatum)
 	    (lambda-cont (formals)
@@ -417,10 +417,10 @@
 			    formals
 			    (cons (last formals) (head formals)))))
 		  (aparse-all (cddr^ adatum) (cons formals-list senv) handler fail
-		      (lambda-cont2 (bodies fail)
+		      (lambda-cont3 (bodies senv2 fail)
 			 (if (and (list? formals) (not (association? formals)))
-			     (k (lambda-aexp formals bodies info) fail)
-			     (k (mu-lambda-aexp (head formals) (last formals) bodies info) fail))))))))
+			     (k (lambda-aexp formals bodies info) senv2 fail)
+			     (k (mu-lambda-aexp (head formals) (last formals) bodies info) senv2 fail))))))))
 	((trace-lambda?^ adatum)
 	 (unannotate-cps (caddr^ adatum)
 	      (lambda-cont (formals)
@@ -430,10 +430,10 @@
 			    (cons (last formals) (head formals))))
 		      (name (untag-atom^ (cadr^ adatum))))
 		  (aparse-all (cdddr^ adatum) (cons formals-list senv) handler fail
-		      (lambda-cont2 (bodies fail)
+		      (lambda-cont3 (bodies senv2 fail)
 			 (if (and (list? formals) (not (association? formals)))
-			     (k (trace-lambda-aexp name formals bodies info) fail)
-			     (k (mu-trace-lambda-aexp name (head formals) (last formals) bodies info) fail))))))))
+			     (k (trace-lambda-aexp name formals bodies info) senv2 fail)
+			     (k (mu-trace-lambda-aexp name (head formals) (last formals) bodies info) senv2 fail))))))))
 	((try?^ adatum)
 	 (cond
 	  ;; (try <body>)
@@ -442,54 +442,54 @@
 	   ;; (try <body> (catch <var> <exp> ...))
 	   ((and (= (length^ adatum) 3) (catch?^ (caddr^ adatum)))
 	    (aparse (try-body^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
+	      (lambda-cont3 (body senv2 fail)
 		 (let ((cvar (catch-var^ adatum)))
 		   (aparse-all (catch-exps^ adatum) (cons (list cvar) senv) handler fail
-		     (lambda-cont2 (cexps fail)
-		      (k (try-catch-aexp body cvar cexps info) fail)))))))
+		     (lambda-cont3 (cexps senv2 fail)
+		      (k (try-catch-aexp body cvar cexps info) senv2 fail)))))))
 	   ;; (try <body> (finally <exp> ...))
 	   ((and (= (length^ adatum) 3) (finally?^ (caddr^ adatum)))
 	    (aparse (try-body^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
+	      (lambda-cont3 (body senv2 fail)
 		(aparse-all (try-finally-exps^ adatum) senv handler fail
-		  (lambda-cont2 (fexps fail)
-		    (k (try-finally-aexp body fexps info) fail))))))
+		  (lambda-cont3 (fexps senv2 fail)
+		    (k (try-finally-aexp body fexps info) senv2 fail))))))
 	   ;; (try <body> (catch <var> <exp> ...) (finally <exp> ...))
 	   ((and (= (length^ adatum) 4) (catch?^ (caddr^ adatum)) (finally?^ (cadddr^ adatum)))
 	    (aparse (try-body^ adatum) senv handler fail
-	      (lambda-cont2 (body fail)
+	      (lambda-cont3 (body senv2 fail)
 		(let ((cvar (catch-var^ adatum)))
 		  (aparse-all (catch-exps^ adatum) (cons (list cvar) senv) handler fail
-		    (lambda-cont2 (cexps fail)
-		      (aparse-all (try-catch-finally-exps^ adatum) senv handler fail
-			(lambda-cont2 (fexps fail)
-			  (k (try-catch-finally-aexp body cvar cexps fexps info) fail)))))))))
+		    (lambda-cont3 (cexps senv2 fail)
+		      (aparse-all (try-catch-finally-exps^ adatum) senv2 handler fail
+			(lambda-cont3 (fexps senv2 fail)
+			  (k (try-catch-finally-aexp body cvar cexps fexps info) senv2 fail)))))))))
 	   (else (aparse-error "bad try syntax:" adatum handler fail))))
 	((raise?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
-	   (lambda-cont2 (v fail)
-	     (k (raise-aexp v info) fail))))
+	   (lambda-cont3 (v senv2 fail)
+	     (k (raise-aexp v info) senv2 fail))))
 	((choose?^ adatum)
 	 (aparse-all (cdr^ adatum) senv handler fail
-	   (lambda-cont2 (exps fail)
-	     (k (choose-aexp exps info) fail))))
+	   (lambda-cont3 (exps senv2 fail)
+	     (k (choose-aexp exps info) senv2 fail))))
 	((application?^ adatum)
 	 (aparse (car^ adatum) senv handler fail
-	   (lambda-cont2 (v1 fail)
+	   (lambda-cont3 (v1 senv2 fail)
 	     (aparse-all (cdr^ adatum) senv handler fail
-	       (lambda-cont2 (v2 fail)
-		 (k (app-aexp v1 v2 info) fail))))))
+	       (lambda-cont3 (v2 senv2 fail)
+		 (k (app-aexp v1 v2 info) senv2 fail))))))
 	(else (aparse-error "bad concrete syntax:" adatum handler fail))))))
 
 (define* aparse-all
-  (lambda (adatum-list senv handler fail k)
+  (lambda (adatum-list senv handler fail k) ;; k receives args, env2, fail
     (if (null?^ adatum-list)
-      (k '() fail)
+      (k '() senv fail)
       (aparse (car^ adatum-list) senv handler fail
-	(lambda-cont2 (a fail)
+	(lambda-cont3 (a senv2 fail)
 	  (aparse-all (cdr^ adatum-list) senv handler fail
-	    (lambda-cont2 (b fail)
-	      (k (cons a b) fail))))))))
+	    (lambda-cont3 (b senv2 fail)
+	      (k (cons a b) senv2 fail))))))))
 
 (define* aparse-error
   (lambda (msg adatum handler fail)
@@ -506,28 +506,28 @@
 (define* aparse-sexps
   (lambda (tokens src senv handler fail k)
     (if (token-type? (first tokens) 'end-marker)
-      (k '() fail)
+      (k '() senv fail)
       (read-sexp tokens src handler fail
 	(lambda-cont4 (adatum end tokens-left fail)
 	  (aparse adatum senv handler fail
-	    (lambda-cont2 (v1 fail)
+	    (lambda-cont3 (v1 senv2 fail)
 	      (aparse-sexps tokens-left src senv handler fail
-		(lambda-cont2 (v2 fail)
-		  (k (cons v1 v2) fail))))))))))
+		(lambda-cont3 (v2 senv2 fail)
+		  (k (cons v1 v2) senv2 fail))))))))))
 
 (define* get-lexical-address
   (lambda (id senv depth info fail k)
     (cond
-      ((null? senv) (k (var-aexp id info) fail))   ;; free!
+      ((null? senv) (k (var-aexp id info) senv fail))   ;; free!
       ((memq id (car senv))
-       (get-lexical-address-offset id (car senv) depth 0 info fail k))
+       (get-lexical-address-offset id (car senv) depth 0 info fail senv k))
       (else (get-lexical-address id (cdr senv) (+ depth 1) info fail k)))))
 
 (define* get-lexical-address-offset
-  (lambda (id contours depth offset info fail k)
+  (lambda (id contours depth offset info fail senv k)
     (if (eq? (car contours) id)
-      (k (lexical-address-aexp depth offset id info) fail)
-      (get-lexical-address-offset id (cdr contours) depth (+ offset 1) info fail k))))
+      (k (lexical-address-aexp depth offset id info) senv fail)
+      (get-lexical-address-offset id (cdr contours) depth (+ offset 1) info fail senv k))))
 
 ;;(define get-lexical-address
 ;;  ;; given an environment and variable id, return the depth of the
@@ -1205,7 +1205,7 @@
   (lambda (string)
     (aread-datum string 'stdin init-handler2 init-fail
       (lambda-cont3 (adatum tokens-left fail)
-	(aparse adatum (initial-contours toplevel-env) init-handler2 init-fail init-cont2)))))
+	(aparse adatum (initial-contours toplevel-env) init-handler2 init-fail init-cont3)))))
 
 (define aparse-file
   (lambda (filename)
@@ -1219,7 +1219,7 @@
   (lambda (filename)
     (scan-input (read-content filename) filename init-handler2 init-fail
       (lambda-cont2 (tokens fail)
-	(aparse-sexps tokens filename (initial-contours toplevel-env) init-handler2 init-fail init-cont2)))))
+	(aparse-sexps tokens filename (initial-contours toplevel-env) init-handler2 init-fail init-cont3)))))
 
 ;;--------------------------------------------------------------------------------------------
 ;; not used - for possible future reference
