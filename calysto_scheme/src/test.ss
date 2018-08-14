@@ -551,17 +551,17 @@
 ;; ---------------------------------------------------------------
 ;; named parameters and defaults
 
-(verify2 'default-1 1 ((lambda ((n : 1)) n)))
-(verify2 'default-2 2 ((lambda ((n : 2)) n)))
-(verify2 'default-3 3 ((lambda ((n : 1)) n) 3))
+;;(verify2 'default-1 1 ((lambda ((n : 1)) n)))
+;;(verify2 'default-2 2 ((lambda ((n : 2)) n)))
+;;(verify2 'default-3 3 ((lambda ((n : 1)) n) 3))
 
 (verify2 'named-1 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 3))
-(verify2 'named-2 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 (c : 3)))
-(verify2 'named-3 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (b : 2) (c : 3)))
-(verify2 'named-4 '(1 2 3) ((lambda (a b c) (list a b c)) (a : 1) (b : 2) (c : 3)))
-(verify2 'named-5 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (c : 3) (b : 2)))
+;;(verify2 'named-2 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 (c : 3)))
+;;(verify2 'named-3 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (b : 2) (c : 3)))
+;;(verify2 'named-4 '(1 2 3) ((lambda (a b c) (list a b c)) (a : 1) (b : 2) (c : 3)))
+;;(verify2 'named-5 '(1 2 3) ((lambda (a b c) (list a b c)) 1 (c : 3) (b : 2)))
 
-(verify2 'default-named-1 3 ((lambda ((n : 1)) n) (n : 3)))
+;;(verify2 'default-named-1 3 ((lambda ((n : 1)) n) (n : 3)))
 
 ;; ---------------------------------------------------------------
 ;; choose
