@@ -231,7 +231,7 @@
       (lambda-cont4 (datum end tokens-left fail)
 	(set! *tokens-left* tokens-left)
 	(aparse datum (initial-contours toplevel-env) REP-handler fail
-	  (lambda-cont3 (exp senv2 fail)
+	  (lambda-cont2 (exp fail)
 	    (m exp toplevel-env REP-handler fail REP-k)))))))
 
 ;;----------------------------------------------------------------------------
@@ -311,7 +311,7 @@
       (lambda-cont4 (datum end tokens-left fail)
 	(set! *tokens-left* tokens-left)
 	(aparse datum (initial-contours toplevel-env) REP-handler fail
-	  (lambda-cont3 (exp senv2 fail)
+	  (lambda-cont2 (exp fail)
 	    (m exp toplevel-env REP-handler fail REP-k)))))))
 
 ;;----------------------------------------------------------------------------
@@ -327,7 +327,7 @@
     (scan-input input 'stdin try-parse-handler *last-fail*
       (lambda-cont2 (tokens fail)
 	(aparse-sexps tokens 'stdin (initial-contours toplevel-env) try-parse-handler fail
-	  (lambda-cont3 (result senv2 fail)
+	  (lambda-cont2 (result fail)
 	    (halt* #t)))))
     (trampoline)))
 
@@ -817,13 +817,13 @@
        (annotate-cps (car args) 'none
 	 (lambda-cont (adatum)
 	   (aparse adatum (initial-contours toplevel-env) handler fail
-	     (lambda-cont3 (exp senv2 fail)
-	       (m exp env2 handler fail k2))))))
+	     (lambda-cont2 (exp fail)
+	       (m exp toplevel-env handler fail k2))))))
       ((length-two? args)
        (annotate-cps (car args) 'none
 	 (lambda-cont (adatum)
 	   (aparse adatum (initial-contours (cadr args)) handler fail
-	     (lambda-cont3 (exp senv2 fail)
+	     (lambda-cont2 (exp fail)
 	       (m exp (cadr args) handler fail k2))))))
       (else (runtime-error "incorrect number of arguments to eval" info handler fail)))))
 	       
@@ -842,9 +842,7 @@
   (lambda-proc (args env2 info handler fail k2)
     (annotate-cps (car args) 'none
       (lambda-cont (adatum)
-	  (aparse adatum (initial-contours toplevel-env) handler fail
-	      (lambda-cont3 (exp senv2 fail)
-		  (k2 exp fail)))))))
+        (aparse adatum (initial-contours toplevel-env) handler fail k2)))))  ;; was env2
 
 ;; string-length
 (define string-length-prim
@@ -886,10 +884,8 @@
 	(read-sexp tokens 'stdin handler fail
 	  (lambda-cont4 (adatum end tokens-left fail)
 	    (if (token-type? (first tokens-left) 'end-marker)
-		(aparse adatum (initial-contours toplevel-env) handler fail
-		   (lambda-cont3 (exp senv2 fail)
-			(k2 exp fail)))
-		(read-error "tokens left over" tokens-left 'stdin handler fail))))))))
+	      (aparse adatum (initial-contours toplevel-env) handler fail k2)  ;; was env2
+	      (read-error "tokens left over" tokens-left 'stdin handler fail))))))))
 
 ;; read-string
 (define read-string-prim
@@ -1074,13 +1070,12 @@
       (read-sexp tokens src handler fail
 	(lambda-cont4 (datum end tokens-left fail)
 	  (aparse datum (initial-contours env2) handler fail  ;; was env2
-	    (lambda-cont3 (exp senv2 fail)
+	    (lambda-cont2 (exp fail)
 	      (m exp env2 handler fail
 		(lambda-cont2 (v fail)
 		  (if (token-type? (first tokens-left) 'end-marker)
-		      (k v fail)
-		      ;;; FIXME: Should this continue with senv2 ?
-		      (read-and-eval-asexps tokens-left src env2 handler fail k)))))))))))
+		    (k v fail)
+		    (read-and-eval-asexps tokens-left src env2 handler fail k)))))))))))
 
 (define* load-files
   (lambda (filenames env2 info handler fail k)
