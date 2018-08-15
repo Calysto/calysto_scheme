@@ -47,7 +47,7 @@ class CalystoScheme(MetaKernel):
 
     def __init__(self, *args, **kwargs):
         super(CalystoScheme, self).__init__(*args, **kwargs)
-        #self.log.setLevel(logging.INFO)
+        ## self.log.setLevel(logging.DEBUG)
         scheme.ENVIRONMENT["raw_input"] = self.raw_input
         scheme.ENVIRONMENT["read"] = self.raw_input
         scheme.ENVIRONMENT["input"] = self.raw_input
@@ -146,9 +146,6 @@ MAIN FEATURES
 """
 
     def get_completions(self, info):
-        self.log.debug("get_completitons: info = %s" % info)
-        #for key in info.keys():
-        #    io.rprint("get_completitons: info[%s] = %s" % (key, info[key]))
         token = info["help_obj"]
         matches = []
         # from latex
@@ -221,10 +218,13 @@ MAIN FEATURES
             return scheme.ENVIRONMENT[name]
 
     def get_kernel_help_on(self, info, level=0, none_on_fail=False):
-        expr = info["code"]
+        expr = info["help_obj"]
+        if expr == "":
+            return None
         result = scheme.execute_string_rm("(help %s)" % expr)
         if not scheme.exception_q(result):
             return result
+            #return {"text/html": "<b>%s</b>" % result}
         elif expr in ["define", "define!", "func", "callback", "if",
                      "help", "define-syntax", "begin", "lambda", "trace-lambda",
                      "try", "catch", "finally", "raise", "choose"]:
