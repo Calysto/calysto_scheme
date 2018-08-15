@@ -740,7 +740,7 @@ def string_to_number(s):
         return string_to_integer(s)
 
 def int_(number):
-    return int(round(number))
+    return int(number)
 
 ### Strings:
 
