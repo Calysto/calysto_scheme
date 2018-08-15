@@ -739,7 +739,7 @@ def string_to_number(s):
     else:
         return string_to_integer(s)
 
-def int_(number):
+def truncate_to_integer(number):
     return int(number)
 
 ### Strings:
