@@ -305,7 +305,7 @@ def random(number):
     if isinstance(number, float):
         return pyrandom.random() * number
     elif isinstance(number, int):
-        return pyrandom.randint(0, number)
+        return pyrandom.randint(0, number - 1)
     else:
         raise Exception("random function received invalid value: %s" % number)
 
