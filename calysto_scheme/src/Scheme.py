@@ -10,6 +10,7 @@ import inspect
 import fractions
 import functools
 import operator
+import random as pyrandom
 import types
 import math
 import time
@@ -299,6 +300,14 @@ def make_comparison_function(procedure):
 
 def apply_comparison(p, carl, cadrl):
     return p(carl, cadrl)
+
+def random(number):
+    if isinstance(number, float):
+        return pyrandom.random() * number
+    elif isinstance(number, int):
+        return pyrandom.randint(0, number)
+    else:
+        raise Exception("random function received invalid value: %s" % number)
 
 ## usage: (partition 4 '(6 4 2 1 7) () ()) -> returns partitions
 def partition (p, piv, l, p1, p2):
