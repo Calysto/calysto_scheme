@@ -847,8 +847,24 @@ def trampoline():
                 pc = apply_handler2
     return final_reg
 
+class Box():
+    """
+    A Box object.
+    """
+    def __init__(self, item):
+        self.item = item
+
+    def __str__(self):
+        return "#&%s" % self.item
+
+def box_q(item):
+    return isinstance(item, Box)
+
 def box(item):
-    return List(item)
+    return Box(item)
+
+def unbox(item):
+    return item.item
 
 def ready_to_eval(text):
     if text:
