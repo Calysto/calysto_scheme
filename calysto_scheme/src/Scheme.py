@@ -317,14 +317,14 @@ def sort_native(args, env2, info, handler, fail):
         f = make_comparison_function(p)
     else:
         f = p
-    return sort_continue_native(f, l)
+    return sort(f, l)
 
-def sort_continue_native(f, l):
+def sort(f, l):
     piv = pivot(f, l)
     if (piv is make_symbol("done")): return l
     parts = partition(f, piv, l, symbol_emptylist, symbol_emptylist)
-    return append(sort_continue_native(f, car(parts)),
-                  sort_continue_native(f, cadr(parts)))
+    return append(sort(f, car(parts)),
+                  sort(f, cadr(parts)))
 
 def append(*objs):
     retval = objs[-1]
