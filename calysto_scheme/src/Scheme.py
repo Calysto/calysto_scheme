@@ -310,18 +310,21 @@ def partition (p, piv, l, p1, p2):
     else:
         return partition(p, piv, cdr(l), p1, cons(car(l), p2))
 
-def sort(p, l):
-    # FIXME: should rewrite this using CPS style
-    # in order to use CPS comparison operators
+def sort_native(args, env2, info, handler, fail):
+    p = car(args)
+    l = cadr(args)
     if procedure_q(p):
         f = make_comparison_function(p)
     else:
         f = p
+    return sort_continue_native(f, l)
+
+def sort_continue_native(f, l):
     piv = pivot(f, l)
     if (piv is make_symbol("done")): return l
     parts = partition(f, piv, l, symbol_emptylist, symbol_emptylist)
-    return append(sort(f, car(parts)),
-                  sort(f, cadr(parts)))
+    return append(sort_continue_native(f, car(parts)),
+                  sort_continue_native(f, cadr(parts)))
 
 def append(*objs):
     retval = objs[-1]

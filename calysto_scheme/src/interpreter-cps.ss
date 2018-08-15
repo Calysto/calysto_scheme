@@ -2400,7 +2400,13 @@
     (cond
       ((not (length-two? args))
        (runtime-error "incorrect number of arguments to sort" info handler fail))
-      (else (k2 (apply sort args) fail)))))
+      (else (k2 (sort-native args env2 info handler fail) fail)))))
+
+(define-native sort-native
+  (lambda (args env2 info handler fail)
+    (let ((op-prim (car args)))
+      (sort (lambda (v1 v2) (op-prim (list v1 v2) env2 info handler fail init-cont2))
+	    (cadr args)))))
 
 (define string-append-prim
   (lambda-proc (args env2 info handler fail k2)
