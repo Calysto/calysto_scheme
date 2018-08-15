@@ -7,9 +7,10 @@
 
 (define verify
   (lambda (name ans f exp)
+    (printf "Verifying ~s\n" name)
     (let* ((result (f exp ans))) ;; should be true
       (if (eq? result #t)
-	  (begin 
+	  (begin
 	    (printf ".")
 	    (set! right (+ right 1)))
 	  (begin
@@ -54,7 +55,7 @@
 (verify 'atom? (atom? 1) equal? #t)
 (verify 'boolean? (boolean? #t) equal? #t)
 (verify 'caaaar (caaaar '(((((hello there) this is a test) what is this) another item) in the list)) equal? '(hello there))
-(verify 'caaadr (caaadr '(((((hello there) this is a test) what is this) another item) ((((((1 2 3 ) 4 5 6) 7 8 9) 10 11 12) 13 14 15) 16 17 18))) 
+(verify 'caaadr (caaadr '(((((hello there) this is a test) what is this) another item) ((((((1 2 3 ) 4 5 6) 7 8 9) 10 11 12) 13 14 15) 16 17 18)))
 	equal? '((((1 2 3) 4 5 6) 7 8 9) 10 11 12))
 (verify 'caaar (caaar '(((((hello there) this is a test) what is this) another item) in the list)) equal? '((hello there) this is a test))
 (verify 'caadar (caadar '(((((hello there) this is a test) what is this) (((1 2 3) 4 5 6) 7 8 9) another item) in the list)) equal? '((1 2 3) 4 5 6))
@@ -69,8 +70,8 @@
 (verify 'caddr (caddr '(((((hello there) this is a test) what is this) another item) in the list)) equal? 'the)
 (verify 'cadr (cadr '(((((hello there) this is a test) what is this) another item) in the list)) equal? 'in)
 ;;(call-with-current-continuation) ;; see below
-;;(call/cc) 
-(verify 'car (car '(((((hello there) this is a test) what is this) another item) in the list)) 
+;;(call/cc)
+(verify 'car (car '(((((hello there) this is a test) what is this) another item) in the list))
 	equal? '((((hello there) this is a test) what is this) another item))
 (verify 'case (case 'thing1 (thing2 1) (thing1 2)) = 2)
 (verify 'case-2 (case 'thing1 (thing2 1) ((thing1 thing3) 2)) = 2)
@@ -131,11 +132,25 @@
 (verify 'get-stack-trace (caddr (cadar (get-stack-trace))) <= 73)
 ;;(verify 'globals (globals) equal? (globals))
 ;;(import "test")
-(verify 'int (int 12.8) = 13)
+(verify 'import (try
+		(import "math")
+		(catch e e
+		       (import "Graphics"))) (lambda (a b) (not (null? b))) '())
+(verify 'int (int 12.8) = 12)
 (verify 'integer->char (integer->char 97) equal? #\a)
+(verify 'internal-defines
+	(let ((nums
+	       (lambda (nums)
+		 (define odd (lambda (n) (if (= n 0) #f (even (- n 1)))))
+		 (define even (lambda (n) (if (= n 0) #t (odd (- n 1)))))
+		 (list (map odd nums) (map even nums)))))
+	  (nums '(1 2 3 4 5)))
+	equal?
+	'((#t #f #t #f #t) (#f #t #f #t #f)))
 (verify 'iter? (iter? 3) eq? #f)
 (verify 'length (length '(1 2 3)) = 3)
 (verify 'let (let ((x 1)) x) = 1)
+(verify 'let (let ((v (vector 1 2 3))) (vector-set! v 2 'a) v) equal? (vector 1 2 'a))
 (verify 'let* (let* ((x 1)(y (+ x 1))) y) = 2)
 (verify 'letrec (letrec ((loop (lambda (n) (if (= n 0) 'ok (loop (- n 1)))))) (loop 10)) eq? 'ok)
 (verify 'list (list 1 2) equal? '(1 2))
@@ -149,7 +164,8 @@
 (verify 'map (map (lambda (n) (+ n 1)) (range 5)) equal? '(1 2 3 4 5))
 (verify 'member (member "b" '("a" "b" "c")) equal? '("b" "c"))
 (verify 'memq (memq 'b '(a b c)) equal? '(b c))
-(verify 'memv (memv 2 '(1.0 2.0 3.0)) equal? '(2.0 3.0)) 
+(verify 'memv (memv 2 '(1.0 2.0 3.0)) equal? #f)
+(verify 'memv (memv 2.0 '(1.0 2.0 3.0)) equal? '(2.0 3.0))
 ;;(newline) ;; outputs a newline
 (verify 'not (not #f) eq? #t)
 (verify 'null? (null? '()) eq? #t)
@@ -170,7 +186,14 @@
 (verify 'range (range 10) equal? '(0 1 2 3 4 5 6 7 8 9))
 (verify 'rational (rational 3 4) = 3/4)
 (verify 'rdc (rdc '(1 2 3)) equal? '(1 2))
-(verify 'read-string (read-string '(1 2 3)) equal? '((pair) ((atom) 1 (stdin 1 2 2 1 2 2)) ((pair) ((atom) 2 (stdin 1 4 4 1 4 4)) ((pair) ((atom) 3 (stdin 1 6 6 1 6 6)) ((atom) () none) none) none) (stdin 1 1 1 1 7 7)))
+
+(let ((pair (box 'pair)) (atom (box 'atom)))
+  (verify 'read-string (read-string "(1 2 3)") equal?
+	  `(,pair (,atom 1 (stdin 1 2 2 1 2 2))
+		  (,pair (,atom 2 (stdin 1 4 4 1 4 4))
+			 (,pair (,atom 3 (stdin 1 6 6 1 6 6))
+				(,atom () none) none) none) (stdin 1 1 1 1 7 7))))
+
 ;;(record-case) ;; see macros below
 (verify 'remainder (remainder 1 4) = 1)
 (verify 'require (require #t) eq? 'ok) ;; requires an expression to be true
@@ -184,7 +207,7 @@
 (verify 'sort (sort < '(3 7 1 2)) equal? '(1 2 3 7))
 (verify 'sqrt (sqrt 3) equal? 1.7320508075688772)
 (verify 'string (string #\1 #\2) equal? "12")
-(verify 'string->list (string->list "hello world") 
+(verify 'string->list (string->list "hello world")
 	equal? '(#\h #\e #\l #\l #\o #\  #\w #\o #\r #\l #\d))
 (verify 'string->number (string->number "12.1") equal? 12.1)
 (verify 'string->symbol (string->symbol "hello") eq? 'hello)
@@ -196,24 +219,19 @@
 (verify 'string=? (string=? "a" "b") eq? #f)
 (verify 'string? (string? "hello") eq? #t)
 (verify 'substring (substring "hello" 1 3) equal? "el")
-(verify 'symbol (symbol "hello") eq? 'hello)
 (verify 'symbol->string (symbol->string 'hello) equal? "hello")
 (verify 'symbol? (symbol? 'hello) eq? #t)
 (verify 'typeof (typeof 23) eq? (typeof 24))
+(verify 'typeof (typeof "hello") eq? (typeof "goodbye"))
+(verify 'typeof (typeof '(2 3 4)) (lambda (x y) (not (eq? x y))) (typeof "(2 3 4)"))
 (verify 'unparse (unparse (parse '(+ 1 2))) equal? '(+ 1 2))
 ;;(unparse-procedure (lambda (n) (+ n 1))) ;; no longer possible?
 (verify 'use-lexial-address (use-lexical-address) eq? #t)
 (verify 'use-satck-trace (use-stack-trace) eq? #t)
 (verify 'use-tracing (use-tracing) eq? #f)
-(verify 'import (try 
-		(import "math")
-		(catch e e 
-		       (import "Graphics"))) (lambda (a b) (not (null? b))) '())
 (verify 'vector (vector 1 2 3) equal? (vector 1 2 3))
 (verify 'vector->lsit (vector->list (vector 1 2 3)) equal? '(1 2 3))
 (verify 'vector-ref (vector-ref (vector 1 2 3) 2) = 3)
-
-(verify 'let (let ((v (vector 1 2 3))) (vector-set! v 2 'a) v) equal? (vector 1 2 'a))
 (verify 'vector? (vector? (vector)) eq? #t)
 (verify '(void) (void) equal? (void))
 (verify 'zero? (zero? 0.0) equal? #t)
@@ -235,7 +253,7 @@
 	  (cons (f (car values)) (filter-map f pred? (cdr values)))
 	  (filter-map f pred? (cdr values))))))
 
-(define-syntax time 
+(define-syntax time
   [(time ?exp) (let ((start (current-time)))
 		 ?exp
 		 (- (current-time) start))])
@@ -519,9 +537,9 @@
 (test-try)
 
 (define-datatype lc-exp lc-exp?
-  (var-exp 
+  (var-exp
    (var symbol?))
-  (lambda-exp 
+  (lambda-exp
    (bound-var symbol?)
    (body lc-exp?))
   (app-exp

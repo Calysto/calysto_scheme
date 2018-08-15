@@ -79,18 +79,18 @@
 (define-native string-startswith? (lambda (string s) #f))
 (define-native expt-native (lambda (base power) (expt base power)))
 
-(define path-join 
+(define path-join
   (lambda (path filename)
     (cond
      ((null? path) filename)
-     (else (path-join (cdr path) 
+     (else (path-join (cdr path)
 		      (string-append (car path) "/" filename))))))
 
 (define use-lexical-address
   (lambda args
-    (cond 
+    (cond
      ((null? args) *use-lexical-address*)
-     (else 
+     (else
       (begin (set! *use-lexical-address* (true? (car args)))
 	     void-value)))))
 
@@ -135,7 +135,7 @@
 
 (define read-eval-print-loop
   (lambda ()
-    (let ((input (read-multiline "==> ")))  
+    (let ((input (read-multiline "==> ")))
       ;; execute gets redefined as execute-rm when no-csharp-support.ss is loaded
       (let ((result (execute input 'stdin)))
 	(if (not (void? result))
@@ -169,7 +169,7 @@
 		 (set! retval (string-append retval (format-exception-line (car stack))))
 		 (set! stack (cdr stack)))
 	  (if (not (eq? src-file 'none))
-	      (set! retval (string-append retval 
+	      (set! retval (string-append retval
 					  (format "  File \"~a\", line ~a, col ~a~%" src-file src-line src-col))))
 	  (string-append retval (format "~a: ~a~%" error-type message)))
 	(let ((retval (format "~%Traceback (most recent call last):~%")))
@@ -252,16 +252,16 @@
 
 (define read-eval-print-loop-rm
   (lambda ()
-    (let ((input (read-multiline "==> ")))  
+    (let ((input (read-multiline "==> ")))
       (let ((result (execute-rm input 'stdin)))
 	(while (not (end-of-session? result))
-	   (cond 
+	   (cond
 	    ((exception? result) (handle-exception result))
 	    ((not (void? result))
-	     (begin 
+	     (begin
 	       (if *need-newline* (newline))
 	       (safe-print result))))
-	   (set! input (read-multiline "==> "))  
+	   (set! input (read-multiline "==> "))
 	   (set! result (execute-rm input 'stdin)))
 	'goodbye))))
 
@@ -351,7 +351,7 @@
 
 (define highlight-expression
   (lambda (exp)
-    ;; call: (function 1 2 3) 
+    ;; call: (function 1 2 3)
     ;;          ["filename.ss" at line 13 column 4]
     (printf "call: ~s~%" (aunparse exp))
     (let ((info (rac exp)))
@@ -382,7 +382,7 @@
     (set-car! *stack-trace* '())))
 
 (define initialize-execute!
-  (lambda () 
+  (lambda ()
     (set! _closure_depth  0)
     (set! _trace_pause #f)
     (initialize-stack-trace!)))
@@ -519,13 +519,13 @@
 	      (lambda-cont2 (proc fail)
 		(if *use-stack-trace* (push-stack-trace! exp))
 		(cond
-		  ((dlr-proc? proc) 
+		  ((dlr-proc? proc)
 		   (let ((result (dlr-apply proc args)))
 		     (if *use-stack-trace* (pop-stack-trace! exp))
 		     (k result fail)))
-		  ((procedure-object? proc) 
+		  ((procedure-object? proc)
 		   (if *use-stack-trace*
-		       (proc args env info handler fail 
+		       (proc args env info handler fail
 			  (lambda-cont2 (v2 fail)
 			     (pop-stack-trace! exp)
 			     (k v2 fail)))
@@ -635,9 +635,9 @@
 	;; if new-fail is invoked, it will try the next choice
 	(m (car exps) env handler new-fail k)))))
 
-(define make-empty-docstrings 
+(define make-empty-docstrings
   (lambda (n)
-    (cond 
+    (cond
      ((= n 0) '())
      (else (cons "" (make-empty-docstrings (- n 1)))))))
 
@@ -691,7 +691,7 @@
 	      (printf "~acall: ~s~%" (make-trace-depth-string trace-depth) (cons name new-args))
 	      ;;(printf "k: ~a\n" (make-safe-continuation k2))
 	      (set! trace-depth (+ trace-depth 1))
-	      (eval-sequence bodies (extend env new-formals new-args (make-empty-docstrings (length new-formals))) handler fail 
+	      (eval-sequence bodies (extend env new-formals new-args (make-empty-docstrings (length new-formals))) handler fail
 	        (lambda-cont2 (v fail)
  	          (set! trace-depth (- trace-depth 1))
 		  (printf "~areturn: ~s~%" (make-trace-depth-string trace-depth) v)
@@ -826,7 +826,7 @@
 	     (lambda-cont2 (exp fail)
 	       (m exp (cadr args) handler fail k2))))))
       (else (runtime-error "incorrect number of arguments to eval" info handler fail)))))
-	       
+
 ;; eval-ast
 (define eval-ast-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -956,14 +956,14 @@
     (k2 void-value fail)))
 
 ;; string
-(define string-prim 
+(define string-prim
   ;; turns a list of char into a string
   (lambda-proc (args env2 info handler fail k2)
      ;;(k2 (apply string-append (map (lambda (c) (format "~s" c)) args)) fail)))
      (k2 (apply string args) fail)))
 
 ;; substring
-(define substring-prim 
+(define substring-prim
   ;; (substring "string" start)
   ;; (substring "string" start stop)
   (lambda-proc (args env2 info handler fail k2)
@@ -972,13 +972,13 @@
 	 (k2 (substring (car args) (cadr args) (string-length (car args))) fail))))
 
 ;; number->string
-(define number->string-prim 
+(define number->string-prim
   ;; given a number, returns those digits as a string
   (lambda-proc (args env2 info handler fail k2)
      (k2 (number->string (car args)) fail)))
 
 ;; assv
-(define assv-prim 
+(define assv-prim
   ;; given 'a '((b 1) (a 2)) returns (a 2)
   (lambda-proc (args env2 info handler fail k2)
      (k2 (assv (car args) (cadr args)) fail)))
@@ -1021,7 +1021,7 @@
 (define ends-with-newline?
   (lambda (s)
     (let ((len (string-length s)))
-      (equal? (substring s (- len 1) len) "\n"))))
+      (and (> len 0) (equal? (substring s (- len 1) len) "\n")))))
 
 ;; newline
 (define newline-prim
@@ -1091,7 +1091,7 @@
     (cond
      ((string-startswith? filename "/")
       (load-file filename env2 info handler fail k))
-     ((null? paths) 
+     ((null? paths)
       (runtime-error (format "attempted to load nonexistent file '~a'" filename) info handler fail))
      (else (let ((path (path-join (list (car paths)) filename)))
 	     (if (file-exists? path)
@@ -1213,6 +1213,14 @@
        (runtime-error "incorrect number of arguments to null?" info handler fail))
       (else (k2 (apply null? args) fail)))))
 
+;; box?
+(define box?-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to box?" info handler fail))
+      (else (k2 (apply box? args) fail)))))
+
 ;; pair?
 (define pair?-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -1220,6 +1228,24 @@
       ((not (length-one? args))
        (runtime-error "incorrect number of arguments to pair?" info handler fail))
       (else (k2 (apply pair? args) fail)))))
+
+;; box
+(define box-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to box" info handler fail))
+      (else (k2 (apply box args) fail)))))
+
+;; unbox
+(define unbox-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to unbox" info handler fail))
+      ((not (box? (car args)))
+       (runtime-error (format "unbox called on non-box ~s" (car args)) info handler fail))
+      (else (k2 (apply unbox args) fail)))))
 
 ;; cons
 (define cons-prim
@@ -1515,7 +1541,7 @@
       ((not (length-one? args))
        (runtime-error "incorrect number of arguments to set" info handler fail))
       (else (make-set (car args) env2 info handler fail k2)))))
-    
+
 (define* make-set
   (lambda (lst env2 info handler fail k2)
     (if (null? lst)
@@ -1651,6 +1677,8 @@
 	     (k #f)))))
       ((and (vector? x) (vector? y) (= (vector-length x) (vector-length y)))
        (equal-vectors? x y (- (vector-length x) 1) k))
+      ((and (box? x) (box? y))
+       (equal-objects? (unbox x) (unbox y) k))
       (else (k #f)))))
 
 (define* equal-vectors?
@@ -1698,6 +1726,16 @@
 		  (k y fail)
 		  (member-loop x (cdr y) ls info handler fail k))))))))
 
+;; random
+(define random-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to random" info handler fail))
+      ((not (positive? (car args)))
+       (runtime-error "argument to random must be positive" info handler fail))
+      (else (k2 (apply random args) fail)))))
+
 ;; range
 (define range-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -1730,7 +1768,7 @@
 	((null? (cdr args)) (range 0 (car args) 1 '()))
 	((null? (cddr args)) (range (car args) (cadr args) 1 '()))
 	(else (range (car args) (cadr args) (caddr args) '()))))))
-	
+
 ;; set-car!
 (define set-car!-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -1975,7 +2013,7 @@
     (cadr frame)))
 
 (define get-variables-from-frames
-  (lambda (frames) 
+  (lambda (frames)
     (flatten (map get-variables-from-frame frames))))
 
 (define symbol<?
@@ -2032,7 +2070,7 @@
       (cons (string->list (car arg-list)) (listify (cdr arg-list))))
      ((iter? (car arg-list))
       (cons (vector->list (list-native (car arg-list))) (listify (cdr arg-list))))
-     (else (error 'map "cannot use object type '~a' in map" 
+     (else (error 'map "cannot use object type '~a' in map"
 		  (get_type (car arg-list))))))) ;; get_type is defined in host
 
 (define* iterate
@@ -2124,7 +2162,7 @@
       (let ((arg-list (listify lists)))
 	(if (null? (car arg-list))
 	  (k void-value fail)
-	  (if (dlr-proc? proc) 
+	  (if (dlr-proc? proc)
 	    (begin
 	      (dlr-apply proc (map car arg-list))
 	      (for-each-primitive proc (map cdr arg-list) env handler fail k))
@@ -2168,7 +2206,7 @@
        (runtime-error "incorrect number of arguments to not" info handler fail))
       (else (k2 (not (true? (car args))) fail)))))
 
-;; printf 
+;; printf
 (define printf-prim
   (lambda-proc (args env2 info handler fail k2)
     (apply printf args)
@@ -2202,7 +2240,7 @@
 ;; error
 (define error-prim
   (lambda-proc (args env2 info handler fail k2)
-    (cond 
+    (cond
       ((not (length-at-least? 1 args))
        (runtime-error "incorrect number of arguments to 'error' (should at least 1)" info handler fail))
       (else
@@ -2341,7 +2379,12 @@
     (cond
       ((not (length-one? args))
        (runtime-error "incorrect number of arguments to int" info handler fail))
-      (else (k2 (apply int args) fail)))))
+      (else (k2 (apply truncate-to-integer args) fail)))))
+
+;; for the Scheme version only (gets ignored when transformed to Python)
+(define-native truncate-to-integer
+  (lambda (x)
+    (inexact->exact (truncate x))))
 
 (define assq-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -2358,7 +2401,7 @@
       (else (make-dict (car args) fail
 	      (lambda-cont2 (pairs fail)
 	         (k2 (apply dict (list pairs)) fail)))))))
-      
+
 (define* make-dict
   (lambda (args fail k2)
     (cond
@@ -2422,20 +2465,30 @@
        (runtime-error "incorrect number of arguments to string-split" info handler fail))
       (else (k2 (apply string-split args) fail)))))
 
-(define symbol-prim
-  (lambda-proc (args env2 info handler fail k2)
-    (cond
-      ((not (length-one? args))
-       (runtime-error "incorrect number of arguments to symbol" info handler fail))
-      (else (k2 (apply make-symbol args) fail)))))
-
 (define typeof-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
       ((not (length-one? args))
        (runtime-error "incorrect number of arguments to typeof" info handler fail))
       (else (k2 (apply type args) fail)))))
- 
+
+;; for the Scheme version only (gets ignored when transformed to Python)
+(define-native type
+  (lambda (x)
+    (cond
+      ((environment? x) '<type:environment>)
+      ((procedure? x) '<type:procedure>)
+      ((number? x) '<type:number>)
+      ((symbol? x) '<type:symbol>)
+      ((pair? x) '<type:pair>)
+      ((string? x) '<type:string>)
+      ((null? x) '<type:null>)
+      ((boolean? x) '<type:boolean>)
+      ((char? x) '<type:char>)
+      ((vector? x) '<type:vector>)
+      ((box? x) '<type:box>)
+      (else '<type:unknown>))))
+
 (define use-lexical-address-prim
   (lambda-proc (args env2 info handler fail k2)
       (k2 (apply use-lexical-address args) fail)))
@@ -2448,12 +2501,12 @@
 ;; 3. add NAME to Scheme.xx implementation
 ;; 4. if you use map or apply on it internally, and the
 ;;    the implementation language cannot pass functions
-;;    as arguments, then add NAME_proc to Scheme.xx 
+;;    as arguments, then add NAME_proc to Scheme.xx
 ;; -----------------------------------------------------
 
 (define make-toplevel-env
   (lambda ()
-    (let ((primitives 
+    (let ((primitives
 	   (list
 	    (list '* times-prim "(* ...): multiplication procedure; multiplies all arguments")
 	    (list '+ plus-prim "(+ ...): addition procedure; adds all arguments")
@@ -2476,6 +2529,9 @@
 	    (list 'apply apply-prim "(apply PROCEDURE '(args...)): apply the PROCEDURE to the args")
 	    (list 'assv assv-prim "(assv KEY ((ITEM VALUE) ...)): look for KEY in ITEMs; return matching (ITEM VALUE) or #f if not found")
 	    (list 'boolean? boolean?-prim "(boolean? ITEM): return #t if ITEM is a boolean value")
+	    (list 'box? box?-prim "(box? ITEM): return #t if ITEM is a boxed value")
+	    (list 'box box-prim "(box ITEM): return a new box containing ITEM")
+	    (list 'unbox unbox-prim "(unbox BOX): return the contents of BOX")
 	    (list 'caddr caddr-prim "(caddr ITEM): return the (car (cdr (cdr ITEM)))")
 	    (list 'cadr cadr-prim "(cadr ITEM): return the (car (cdr ITEM))")
 	    (list 'call-with-current-continuation call/cc-prim "(call-with-current-continuation ...): ")
@@ -2557,6 +2613,7 @@
 	    (list 'parse-string parse-string-prim "(parse-string STRING): parse a string; returns Abstract Syntax Tree (AST)")
 	    (list 'print print-prim "(print ITEM): ")
 	    (list 'printf printf-prim "(printf FORMAT ARGS...): ")
+	    (list 'random random-prim "(random N): return a random number in the range [0, N)")
 	    (list 'range range-prim "(range END), (range START END), or (RANGE START END STEP): (all integers)")
 	    (list 'read-string read-string-prim "(read-string ...): ")
 	    (list 'require require-prim "(require ...): ")
@@ -2578,7 +2635,7 @@
 	    (list 'string=? string=?-prim "(string=? STRING1 STRING2): return #t if STRING1 is the same as STRING2, #f otherwise")
 	    (list 'substring substring-prim "(substring STRING START [END]): return the substring of STRING starting with position START and ending before END. If END is not provided, it defaults to the length of the STRING")
 	    (list 'symbol? symbol?-prim "(symbol? ITEM): return #t if ITEM is a symbol, #f otherwise")
-	    (list 'unparse unparse-prim "(unparse AST): ")    
+	    (list 'unparse unparse-prim "(unparse AST): ")
 	    (list 'unparse-procedure unparse-procedure-prim "(unparse-procedure ...): ")  ;; unparse should be in CPS
 	    (list 'import import-prim "(import MODULE...): import host-system modules; MODULEs are strings")
 	    (list 'import-as import-as-prim "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment")
@@ -2621,7 +2678,6 @@
  	    (list 'sort sort-prim "(sort PROCEDURE LIST): sort the list using PROCEDURE to compare items")
  	    (list 'string-append string-append-prim "(string-append STRING1 STRING2): append two strings together")
  	    (list 'string-split string-split-prim "(string-split STRING CHAR): return a list with substrings of STRING where split by CHAR")
- 	    (list 'symbol symbol-prim "(symbol STRING): turn STRING into a symbol")
  	    (list 'typeof typeof-prim "(typeof ITEM): returns type of ITEM")
  	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-tracing use-tracing-prim "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given")
@@ -2670,8 +2726,8 @@
 ;;     ;;(printf "args: ~a params: ~a~%" args params)
 ;;     ;; args))
 ;;     ;; FIXME: (a) ()
-;;     (let ((retval (get-values-for-params 
-;; 		   params 
+;;     (let ((retval (get-values-for-params
+;; 		   params
 ;; 		   (get-arg-associations args params #f info handler fail)
 ;; 		   '() info handler fail)))
 ;;       ;;(printf "retval: ~a~%" retval)
@@ -2683,13 +2739,13 @@
     ;;(printf "get-values-for-params params: ~a~%" params)
     ;;(printf "get-values-for-params associations: ~a~%" associations)
     (cond
-     ((null? params) 
+     ((null? params)
       (if (and (not (null? associations))
 	       (association? (car associations))
 	       (eq? (caar associations) '*))
 	  (list (get-value (car associations)))
 	  '()))
-     (else 
+     (else
       (cons (get-value-from-associations (car params) associations info handler fail)
 	    (get-values-for-params (cdr params)
 				   associations
@@ -2699,7 +2755,7 @@
   (lambda (param associations info handler fail)
     (let* ((symbol (get-symbol param))
 	   (value (assq symbol associations)))
-      (cond 
+      (cond
        (value (get-value value))
        ((association? param) (get-value param))
        (else (runtime-error (format "missing parameter: ~a" param) info handler fail))))))
@@ -2711,7 +2767,7 @@
      ((association? (car args)) ;; named arg
       (cons (car args)
 	    (get-arg-associations (cdr args) params #t info handler fail)))
-     (must-be-association 
+     (must-be-association
       (runtime-error (format "non-keyword arg following keyword arg: ~a" (car args)) info handler fail))
      ((null? params) ;; should be a runt FIXME
       (list (association '* args))) ;; return args, which should values
@@ -2743,4 +2799,3 @@
       (else (let ((keyword (caar dict))
 		  (value (cadar dict)))
 	      (cons (association keyword value) (make-associations (cdr dict))))))))
-

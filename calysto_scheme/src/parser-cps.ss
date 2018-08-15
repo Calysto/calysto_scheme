@@ -214,7 +214,8 @@
 
 (define mit-style-define?^
   (lambda (asexp)
-    (not (symbol?^ (cadr^ asexp)))))
+    (and (define?^ asexp)
+	 (not (symbol?^ (cadr^ asexp))))))
 
 ;; used in aunparse
 (define literal?
@@ -283,8 +284,10 @@
 (define define-var^ (lambda (x) (untag-atom^ (cadr^ x))))
 (define define-docstring^ (lambda (x) (untag-atom^ (caddr^ x))))
 (define begin?^ (tagged-list^ 'begin >= 2))
-(define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
-(define trace-lambda?^ (tagged-list^ 'trace-lambda >= 4))
+;;(define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
+(define lambda-no-defines?^ (tagged-list^ 'lambda-no-defines >= 3))
+;;(define trace-lambda?^ (tagged-list^ 'trace-lambda >= 4))
+(define trace-lambda-no-defines?^ (tagged-list^ 'trace-lambda-no-defines >= 4))
 (define raise?^ (tagged-list^ 'raise = 2))
 (define choose?^ (tagged-list^ 'choose >= 1))
 (define try?^ (tagged-list^ 'try >= 2))
@@ -409,7 +412,7 @@
 	   (else (aparse-all (cdr^ adatum) senv handler fail
 		   (lambda-cont2 (exps fail)
 		     (k (begin-aexp exps info) fail))))))
-	((lambda?^ adatum)
+	((lambda-no-defines?^ adatum)
 	 (unannotate-cps (cadr^ adatum)
 	    (lambda-cont (formals)
 	        (let ((formals-list
@@ -421,7 +424,7 @@
 			 (if (and (list? formals) (not (association? formals)))
 			     (k (lambda-aexp formals bodies info) fail)
 			     (k (mu-lambda-aexp (head formals) (last formals) bodies info) fail))))))))
-	((trace-lambda?^ adatum)
+	((trace-lambda-no-defines?^ adatum)
 	 (unannotate-cps (caddr^ adatum)
 	      (lambda-cont (formals)
 		(let ((formals-list
@@ -498,7 +501,7 @@
 	(lambda-cont (datum)
 	  (handler (make-exception "ParseError" (format "~s ~a" msg datum)
 			 (get-srcfile info)
-			 (get-start-line info) 
+			 (get-start-line info)
 			 (get-start-char info))
 		   fail))))))
 
@@ -539,7 +542,7 @@
 ;;(define get-lexical-address-frames
 ;;  ;; given a list of frames, get the lexical address of variable
 ;;  (lambda (frames variable depth offset info)
-;;    (cond 
+;;    (cond
 ;;     ((null? frames) (var-aexp variable info)) ;; free!
 ;;     (else (let ((result (get-lexical-address-frame (car frames) variable depth offset info)))
 ;;	     (if (not (car result))
@@ -560,6 +563,82 @@
 ;; Macro support
 
 ;; transformer macros:
+
+(define lambda-transformer^
+  (lambda-macro (adatum handler fail k)
+    (let ((formals (cadr^ adatum))
+	  (bodies (cddr^ adatum)))
+      (get-internal-defines^ bodies adatum handler fail
+	(lambda-cont2 (defines bodies2)
+	  (if (null? defines)
+	    (k `(lambda-no-defines ,formals ,@(at^ bodies2)))
+	    (create-letrec-bindings^ defines handler fail
+	      (lambda-cont (bindings)
+		(k `(lambda-no-defines ,formals (letrec ,bindings ,@(at^ bodies2))))))))))))
+
+(define trace-lambda-transformer^
+  (lambda-macro (adatum handler fail k)
+    (let ((name (cadr^ adatum))
+	  (formals (caddr^ adatum))
+	  (bodies (cdddr^ adatum)))
+      (get-internal-defines^ bodies adatum handler fail
+	(lambda-cont2 (defines bodies2)
+	  (if (null? defines)
+	    (k `(trace-lambda-no-defines ,name ,formals ,@(at^ bodies2)))
+	    (create-letrec-bindings^ defines handler fail
+	      (lambda-cont (bindings)
+		(k `(trace-lambda-no-defines ,name ,formals (letrec ,bindings ,@(at^ bodies2))))))))))))
+
+(define get-internal-defines^
+  (lambda (bodies adatum handler fail k)  ;; k receives 2 args: defines, bodies2
+    (cond
+      ((null?^ bodies)
+       (aparse-error "no body expressions found for" adatum handler fail))
+      ((define?^ (car^ bodies))
+       (get-internal-defines^ (cdr^ bodies) adatum handler fail
+	 (lambda-cont2 (v1 v2)
+	   (k (cons (car^ bodies) v1) v2))))
+      (else (any-internal-defines?^ (cdr^ bodies)
+	      (lambda-cont (v)
+		(if v
+		  (aparse-error "misplaced define in" adatum handler fail)
+		  (k '() bodies))))))))
+
+(define any-internal-defines?^
+  (lambda (exps k)
+    (if (null?^ exps)
+      (k #f)
+      (if (define?^ (car^ exps))
+	  (k #t)
+	  (any-internal-defines?^ (cdr^ exps) k)))))
+
+(define create-letrec-bindings^
+  (lambda (defines handler fail k)
+    (if (null? defines)
+      (k '())
+      (create-letrec-bindings^ (cdr defines) handler fail
+	(lambda-cont (bindings)
+	  (get-define-var-and-exp^ (car defines) handler fail
+	    (lambda-cont2 (var exp)
+	      (k (cons `(,var ,exp) bindings)))))))))
+
+(define get-define-var-and-exp^
+  (lambda (adatum handler fail k)
+    (if (mit-style-define?^ adatum)
+	(let ((name (caadr^ adatum))
+	      (formals (cdadr^ adatum))
+	      (bodies (cddr^ adatum)))
+	  (k name `(lambda ,formals ,@(at^ bodies))))
+	(if (= (length^ adatum) 3) ;; (define <var> <body>)
+	    (let ((name (define-var^ adatum))
+		  (exp (caddr^ adatum)))
+	      (k name exp))
+	    (if (and (= (length^ adatum) 4) (string?^ (caddr^ adatum))) ;; (define <var> <docstring> <body>)
+	      (let ((name (define-var^ adatum))
+		    (exp (cadddr^ adatum)))
+		(k name exp))
+	      (aparse-error "bad concrete syntax:" adatum handler fail))))))
+
 
 (define let-transformer^
   (lambda-macro (adatum handler fail k)
@@ -836,8 +915,11 @@
 (define make-macro-env^
   (lambda ()
     (make-initial-environment
-      (list 'and 'or 'cond 'let 'letrec 'let* 'case 'record-case 'define-datatype 'cases)
-      (list and-transformer^
+      (list 'lambda 'λ 'trace-lambda 'and 'or 'cond 'let 'letrec 'let* 'case 'record-case 'define-datatype 'cases)
+      (list lambda-transformer^
+	    lambda-transformer^
+	    trace-lambda-transformer^
+	    and-transformer^
 	    or-transformer^
 	    cond-transformer^
 	    let-transformer^
@@ -848,7 +930,25 @@
 	    define-datatype-transformer^
 	    cases-transformer^
 	    )
-      (list (string-append "(and ...) - short-circuiting `and` macro\n"
+      (list (string-append "(lambda ...) - lambda with internal definitions"
+	                   "\n"
+			   "Example:\n"
+			   "    In  [1]: (lambda (a b) (define c 3) (list a b c))\n"
+			   "    Out [1]: <procedure>\n"
+			   )
+	    (string-append "(lambda ...) - lambda with internal definitions"
+	                   "\n"
+			   "Example:\n"
+			   "    In  [1]: (lambda (a b) (define c 3) (list a b c))\n"
+			   "    Out [1]: <procedure>\n"
+			   )
+	    (string-append "(trace-lambda name ...) - trace-lambda with internal definitions"
+	                   "\n"
+			   "Example:\n"
+			   "    In  [1]: (trace-lambda name (a b) (define c 3) (list a b c))\n"
+			   "    Out [1]: <procedure>\n"
+			   )
+	    (string-append "(and ...) - short-circuiting `and` macro\n"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (and)\n"
@@ -856,7 +956,7 @@
 			   "    In  [2]: (and #t #f)\n"
 			   "    Out [2]: #f\n"
 			   )
-	    (string-append "(or ...) - short-circuiting `or` macro" 
+	    (string-append "(or ...) - short-circuiting `or` macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (or)\n"
@@ -864,41 +964,41 @@
 			   "    In  [2]: (or #t #f)\n"
 			   "    Out [2]: #t\n"
 			   )
-	    (string-append "(cond (TEST RETURN)...) - conditional evaluation macro" 
+	    (string-append "(cond (TEST RETURN)...) - conditional evaluation macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (cond ((= 1 2) 3)(else 4))\n"
 			   "    Out [1]: 4\n"
 			   )
-	    (string-append "(let ((VAR VALUE)...)...) - local variable macro" 
+	    (string-append "(let ((VAR VALUE)...)...) - local variable macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (let ((x 3)) x)\n"
 			   "    Out [1]: 3\n"
 			   )
-	    (string-append "(letrec ((VAR VALUE)...)...) - recursive local variable macro" 
+	    (string-append "(letrec ((VAR VALUE)...)...) - recursive local variable macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [*]: (letrec ((loop (lambda () (loop)))) (loop))\n"
 			   )
-	    (string-append "(let* ((VAR VALUE)...)...) - cascading local variable macro" 
+	    (string-append "(let* ((VAR VALUE)...)...) - cascading local variable macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (let* ((a 1)(b a)(c b)) c)\n"
 			   "    Out [1]: 1\n"
 			   )
-	    (string-append "(case THING (ITEM RETURN)...)) - case macro"  
+	    (string-append "(case THING (ITEM RETURN)...)) - case macro"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (case 1 (1 2)(3 4))\n"
 			   "    Out [1]: 2\n"
 			   )
-	    (string-append "(record-case ) - record-case macro for define-datatype" 
+	    (string-append "(record-case ) - record-case macro for define-datatype"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (record-case ddtype (subtype (part...) return)...)\n"
 			   )
-	    (string-append "(define-datatype NAME NAME? (TYPE (PART TEST))...) - defines new datatypes and support functions (macro)" 
+	    (string-append "(define-datatype NAME NAME? (TYPE (PART TEST))...) - defines new datatypes and support functions (macro)"
 			   "\n"
 			   "Example:\n"
 			   "    In  [1]: (define-datatype e e?)\n"
