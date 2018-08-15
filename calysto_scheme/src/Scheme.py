@@ -506,6 +506,9 @@ def make_handler2(*args):
 
 ### Native other functions:
 
+def positive_q(value):
+    return 0 < value
+
 def length_one_q(ls):
     return isinstance(ls, cons) and (ls.cdr is symbol_emptylist)
 
