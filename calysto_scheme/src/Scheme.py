@@ -857,6 +857,9 @@ class Box():
     def __str__(self):
         return "#&%s" % self.item
 
+    def __repr__(self):
+        return "#&%s" % self.item
+
 def box_q(item):
     return isinstance(item, Box)
 
