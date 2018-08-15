@@ -530,6 +530,10 @@ def odd_q(n):
     return n % 2 == 1
 
 def eq_q(o1, o2):
+    if (isinstance(o1, float) and isinstance(o2, float)):
+        return o1 == o2
+    elif (isinstance(o1, int) and isinstance(o2, int)):
+        return o1 == o2
     return o1 is o2
 
 def char_q(item):
@@ -982,7 +986,7 @@ def assv(x, ls):
 def memv(item, ls):
     current = ls
     while isinstance(current, cons):
-        if (item == current.car):
+        if (eq_q(item, current.car)):
             return current
         current = current.cdr
     return False
