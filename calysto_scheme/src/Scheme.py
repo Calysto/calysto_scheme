@@ -998,7 +998,7 @@ def assv(x, ls):
 def memv(item, ls):
     current = ls
     while isinstance(current, cons):
-        if (eq_q(item, current.car)):
+        if (eqv_q(item, current.car)):
             return current
         current = current.cdr
     return False
