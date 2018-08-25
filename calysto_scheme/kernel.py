@@ -153,7 +153,7 @@ MAIN FEATURES
         if matches:
             return matches
         # from the language environment:
-        slist = scheme.execute_string_rm("(dir)")
+        slist = scheme.execute_string_rm("(get-completions)")
         if not scheme.exception_q(slist):
             for item in slist:
                 item_str = str(item)
@@ -172,7 +172,7 @@ MAIN FEATURES
         # add properties and attributes if token is "numpy.ar"
         if "." in token:
             components, partial = token.rsplit(".", 1)
-            slist = scheme.execute_string_rm("(dir %s)" % components)
+            slist = scheme.execute_string_rm("(get-completions %s)" % components)
             if not scheme.exception_q(slist):
                 for item in slist:
                     item_str = str(item)
