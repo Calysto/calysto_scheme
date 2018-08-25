@@ -797,7 +797,7 @@
 ;; exit
 (define exit-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 "use ^D to exit from console; use 'Shutdown Kernel` for others" fail)))
+    (halt* end-of-session)))
 
 ;; expt
 (define expt-prim
@@ -1533,6 +1533,26 @@
 (define list-prim
   (lambda-proc (args env2 info handler fail k2)
     (k2 args fail)))
+
+;; (assert op exp result)
+(define assert-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((not (or (= (length args) 3) (= (length args) 4)))
+       (runtime-error "incorrect number of arguments to assert" info handler fail))
+      ((not (procedure-object? (car args)))
+       (runtime-error "assertion predicate is not a procedure" info handler fail))
+      (else (let ((proc (car args))
+                  (expression-result (cadr args))
+                  (expected-result (caddr args)))
+              (proc (list expression-result expected-result) env2 info handler fail
+                    (lambda-cont2 (v fail)
+                      (cond
+                        ((eq? v #t) (k2 'ok fail))
+                        ((= (length args) 3)
+                         (runtime-error "Assertion failed" info handler fail))
+                        (else (let ((msg (format "Assertion failed: ~a" (cadddr args))))
+                                (runtime-error msg info handler fail)))))))))))
 
 ;; make-set
 (define make-set-prim
@@ -2549,6 +2569,7 @@
 	    (list 'abs abs-prim "(abs value): absolute value procedure")
 	    (list 'append append-prim "(append ...): append lists together into a single list")
 	    (list 'apply apply-prim "(apply PROCEDURE '(args...)): apply the PROCEDURE to the args")
+	    (list 'assert assert-prim "(assert OPERATOR EXPRESSION ANSWER): assert that (OPERATOR EXPRESSION ANSWER) is #t")
 	    (list 'assv assv-prim "(assv KEY ((ITEM VALUE) ...)): look for KEY in ITEMs; return matching (ITEM VALUE) or #f if not found")
 	    (list 'atom? atom?-prim "(atom? ITEM): return #t if ITEM is a atom, #f otherwise")
 	    (list 'boolean? boolean?-prim "(boolean? ITEM): return #t if ITEM is a boolean value")

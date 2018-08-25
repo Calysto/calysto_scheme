@@ -1,4 +1,8 @@
 ;; Unit tests for Scheme functions
+
+;;(use-lexical-address #f)
+;;(define! DEBUG #t)
+
 (define start-time (current-time))
 
 (define right 0)
@@ -6,21 +10,20 @@
 (define report '())
 
 (define verify
-  (lambda (name ans f exp)
+  (lambda (name result pred ans)
     (printf "Verifying ~s\n" name)
-    (let* ((result (f exp ans))) ;; should be true
-      (if (eq? result #t)
+      (if (eq? (pred result ans) #t)
 	  (begin
 	    (printf ".")
 	    (set! right (+ right 1)))
 	  (begin
 	    (printf "F")
-	    (set! report (cons (format "~a:\nshould be: ~s\n      was: ~s" name ans exp) report))
-	    (set! wrong (+ wrong 1)))))))
+	    (set! report (cons (format "~a:\nshould be: ~s\n      was: ~s" name ans result) report))
+	    (set! wrong (+ wrong 1))))))
 
 (define verify2
-  (lambda (name ans exp)
-    (verify name ans equal? exp)))
+  (lambda (name ans result)
+    (verify name result equal? ans)))
 
 (printf "Scheme Unit tests~%")
 
@@ -107,7 +110,7 @@
 (verify 'cond (cond (#f 1) (else 2)) = 2)
 (verify 'cons (cons 1 '()) equal? '(1))
 (verify 'current-directory (current-directory) (lambda (a b) (string? a)) ".")
-(verify 'current-environment (length (dir (current-environment))) < 160)
+(verify 'current-environment (length (dir (current-environment))) >= 180)
 (verify 'current-time (current-time) (lambda (a b) (< (- a b) .1)) (current-time))
 (verify 'cut (letrec ((loop (lambda (n) (if (= n 0) (set! var (cut 23)) (loop (- n 1)))))
 		      (var 0))
@@ -115,7 +118,7 @@
 	       var) equal? '(23))
 ;;(define-datatype) ;; see below
 (verify 'dict (dict '((1 2) (3 4))) (lambda (a b) #t) 'none)
-(verify 'dir (length (dir)) < 170)
+(verify 'dir (length (dir)) >= 180)
 ;;(display 1) ;; no newline
 (verify 'eq? (eq? 'a 'a) eq? #t)
 (verify 'equal? (equal? 1 1.0) eq? #t)
@@ -129,13 +132,10 @@
 (verify 'for-each (for-each (lambda (n) (+ n 1)) '(1 2 3)) equal? (void))
 (verify 'format (format "~a ~s ~%" "hello" "hello") equal? "hello \"hello\" \n")
 ;;(get) ;; used with import
-(verify 'get-stack-trace (caddr (cadar (get-stack-trace))) <= 73)
+(verify 'use-lexical-address (boolean? (use-lexical-address)) eq? #t)
 ;;(verify 'globals (globals) equal? (globals))
 ;;(import "test")
-(verify 'import (try
-		(import "math")
-		(catch e e
-		       (import "Graphics"))) (lambda (a b) (not (null? b))) '())
+(verify 'import (import "math") equal? '(math))
 (verify 'int (int 12.8) = 12)
 (verify 'integer->char (integer->char 97) equal? #\a)
 (verify 'internal-defines
@@ -175,8 +175,12 @@
 (verify 'or (or #t (/ 1 0)) equal? #t)
 (verify 'pair? (pair? '()) equal? #f)
 (verify 'pair? (pair? (cons 1 2)) equal? #t)
-(verify 'parse (parse '(let ((- +)(+ -)) (+ 1 2))) equal? '(app-aexp (lambda-aexp (- +) ((app-aexp (lexical-address-aexp 0 1 + none) ((lit-aexp 1 none) (lit-aexp 2 none)) none)) none) ((lexical-address-aexp 0 2 + none) (lexical-address-aexp 0 3 - none)) none))
-(verify 'parse-string (parse-string "(let ((- +)) (- 7 8))") equal? '(app-aexp (lambda-aexp (-) ((app-aexp (lexical-address-aexp 0 0 - (stdin 1 15 15 1 15 15)) ((lit-aexp 7 (stdin 1 17 17 1 17 17)) (lit-aexp 8 (stdin 1 19 19 1 19 19))) (stdin 1 14 14 1 20 20))) none) ((lexical-address-aexp 0 2 + (stdin 1 10 10 1 10 10))) (stdin 1 1 1 1 21 21 let)))
+(if (use-lexical-address)
+    (verify 'parse (parse '(let ((- +)(+ -)) (+ 1 2))) equal? '(app-aexp (lambda-aexp (- +) ((app-aexp (lexical-address-aexp 0 1 + none) ((lit-aexp 1 none) (lit-aexp 2 none)) none)) none) ((lexical-address-aexp 0 2 + none) (lexical-address-aexp 0 3 - none)) none))
+    (verify 'parse (parse '(let ((- +)(+ -)) (+ 1 2))) equal? '(app-aexp (lambda-aexp (- +) ((app-aexp (var-aexp + none) ((lit-aexp 1 none) (lit-aexp 2 none)) none)) none) ((var-aexp + none) (var-aexp - none)) none)))
+(if (use-lexical-address)
+    (verify 'parse-string (parse-string "(let ((- +)) (- 7 8))") equal? '(app-aexp (lambda-aexp (-) ((app-aexp (lexical-address-aexp 0 0 - (stdin 1 15 15 1 15 15)) ((lit-aexp 7 (stdin 1 17 17 1 17 17)) (lit-aexp 8 (stdin 1 19 19 1 19 19))) (stdin 1 14 14 1 20 20))) none) ((lexical-address-aexp 0 2 + (stdin 1 10 10 1 10 10))) (stdin 1 1 1 1 21 21 let)))
+    (verify 'parse-string (parse-string "(let ((- +)) (- 7 8))") equal? '(app-aexp (lambda-aexp (-) ((app-aexp (var-aexp - (stdin 1 15 15 1 15 15)) ((lit-aexp 7 (stdin 1 17 17 1 17 17)) (lit-aexp 8 (stdin 1 19 19 1 19 19))) (stdin 1 14 14 1 20 20))) none) ((var-aexp + (stdin 1 10 10 1 10 10))) (stdin 1 1 1 1 21 21 let))))
 ;;(print "hello!")
 ;;(printf "hello ~a!" 'mate)
 (verify 'procedure? (procedure? procedure?) eq? #t)
@@ -226,8 +230,7 @@
 (verify 'typeof (typeof '(2 3 4)) (lambda (x y) (not (eq? x y))) (typeof "(2 3 4)"))
 (verify 'unparse (unparse (parse '(+ 1 2))) equal? '(+ 1 2))
 ;;(unparse-procedure (lambda (n) (+ n 1))) ;; no longer possible?
-(verify 'use-lexial-address (use-lexical-address) eq? #t)
-(verify 'use-satck-trace (use-stack-trace) eq? #t)
+(verify 'use-stack-trace (use-stack-trace) eq? #t)
 (verify 'use-tracing (use-tracing) eq? #f)
 (verify 'vector (vector 1 2 3) equal? (vector 1 2 3))
 (verify 'vector->lsit (vector->list (vector 1 2 3)) equal? '(1 2 3))
@@ -546,14 +549,14 @@
    (rator lc-exp?)
    (rand lc-exp?)))
 
-(verify 'define-datatype-1 lc-exp? (lambda (a b) (procedure? b)) '())
-(verify 'define-datatype-2 var-exp (lambda (a b) (procedure? b)) '())
-(verify 'define-datatype-3 lambda-exp (lambda (a b) (procedure? b)) '())
-(verify 'define-datatype-4 app-exp (lambda (a b) (procedure? b)) '())
+(verify 'define-datatype-1 lc-exp? (lambda (a b) (procedure? a)) #t)
+(verify 'define-datatype-2 var-exp (lambda (a b) (procedure? a)) #t)
+(verify 'define-datatype-3 lambda-exp (lambda (a b) (procedure? a)) #t)
+(verify 'define-datatype-4 app-exp (lambda (a b) (procedure? a)) #t)
 
-(verify 'define-datatype-5 (var-exp 'a) (lambda (a b) (lc-exp? b)) '())
-(verify 'define-datatype-6 (lambda-exp 'a (var-exp 'a)) (lambda (a b) (lc-exp? b)) '())
-(verify 'define-datatype-7 (app-exp (lambda-exp 'a (var-exp 'a)) (var-exp 'a)) (lambda (a b) (lc-exp? b)) '())
+(verify 'define-datatype-5 (var-exp 'a) (lambda (a b) (lc-exp? a)) #t)
+(verify 'define-datatype-6 (lambda-exp 'a (var-exp 'a)) (lambda (a b) (lc-exp? a)) #t)
+(verify 'define-datatype-7 (app-exp (lambda-exp 'a (var-exp 'a)) (var-exp 'a)) (lambda (a b) (lc-exp? a)) #t)
 
 (define un-parse
   (lambda (exp)

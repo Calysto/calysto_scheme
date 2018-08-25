@@ -1294,6 +1294,7 @@ symbol_begin = make_symbol("begin")
 symbol_cases = make_symbol("cases")
 symbol_stdin = make_symbol("stdin")
 symbol_end_marker = make_symbol("end-marker")
+symbol_ok = make_symbol("ok")
 symbol_continuation3 = make_symbol("continuation3")
 symbol_continuation4 = make_symbol("continuation4")
 symbol_dot = make_symbol("dot")
@@ -1302,7 +1303,6 @@ symbol_handler = make_symbol("handler")
 symbol_exception = make_symbol("exception")
 symbol_handler2 = make_symbol("handler2")
 symbol_procedure = make_symbol("procedure")
-symbol_ok = make_symbol("ok")
 symbol_macro_transformer = make_symbol("macro-transformer")
 symbol_bool = make_symbol("bool")
 symbol_or = make_symbol("or")
@@ -1396,6 +1396,7 @@ symbol_GreaterThanEqual = make_symbol(">=")
 symbol_SCHEMEPATH = make_symbol("SCHEMEPATH")
 symbol_abort = make_symbol("abort")
 symbol_abs = make_symbol("abs")
+symbol_assert = make_symbol("assert")
 symbol_assv = make_symbol("assv")
 symbol_atom_q = make_symbol("atom?")
 symbol_boolean_q = make_symbol("boolean?")
@@ -2185,7 +2186,7 @@ def b_cont_55_d(apair1, apair2, pair1, pair2, k):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_107_d, apair2, pair2, value_reg, k)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_108_d, apair2, pair2, value_reg, k)
         GLOBALS['ap_reg'] = cdr_hat(apair1)
         GLOBALS['s_reg'] = value_reg
         GLOBALS['pattern_reg'] = cdr(pair1)
@@ -2863,7 +2864,28 @@ def b_cont2_88_d(filenames, env2, info, handler, k):
     GLOBALS['filenames_reg'] = cdr(filenames)
     GLOBALS['pc'] = load_files
 
-def b_cont2_89_d(lst, k2):
+def b_cont2_89_d(args, info, handler, k2):
+    if true_q((value1_reg) is (True)):
+        GLOBALS['value1_reg'] = symbol_ok
+        GLOBALS['k_reg'] = k2
+        GLOBALS['pc'] = apply_cont2
+    else:
+        if true_q(numeric_equal(length(args), 3)):
+            GLOBALS['fail_reg'] = value2_reg
+            GLOBALS['handler_reg'] = handler
+            GLOBALS['info_reg'] = info
+            GLOBALS['msg_reg'] = "Assertion failed"
+            GLOBALS['pc'] = runtime_error
+        else:
+            msg = symbol_undefined
+            msg = format("Assertion failed: ~a", cadddr(args))
+            GLOBALS['fail_reg'] = value2_reg
+            GLOBALS['handler_reg'] = handler
+            GLOBALS['info_reg'] = info
+            GLOBALS['msg_reg'] = msg
+            GLOBALS['pc'] = runtime_error
+
+def b_cont2_90_d(lst, k2):
     if true_q(member(car(lst), value1_reg)):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
@@ -2872,7 +2894,7 @@ def b_cont2_89_d(lst, k2):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
 
-def b_cont2_90_d(filename, handler, k2):
+def b_cont2_91_d(filename, handler, k2):
     module = symbol_undefined
     module = make_toplevel_env()
     set_binding_value_b(value1_reg, module)
@@ -2885,7 +2907,7 @@ def b_cont2_90_d(filename, handler, k2):
     GLOBALS['paths_reg'] = SCHEMEPATH
     GLOBALS['pc'] = find_file_and_load
 
-def b_cont2_91_d(args, sym, info, handler, k):
+def b_cont2_92_d(args, sym, info, handler, k):
     if true_q(null_q(cdr(args))):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -2905,19 +2927,19 @@ def b_cont2_91_d(args, sym, info, handler, k):
             GLOBALS['args_reg'] = cdr(args)
             GLOBALS['pc'] = get_primitive
 
-def b_cont2_92_d(ls1, k2):
+def b_cont2_93_d(ls1, k2):
     GLOBALS['value1_reg'] = cons(car(ls1), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_93_d(lists, k2):
+def b_cont2_94_d(lists, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['ls2_reg'] = value1_reg
     GLOBALS['ls1_reg'] = car(lists)
     GLOBALS['pc'] = append2
 
-def b_cont2_94_d(iterator, proc, env, handler, k):
+def b_cont2_95_d(iterator, proc, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2926,7 +2948,7 @@ def b_cont2_94_d(iterator, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = iterate_continue
 
-def b_cont2_95_d(iterator, proc, env, handler, k):
+def b_cont2_96_d(iterator, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_35_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2935,7 +2957,7 @@ def b_cont2_95_d(iterator, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = iterate_collect_continue
 
-def b_cont2_96_d(list1, proc, env, handler, k):
+def b_cont2_97_d(list1, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_35_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2944,12 +2966,12 @@ def b_cont2_96_d(list1, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = map1
 
-def b_cont2_97_d(list1, proc, k):
+def b_cont2_98_d(list1, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, List(car(list1))), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_98_d(list1, list2, proc, env, handler, k):
+def b_cont2_99_d(list1, list2, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_35_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2959,12 +2981,12 @@ def b_cont2_98_d(list1, list2, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = map2
 
-def b_cont2_99_d(list1, list2, proc, k):
+def b_cont2_100_d(list1, list2, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, List(car(list1), car(list2))), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_100_d(lists, proc, env, handler, k):
+def b_cont2_101_d(lists, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_35_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2973,12 +2995,12 @@ def b_cont2_100_d(lists, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = mapN
 
-def b_cont2_101_d(lists, proc, k):
+def b_cont2_102_d(lists, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, Map(car, lists)), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_102_d(arg_list, proc, env, handler, k):
+def b_cont2_103_d(arg_list, proc, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2987,22 +3009,22 @@ def b_cont2_102_d(arg_list, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = for_each_primitive
 
-def b_cont2_103_d(k2):
+def b_cont2_104_d(k2):
     GLOBALS['value1_reg'] = Apply(dict, List(value1_reg))
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_104_d(args, k2):
+def b_cont2_105_d(args, k2):
     GLOBALS['value1_reg'] = cons(car(args), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_105_d(args, k2):
+def b_cont2_106_d(args, k2):
     GLOBALS['value1_reg'] = cons(List(caar(args), caddar(args)), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_106_d(new_acdr1, new_cdr1, s_car, k):
+def b_cont2_107_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['k_reg'] = make_cont(b_cont_54_d, s_car, k)
     GLOBALS['ap2_reg'] = value2_reg
     GLOBALS['ap1_reg'] = new_acdr1
@@ -3010,27 +3032,27 @@ def b_cont2_106_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['p1_reg'] = new_cdr1
     GLOBALS['pc'] = unify_patterns_hat
 
-def b_cont2_107_d(apair2, pair2, s_car, k):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_106_d, value2_reg, value1_reg, s_car, k)
+def b_cont2_108_d(apair2, pair2, s_car, k):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_107_d, value2_reg, value1_reg, s_car, k)
     GLOBALS['ap_reg'] = cdr_hat(apair2)
     GLOBALS['s_reg'] = s_car
     GLOBALS['pattern_reg'] = cdr(pair2)
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_108_d(a, aa, ap, k2):
+def b_cont2_109_d(a, aa, ap, k2):
     GLOBALS['value2_reg'] = cons_hat(aa, value2_reg, get_source_info(ap))
     GLOBALS['value1_reg'] = cons(a, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_109_d(ap, pattern, s, k2):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_108_d, value1_reg, value2_reg, ap, k2)
+def b_cont2_110_d(ap, pattern, s, k2):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_109_d, value1_reg, value2_reg, ap, k2)
     GLOBALS['ap_reg'] = cdr_hat(ap)
     GLOBALS['s_reg'] = s
     GLOBALS['pattern_reg'] = cdr(pattern)
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_110_d(s2, k2):
+def b_cont2_111_d(s2, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['ap_reg'] = value2_reg
     GLOBALS['s_reg'] = s2
@@ -3376,10 +3398,8 @@ def b_proc_8_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_9_d():
-    GLOBALS['value2_reg'] = fail_reg
-    GLOBALS['value1_reg'] = "use ^D to exit from console; use 'Shutdown Kernel` for others"
-    GLOBALS['k_reg'] = k2_reg
-    GLOBALS['pc'] = apply_cont2
+    GLOBALS['final_reg'] = end_of_session
+    GLOBALS['pc'] = pc_halt_signal
 
 def b_proc_10_d():
     GLOBALS['value2_reg'] = fail_reg
@@ -4234,6 +4254,26 @@ def b_proc_83_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_84_d():
+    if true_q(not((numeric_equal(length(args_reg), 3)) or (numeric_equal(length(args_reg), 4)))):
+        GLOBALS['msg_reg'] = "incorrect number of arguments to assert"
+        GLOBALS['pc'] = runtime_error
+    else:
+        if true_q(not(procedure_object_q(car(args_reg)))):
+            GLOBALS['msg_reg'] = "assertion predicate is not a procedure"
+            GLOBALS['pc'] = runtime_error
+        else:
+            proc = symbol_undefined
+            expression_result = symbol_undefined
+            expected_result = symbol_undefined
+            expected_result = caddr(args_reg)
+            expression_result = cadr(args_reg)
+            proc = car(args_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_89_d, args_reg, info_reg, handler_reg, k2_reg)
+            GLOBALS['args_reg'] = List(expression_result, expected_result)
+            GLOBALS['proc_reg'] = proc
+            GLOBALS['pc'] = apply_proc
+
+def b_proc_85_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set"
         GLOBALS['pc'] = runtime_error
@@ -4241,13 +4281,13 @@ def b_proc_84_d():
         GLOBALS['lst_reg'] = car(args_reg)
         GLOBALS['pc'] = make_set
 
-def b_proc_85_d():
+def b_proc_86_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(plus, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_86_d():
+def b_proc_87_d():
     if true_q(null_q(args_reg)):
         GLOBALS['msg_reg'] = "incorrect number of arguments to -"
         GLOBALS['pc'] = runtime_error
@@ -4257,13 +4297,13 @@ def b_proc_86_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_87_d():
+def b_proc_88_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(multiply, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_88_d():
+def b_proc_89_d():
     if true_q((GreaterThan(length(args_reg), 1)) and (member(0, cdr(args_reg)))):
         GLOBALS['msg_reg'] = "division by zero"
         GLOBALS['pc'] = runtime_error
@@ -4273,7 +4313,7 @@ def b_proc_88_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_89_d():
+def b_proc_90_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to %"
         GLOBALS['pc'] = runtime_error
@@ -4287,19 +4327,19 @@ def b_proc_89_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_90_d():
+def b_proc_91_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(min, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_91_d():
+def b_proc_92_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(max, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_92_d():
+def b_proc_93_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to <"
         GLOBALS['pc'] = runtime_error
@@ -4309,7 +4349,7 @@ def b_proc_92_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_93_d():
+def b_proc_94_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to >"
         GLOBALS['pc'] = runtime_error
@@ -4319,7 +4359,7 @@ def b_proc_93_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_94_d():
+def b_proc_95_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to <="
         GLOBALS['pc'] = runtime_error
@@ -4329,7 +4369,7 @@ def b_proc_94_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_95_d():
+def b_proc_96_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to >="
         GLOBALS['pc'] = runtime_error
@@ -4339,7 +4379,7 @@ def b_proc_95_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_96_d():
+def b_proc_97_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to ="
         GLOBALS['pc'] = runtime_error
@@ -4353,7 +4393,7 @@ def b_proc_96_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_97_d():
+def b_proc_98_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to abs"
         GLOBALS['pc'] = runtime_error
@@ -4363,7 +4403,7 @@ def b_proc_97_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_98_d():
+def b_proc_99_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to equal?"
         GLOBALS['pc'] = runtime_error
@@ -4373,7 +4413,7 @@ def b_proc_98_d():
         GLOBALS['x_reg'] = car(args_reg)
         GLOBALS['pc'] = equal_objects_q
 
-def b_proc_99_d():
+def b_proc_100_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to eq?"
         GLOBALS['pc'] = runtime_error
@@ -4383,7 +4423,7 @@ def b_proc_99_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_100_d():
+def b_proc_101_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to memq"
         GLOBALS['pc'] = runtime_error
@@ -4393,7 +4433,7 @@ def b_proc_100_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_101_d():
+def b_proc_102_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to member"
         GLOBALS['pc'] = runtime_error
@@ -4404,7 +4444,7 @@ def b_proc_101_d():
         GLOBALS['x_reg'] = car(args_reg)
         GLOBALS['pc'] = member_loop
 
-def b_proc_102_d():
+def b_proc_103_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to random"
         GLOBALS['pc'] = runtime_error
@@ -4418,7 +4458,7 @@ def b_proc_102_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_103_d():
+def b_proc_104_d():
     if true_q((null_q(args_reg)) or (length_at_least_q(4, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to range"
         GLOBALS['pc'] = runtime_error
@@ -4428,25 +4468,25 @@ def b_proc_103_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_104_d():
+def b_proc_105_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(snoc, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_105_d():
+def b_proc_106_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(rac, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_106_d():
+def b_proc_107_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(rdc, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_107_d():
+def b_proc_108_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set-car!"
         GLOBALS['pc'] = runtime_error
@@ -4460,7 +4500,7 @@ def b_proc_107_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_108_d():
+def b_proc_109_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set-cdr!"
         GLOBALS['pc'] = runtime_error
@@ -4474,7 +4514,7 @@ def b_proc_108_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_109_d():
+def b_proc_110_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to load-as"
         GLOBALS['pc'] = runtime_error
@@ -4483,29 +4523,29 @@ def b_proc_109_d():
         module_name = symbol_undefined
         module_name = cadr(args_reg)
         filename = car(args_reg)
-        GLOBALS['k_reg'] = make_cont2(b_cont2_90_d, filename, handler_reg, k2_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_91_d, filename, handler_reg, k2_reg)
         GLOBALS['env_reg'] = env2_reg
         GLOBALS['var_reg'] = module_name
         GLOBALS['pc'] = lookup_binding_in_first_frame
 
-def b_proc_110_d():
+def b_proc_111_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = car(_starstack_trace_star)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_111_d():
+def b_proc_112_d():
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['env_reg'] = env2_reg
     GLOBALS['pc'] = get_primitive
 
-def b_proc_112_d(k):
+def b_proc_113_d(k):
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = car(args_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_113_d():
+def b_proc_114_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to call/cc"
         GLOBALS['pc'] = runtime_error
@@ -4517,7 +4557,7 @@ def b_proc_113_d():
             GLOBALS['pc'] = runtime_error
         else:
             fake_k = symbol_undefined
-            fake_k = make_proc(b_proc_112_d, k2_reg)
+            fake_k = make_proc(b_proc_113_d, k2_reg)
             if true_q(dlr_proc_q(proc)):
                 GLOBALS['value2_reg'] = fail_reg
                 GLOBALS['value1_reg'] = dlr_apply(proc, List(fake_k))
@@ -4528,7 +4568,7 @@ def b_proc_113_d():
                 GLOBALS['proc_reg'] = proc
                 GLOBALS['pc'] = apply_proc
 
-def b_proc_114_d():
+def b_proc_115_d():
     if true_q(null_q(args_reg)):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
@@ -4540,7 +4580,7 @@ def b_proc_114_d():
         GLOBALS['k_reg'] = REP_k
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_115_d():
+def b_proc_116_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to require"
         GLOBALS['pc'] = runtime_error
@@ -4553,13 +4593,13 @@ def b_proc_115_d():
         else:
             GLOBALS['pc'] = apply_fail
 
-def b_proc_116_d():
+def b_proc_117_d():
     GLOBALS['value2_reg'] = REP_fail
     GLOBALS['value1_reg'] = args_reg
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_117_d():
+def b_proc_118_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to reverse"
         GLOBALS['pc'] = runtime_error
@@ -4573,11 +4613,11 @@ def b_proc_117_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_118_d():
+def b_proc_119_d():
     GLOBALS['lists_reg'] = args_reg
     GLOBALS['pc'] = append_all
 
-def b_proc_119_d():
+def b_proc_120_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->number"
         GLOBALS['pc'] = runtime_error
@@ -4587,7 +4627,7 @@ def b_proc_119_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_120_d():
+def b_proc_121_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string=?"
         GLOBALS['pc'] = runtime_error
@@ -4597,7 +4637,7 @@ def b_proc_120_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_121_d():
+def b_proc_122_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list->vector"
         GLOBALS['pc'] = runtime_error
@@ -4611,7 +4651,7 @@ def b_proc_121_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_122_d():
+def b_proc_123_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list->string"
         GLOBALS['pc'] = runtime_error
@@ -4629,7 +4669,7 @@ def b_proc_122_d():
                 GLOBALS['k_reg'] = k2_reg
                 GLOBALS['pc'] = apply_cont2
 
-def b_proc_123_d():
+def b_proc_124_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char->string"
         GLOBALS['pc'] = runtime_error
@@ -4643,7 +4683,7 @@ def b_proc_123_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_124_d():
+def b_proc_125_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->list"
         GLOBALS['pc'] = runtime_error
@@ -4657,7 +4697,7 @@ def b_proc_124_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_125_d():
+def b_proc_126_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->symbol"
         GLOBALS['pc'] = runtime_error
@@ -4671,7 +4711,7 @@ def b_proc_125_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_126_d():
+def b_proc_127_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to symbol->string"
         GLOBALS['pc'] = runtime_error
@@ -4685,7 +4725,7 @@ def b_proc_126_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_127_d():
+def b_proc_128_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector->list"
         GLOBALS['pc'] = runtime_error
@@ -4699,7 +4739,7 @@ def b_proc_127_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_128_d():
+def b_proc_129_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector-length"
         GLOBALS['pc'] = runtime_error
@@ -4713,39 +4753,39 @@ def b_proc_128_d():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
 
-def b_proc_129_d():
+def b_proc_130_d():
     GLOBALS['lst_reg'] = sort(symbolLessThan_q, get_completions(args_reg, env2_reg))
     GLOBALS['pc'] = make_set
 
-def b_proc_130_d():
+def b_proc_131_d():
     GLOBALS['lst_reg'] = directory(args_reg, env2_reg)
     GLOBALS['pc'] = make_set
 
-def b_proc_131_d():
+def b_proc_132_d():
     GLOBALS['lst_reg'] = sort(symbolLessThan_q, get_variables_from_frames(frames(macro_env)))
     GLOBALS['pc'] = make_set
 
-def b_proc_132_d():
+def b_proc_133_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = get_current_time()
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_133_d():
+def b_proc_134_d():
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['env_reg'] = env2_reg
     GLOBALS['proc_reg'] = car(args_reg)
     GLOBALS['args_reg'] = cdr(args_reg)
     GLOBALS['pc'] = map_primitive
 
-def b_proc_134_d():
+def b_proc_135_d():
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['env_reg'] = env2_reg
     GLOBALS['lists_reg'] = cdr(args_reg)
     GLOBALS['proc_reg'] = car(args_reg)
     GLOBALS['pc'] = for_each_primitive
 
-def b_proc_135_d():
+def b_proc_136_d():
     if true_q(LessThan(length(args_reg), 1)):
         GLOBALS['msg_reg'] = "incorrect number of arguments to format"
         GLOBALS['pc'] = runtime_error
@@ -4755,31 +4795,31 @@ def b_proc_135_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_136_d():
+def b_proc_137_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = env2_reg
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_137_d():
+def b_proc_138_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = import_native(args_reg, env2_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_138_d():
+def b_proc_139_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = import_as_native(car(args_reg), cadr(args_reg), env2_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_139_d():
+def b_proc_140_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = import_from_native(car(args_reg), cdr(args_reg), env2_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_140_d():
+def b_proc_141_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to not"
         GLOBALS['pc'] = runtime_error
@@ -4789,39 +4829,39 @@ def b_proc_140_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_141_d():
+def b_proc_142_d():
     Apply(printf, args_reg)
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_142_d():
+def b_proc_143_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(vector_native, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_143_d():
+def b_proc_144_d():
     vector_set_b(car(args_reg), cadr(args_reg), caddr(args_reg))
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_144_d():
+def b_proc_145_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(vector_ref, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_145_d():
+def b_proc_146_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(make_vector, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_146_d():
+def b_proc_147_d():
     if true_q(not(length_at_least_q(1, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to 'error' (should at least 1)"
         GLOBALS['pc'] = runtime_error
@@ -4833,7 +4873,7 @@ def b_proc_146_d():
         GLOBALS['msg_reg'] = message
         GLOBALS['pc'] = runtime_error
 
-def b_proc_147_d():
+def b_proc_148_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list-ref"
         GLOBALS['pc'] = runtime_error
@@ -4843,7 +4883,7 @@ def b_proc_147_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_148_d():
+def b_proc_149_d():
     if true_q(null_q(args_reg)):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = current_directory()
@@ -4863,7 +4903,7 @@ def b_proc_148_d():
             GLOBALS['msg_reg'] = "incorrect number of arguments to current-directory"
             GLOBALS['pc'] = runtime_error
 
-def b_proc_149_d():
+def b_proc_150_d():
     if true_q((length_one_q(args_reg)) and (number_q(car(args_reg)))):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = round(car(args_reg))
@@ -4873,7 +4913,7 @@ def b_proc_149_d():
         GLOBALS['msg_reg'] = "round requires exactly one number"
         GLOBALS['pc'] = runtime_error
 
-def b_proc_150_d():
+def b_proc_151_d():
     if true_q((length_one_q(args_reg)) and (boolean_q(car(args_reg)))):
         set_use_stack_trace_b(car(args_reg))
         GLOBALS['value2_reg'] = fail_reg
@@ -4890,7 +4930,7 @@ def b_proc_150_d():
             GLOBALS['msg_reg'] = "use-stack-trace requires exactly one boolean or nothing"
             GLOBALS['pc'] = runtime_error
 
-def b_proc_151_d():
+def b_proc_152_d():
     if true_q((length_one_q(args_reg)) and (boolean_q(car(args_reg)))):
         GLOBALS['_startracing_on_q_star'] = true_q(car(args_reg))
         GLOBALS['value2_reg'] = fail_reg
@@ -4907,7 +4947,7 @@ def b_proc_151_d():
             GLOBALS['msg_reg'] = "use-tracing requires exactly one boolean or nothing"
             GLOBALS['pc'] = runtime_error
 
-def b_proc_152_d():
+def b_proc_153_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to eqv?"
         GLOBALS['pc'] = runtime_error
@@ -4917,7 +4957,7 @@ def b_proc_152_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_153_d():
+def b_proc_154_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector?"
         GLOBALS['pc'] = runtime_error
@@ -4927,7 +4967,7 @@ def b_proc_153_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_154_d():
+def b_proc_155_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to atom?"
         GLOBALS['pc'] = runtime_error
@@ -4937,7 +4977,7 @@ def b_proc_154_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_155_d():
+def b_proc_156_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to iter?"
         GLOBALS['pc'] = runtime_error
@@ -4947,25 +4987,25 @@ def b_proc_155_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_156_d():
+def b_proc_157_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(contains_native, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_157_d():
+def b_proc_158_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(getitem_native, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_158_d():
+def b_proc_159_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(setitem_native, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_159_d():
+def b_proc_160_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list?"
         GLOBALS['pc'] = runtime_error
@@ -4975,7 +5015,7 @@ def b_proc_159_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_160_d():
+def b_proc_161_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to procedure?"
         GLOBALS['pc'] = runtime_error
@@ -4985,7 +5025,7 @@ def b_proc_160_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_161_d():
+def b_proc_162_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string<?"
         GLOBALS['pc'] = runtime_error
@@ -4995,7 +5035,7 @@ def b_proc_161_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_162_d():
+def b_proc_163_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to float"
         GLOBALS['pc'] = runtime_error
@@ -5005,7 +5045,7 @@ def b_proc_162_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_163_d():
+def b_proc_164_d():
     if true_q(not(null_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to globals"
         GLOBALS['pc'] = runtime_error
@@ -5015,7 +5055,7 @@ def b_proc_163_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_164_d():
+def b_proc_165_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to int"
         GLOBALS['pc'] = runtime_error
@@ -5025,7 +5065,7 @@ def b_proc_164_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_165_d():
+def b_proc_166_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to assq"
         GLOBALS['pc'] = runtime_error
@@ -5035,18 +5075,18 @@ def b_proc_165_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_166_d():
+def b_proc_167_d():
     if true_q(null_q(args_reg)):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = dict()
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_103_d, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_104_d, k2_reg)
         GLOBALS['args_reg'] = car(args_reg)
         GLOBALS['pc'] = make_dict
 
-def b_proc_167_d():
+def b_proc_168_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to property"
         GLOBALS['pc'] = runtime_error
@@ -5056,7 +5096,7 @@ def b_proc_167_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_168_d():
+def b_proc_169_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to rational"
         GLOBALS['pc'] = runtime_error
@@ -5066,7 +5106,7 @@ def b_proc_168_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_169_d():
+def b_proc_170_d():
     if true_q(not(null_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to reset-toplevel-env"
         GLOBALS['pc'] = runtime_error
@@ -5076,7 +5116,7 @@ def b_proc_169_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_170_d():
+def b_proc_171_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to sort"
         GLOBALS['pc'] = runtime_error
@@ -5086,7 +5126,7 @@ def b_proc_170_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_171_d():
+def b_proc_172_d():
     if true_q(not(length_at_least_q(2, args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-append"
         GLOBALS['pc'] = runtime_error
@@ -5096,7 +5136,7 @@ def b_proc_171_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_172_d():
+def b_proc_173_d():
     if true_q(not(length_two_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-split"
         GLOBALS['pc'] = runtime_error
@@ -5106,7 +5146,7 @@ def b_proc_172_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_173_d():
+def b_proc_174_d():
     if true_q(not(length_one_q(args_reg))):
         GLOBALS['msg_reg'] = "incorrect number of arguments to typeof"
         GLOBALS['pc'] = runtime_error
@@ -5116,13 +5156,13 @@ def b_proc_173_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
 
-def b_proc_174_d():
+def b_proc_175_d():
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = Apply(use_lexical_address, args_reg)
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
-def b_proc_175_d(external_function_object):
+def b_proc_176_d(external_function_object):
     GLOBALS['value2_reg'] = fail_reg
     GLOBALS['value1_reg'] = apply_star(external_function_object, args_reg)
     GLOBALS['k_reg'] = k2_reg
@@ -7955,7 +7995,7 @@ def make_set():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_89_d, lst_reg, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_90_d, lst_reg, k2_reg)
         GLOBALS['lst_reg'] = cdr(lst_reg)
         GLOBALS['pc'] = make_set
 
@@ -8011,7 +8051,7 @@ def member_loop():
 def get_primitive():
     sym = symbol_undefined
     sym = car(args_reg)
-    GLOBALS['k_reg'] = make_cont2(b_cont2_91_d, args_reg, sym, info_reg, handler_reg, k_reg)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_92_d, args_reg, sym, info_reg, handler_reg, k_reg)
     GLOBALS['var_info_reg'] = symbol_none
     GLOBALS['var_reg'] = sym
     GLOBALS['pc'] = lookup_value
@@ -8023,7 +8063,7 @@ def append2():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_92_d, ls1_reg, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_93_d, ls1_reg, k2_reg)
         GLOBALS['ls1_reg'] = cdr(ls1_reg)
         GLOBALS['pc'] = append2
 
@@ -8044,7 +8084,7 @@ def append_all():
                 GLOBALS['msg_reg'] = format("append called on incorrect list structure ~s", car(lists_reg))
                 GLOBALS['pc'] = runtime_error
             else:
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_93_d, lists_reg, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_94_d, lists_reg, k2_reg)
                 GLOBALS['lists_reg'] = cdr(lists_reg)
                 GLOBALS['pc'] = append_all
 
@@ -8138,7 +8178,7 @@ def iterate_continue():
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_94_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_95_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['env2_reg'] = env_reg
         GLOBALS['args_reg'] = List(item)
@@ -8158,7 +8198,7 @@ def iterate_collect_continue():
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_95_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_96_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['env2_reg'] = env_reg
         GLOBALS['args_reg'] = List(item)
@@ -8171,11 +8211,11 @@ def map1():
         GLOBALS['pc'] = apply_cont2
     else:
         if true_q(dlr_proc_q(proc_reg)):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_97_d, list1_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_98_d, list1_reg, proc_reg, k_reg)
             GLOBALS['list1_reg'] = cdr(list1_reg)
             GLOBALS['pc'] = map1
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_96_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_97_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = List(car(list1_reg))
@@ -8188,12 +8228,12 @@ def map2():
         GLOBALS['pc'] = apply_cont2
     else:
         if true_q(dlr_proc_q(proc_reg)):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_99_d, list1_reg, list2_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_100_d, list1_reg, list2_reg, proc_reg, k_reg)
             GLOBALS['list2_reg'] = cdr(list2_reg)
             GLOBALS['list1_reg'] = cdr(list1_reg)
             GLOBALS['pc'] = map2
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_98_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_99_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = List(car(list1_reg), car(list2_reg))
@@ -8206,11 +8246,11 @@ def mapN():
         GLOBALS['pc'] = apply_cont2
     else:
         if true_q(dlr_proc_q(proc_reg)):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_101_d, lists_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_102_d, lists_reg, proc_reg, k_reg)
             GLOBALS['lists_reg'] = Map(cdr, lists_reg)
             GLOBALS['pc'] = mapN
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_100_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_101_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = Map(car, lists_reg)
@@ -8233,7 +8273,7 @@ def for_each_primitive():
                 GLOBALS['lists_reg'] = Map(cdr, arg_list)
                 GLOBALS['pc'] = for_each_primitive
             else:
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_102_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_103_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
                 GLOBALS['info_reg'] = symbol_none
                 GLOBALS['env2_reg'] = env_reg
                 GLOBALS['args_reg'] = Map(car, arg_list)
@@ -8247,17 +8287,17 @@ def make_dict():
         GLOBALS['pc'] = apply_cont2
     else:
         if true_q(association_q(car(args_reg))):
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_105_d, args_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_106_d, args_reg, k2_reg)
             GLOBALS['args_reg'] = cdr(args_reg)
             GLOBALS['pc'] = make_dict
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_104_d, args_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_105_d, args_reg, k2_reg)
             GLOBALS['args_reg'] = cdr(args_reg)
             GLOBALS['pc'] = make_dict
 
 def make_toplevel_env():
     primitives = symbol_undefined
-    primitives = List(List(symbol_p, modulo_prim, "(% arg0 arg1): modulo procedure for two arguments (aliases mod and modulo)"), List(symbol_multiply, times_prim, "(* ...): multiplication procedure; multiplies all arguments"), List(symbol_plus, plus_prim, "(+ ...): addition procedure; adds all arguments"), List(symbol_minus, minus_prim, "(- ...): subtraction procedure; subtracts all arguments"), List(symbol_divide, divide_prim, "(/ ...): division procedure; divides all arguments"), List(symbol___, quotient_prim, "(// arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases div and quotient)"), List(symbol_LessThan, lt_prim, "(< arg0 arg1): less-than procedure for two arguments"), List(symbol_LessThanEqual, lt_or_eq_prim, "(<= arg0 arg1): less-than or equal procedure for two arguments"), List(symbol_numeric_equal, equal_sign_prim, "(= arg0 arg1): numeric equality procedure for two arguments"), List(symbol_GreaterThan, gt_prim, "(> arg0 arg1): greater-than procedure for two arguments"), List(symbol_GreaterThanEqual, gt_or_eq_prim, "(>= arg0 arg1): greater-than or equal procedure for two arguments"), List(symbol_SCHEMEPATH, SCHEMEPATH, "List of search directories used with (load NAME)"), List(symbol_abort, abort_prim, "(abort) : aborts processing and returns to top level"), List(symbol_abs, abs_prim, "(abs value): absolute value procedure"), List(symbol_append, append_prim, "(append ...): append lists together into a single list"), List(symbol_Apply, apply_prim, "(apply PROCEDURE '(args...)): apply the PROCEDURE to the args"), List(symbol_assv, assv_prim, "(assv KEY ((ITEM VALUE) ...)): look for KEY in ITEMs; return matching (ITEM VALUE) or #f if not found"), List(symbol_atom_q, atom_q_prim, "(atom? ITEM): return #t if ITEM is a atom, #f otherwise"), List(symbol_boolean_q, boolean_q_prim, "(boolean? ITEM): return #t if ITEM is a boolean value"), List(symbol_box, box_prim, "(box ITEM): return a new box containing ITEM"), List(symbol_box_q, box_q_prim, "(box? ITEM): return #t if ITEM is a boxed value"), List(symbol_caaaar, caaaar_prim, "caaaar ...): "), List(symbol_caaadr, caaadr_prim, "(caaadr ...): "), List(symbol_caaar, caaar_prim, "(caaar ...): "), List(symbol_caadar, caadar_prim, "(caadar ...): "), List(symbol_caaddr, caaddr_prim, "(caaddr ...): "), List(symbol_caadr, caadr_prim, "(caadr ...): "), List(symbol_caar, caar_prim, "(caar ...): "), List(symbol_cadaar, cadaar_prim, "(cadaar ...): "), List(symbol_cadadr, cadadr_prim, "(cadadr ...): "), List(symbol_cadar, cadar_prim, "(cadar ...): "), List(symbol_caddar, caddar_prim, "(caddar ...): "), List(symbol_cadddr, cadddr_prim, "(cadddr ...): "), List(symbol_caddr, caddr_prim, "(caddr ITEM): return the (car (cdr (cdr ITEM)))"), List(symbol_cadr, cadr_prim, "(cadr ITEM): return the (car (cdr ITEM))"), List(symbol_call_with_current_continuation, call_cc_prim, "(call-with-current-continuation ...): "), List(symbol_call_cc, call_cc_prim, "(call/cc ...): "), List(symbol_car, car_prim, "(car LIST) returns the first element of LIST"), List(symbol_cd, current_directory_prim, "(cd [PATH]): get the current directory, or set it if PATH is given (alias current-directory)"), List(symbol_cdaaar, cdaaar_prim, "(cdaaar ...): "), List(symbol_cdaadr, cdaadr_prim, "(cdaadr ...): "), List(symbol_cdaar, cdaar_prim, "(cdaar ...): "), List(symbol_cdadar, cdadar_prim, "(cdadar ...): "), List(symbol_cdaddr, cdaddr_prim, "(cdaddr ...): "), List(symbol_cdadr, cdadr_prim, "(cdadr ...): "), List(symbol_cdar, cdar_prim, "(cdar ...): "), List(symbol_cddaar, cddaar_prim, "(cddaar ...): "), List(symbol_cddadr, cddadr_prim, "(cddadr ...): "), List(symbol_cddar, cddar_prim, "(cddar ...): "), List(symbol_cdddar, cdddar_prim, "(cdddar ...): "), List(symbol_cddddr, cddddr_prim, "(cddddr ...): "), List(symbol_cdddr, cdddr_prim, "(cdddr ...): "), List(symbol_cddr, cddr_prim, "(cddr ...): "), List(symbol_cdr, cdr_prim, "(cdr LIST) returns rest of LIST after (car LIST)"), List(symbol_char_to_integer, char_to_integer_prim, "(char->integer CHAR): return associated number of CHAR "), List(symbol_char_to_string, char_to_string_prim, "(char->string CHAR): "), List(symbol_char_alphabetic_q, char_alphabetic_q_prim, "(char-alphabetic? CHAR): return #t if CHAR is an alphabetic character, #f otherwise"), List(symbol_char_numeric_q, char_numeric_q_prim, "(char-numeric? CHAR): return #t if CHAR is a whitespace character, #f otherwise"), List(symbol_char_whitespace_q, char_whitespace_q_prim, "(char-whitespace? CHAR): return #t if CHAR is a whitespace character, #f otherwise"), List(symbol_char_is__q, char_is__q_prim, "(char=? CHAR1 CHAR2): return #t if CHAR1 has the same values as CHAR2, #f otherwise"), List(symbol_char_q, char_q_prim, "(char? ITEM): return #t if ITEM is a character, #f otherwise"), List(symbol_cons, cons_prim, "(cons ITEM1 ITEM2): return a list with ITEM1 as car and ITEM2 as cdr (ITEM2 is typically a list)"), List(symbol_current_directory, current_directory_prim, "(current-directory [PATH]): get the current directory, or set it if PATH is given (alias cd)"), List(symbol_current_environment, current_environment_prim, "(current-environment): returns the current environment"), List(symbol_current_time, current_time_prim, "(current-time): returns the current time as number of seconds since 1970-1-1"), List(symbol_cut, cut_prim, "(cut ARGS...): return to toplevel with ARGS"), List(symbol_dir, dir_prim, "(dir [ITEM]): return items in environment, or, if ITEM is given, the items in module"), List(symbol_display, display_prim, "(display ITEM): display the ITEM as output"), List(symbol_div, quotient_prim, "(div arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases // and quotient)"), List(symbol_eq_q, eq_q_prim, "(eq? ITEM1 ITEM2): return #t if ITEM1 is eq to ITEM2, #f otherwise"), List(symbol_equal_q, equal_q_prim, "(equal? ITEM1 ITEM2): return #t if ITEM1 is equal to ITEM2, #f otherwise"), List(symbol_eqv_q, eqv_q_prim, "(eqv? ITEM1 ITEM2): return #t if ITEM1 and ITEM2 have the same value"), List(symbol_error, error_prim, "(error NAME MESSAGE): create an exception in NAME with MESSAGE"), List(symbol_eval, eval_prim, "(eval LIST): evaluates the LIST as a Scheme expression"), List(symbol_eval_ast, eval_ast_prim, "(eval-ast AST): evaluates the Abstract Syntax Tree as a Scheme expression (see parse and parse-string)"), List(symbol_even_q, even_q_prim, "(even? NUMBER): returns #t if NUMBER is odd, #f otherwise"), List(symbol_exit, exit_prim, "(exit): Exit the interpreter"), List(symbol_expt, expt_prim, "(expt BASE POWER): raise a base number to a power"), List(symbol_for_each, for_each_prim, "(for-each PROCEDURE LIST): apply PROCEDURE to each item in LIST, but don't return results"), List(symbol_format, format_prim, "(format STRING ITEM ...): format the string with ITEMS as arguments"), List(symbol_get, get_prim, "(get ...): "), List(symbol_get_completions, get_completions_prim, "(get-completions ...): returns completions for TAB"), List(symbol_get_stack_trace, get_stack_trace_prim, "(get-stack-trace): return the current stack trace"), List(symbol_import, import_prim, "(import MODULE...): import host-system modules; MODULEs are strings"), List(symbol_import_as, import_as_prim, "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment"), List(symbol_import_from, import_from_prim, "(import-from MODULE NAME...): import from host-system module; MODULE is a string, and NAME is a symbol or string"), List(symbol_integer_to_char, integer_to_char_prim, "(integer->char INTEGER): return the assocated character of INTEGER"), List(symbol_iter_q, iter_q_prim, "(iter? ITEM): return #t if ITEM is a iterator, #f otherwise"), List(symbol_length, length_prim, "(length LIST): returns the number of elements in top level of LIST"), List(symbol_List, list_prim, "(list ITEM ...): returns a list composed of all of the items"), List(symbol_list_to_string, list_to_string_prim, "(list->string LIST): returns the LIST as a string"), List(symbol_list_to_vector, list_to_vector_prim, "(list->vector LIST): returns the LIST as a vector"), List(symbol_list_ref, list_ref_prim, "(list-ref LIST INDEX): returns the item in LIST at INDEX (zero-based)"), List(symbol_list_q, list_q_prim, "(list? ITEM): return #t if ITEM is a list, #f otherwise"), List(symbol_load, load_prim, "(load FILENAME...): loads the given FILENAMEs"), List(symbol_load_as, load_as_prim, "(load-as FILENAME MODULE-NAME): load the filename, putting items in MODULE-NAME namespace"), List(symbol_macros, macros_prim, "(macros): return the names of the macros"), List(symbol_make_set, make_set_prim, "(make-set LIST): returns a list of unique items from LIST"), List(symbol_make_vector, make_vector_prim, "(make-vector LENGTH): returns a vector of length LENGTH"), List(symbol_Map, map_prim, "(map PROCEDURE LIST...): apply PROCEDURE to each element of LIST, and return return results"), List(symbol_max, max_prim, "(max ...): returns the maximum value from the list of values"), List(symbol_member, member_prim, "(member ITEM LIST): return LIST if ITEM in top level of LIST"), List(symbol_memq, memq_prim, "(memq ...): "), List(symbol_memv, memv_prim, "(memv ...): "), List(symbol_min, min_prim, "(min ...): returns the minimum value from the list of values"), List(symbol_mod, modulo_prim, "(mod arg0 arg1): modulo procedure for two arguments (aliases % and modulo)"), List(symbol_modulo, modulo_prim, "(modulo arg0 arg1): modulo procedure for two arguments (aliases mod and %)"), List(symbol_newline, newline_prim, "(newline): displays a new line in output"), List(symbol_not, not_prim, "(not ITEM): returns the boolean not of ITEM; ITEM is only #t when #t, otherwise #f"), List(symbol_null_q, null_q_prim, "(null? ITEM): return #t if ITEM is empty list, #f otherwise"), List(symbol_number_to_string, number_to_string_prim, "(number->string NUMBER): return NUMBER as a string"), List(symbol_number_q, number_q_prim, "(number? ITEM): return #t if ITEM is a number, #f otherwise"), List(symbol_odd_q, odd_q_prim, "(odd? NUMBER): returns #t if NUMBER is even, #f otherwise"), List(symbol_pair_q, pair_q_prim, "(pair? ITEM): "), List(symbol_parse, parse_prim, "(parse LIST): parse a list; returns Abstract Syntax Tree (AST)"), List(symbol_parse_string, parse_string_prim, "(parse-string STRING): parse a string; returns Abstract Syntax Tree (AST)"), List(symbol_print, print_prim, "(print ITEM): "), List(symbol_printf, printf_prim, "(printf FORMAT ARGS...): "), List(symbol_procedure_q, procedure_q_prim, "(procedure? ITEM): return #t if ITEM is a procedure, #f otherwise"), List(symbol_python_eval, python_eval_prim, "(python-eval PYTHON-EXPRESSION [globals [locals]]): return the result of evaluating PYTHON-EXPRESSION string"), List(symbol_python_exec, python_exec_prim, "(python-exec PYTHON-STATEMENTS [globals [locals]]): return the result of evaluating PYTHON-STATEMENTS string"), List(symbol_quit, exit_prim, "(quit): Exit the interpreter"), List(symbol_quotient, quotient_prim, "(quotient arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases // and div)"), List(symbol_rac, rac_prim, "(rac LIST): return the last item of LIST"), List(symbol_random, random_prim, "(random N): return a random number in the range [0, N)"), List(symbol_Range, range_prim, "(range END), (range START END), or (RANGE START END STEP): (all integers)"), List(symbol_rdc, rdc_prim, "(rdc LIST): return everything but last item in LIST"), List(symbol_read_string, read_string_prim, "(read-string ...): "), List(symbol_remainder, remainder_prim, "(remainder NUMBER1 NUMBER2): returns the remainder after dividing NUMBER1 by NUMBER2"), List(symbol_require, require_prim, "(require ...): "), List(symbol_reverse, reverse_prim, "(reverse LIST): "), List(symbol_round, round_prim, "(round NUMBER): round NUMBER to the nearest integer (may return float)"), List(symbol_set_car_b, set_car_b_prim, "(set-car! LIST ITEM): set the car of LIST to be ITEM"), List(symbol_set_cdr_b, set_cdr_b_prim, "(set-cdr! LIST ITEM): set the car of LIST to be ITEM (which is typically a list)"), List(symbol_snoc, snoc_prim, "(snoc ITEM LIST): cons the ITEM onto the end of LIST"), List(symbol_sqrt, sqrt_prim, "(sqrt NUMBER): return the square root of NUMBER"), List(symbol_string, string_prim, "(string ITEM): returns ITEM as a string"), List(symbol_string_to_list, string_to_list_prim, "(string->list STRING): string STRING as a list of characters"), List(symbol_string_to_number, string_to_number_prim, "(string->number STRING): return STRING as a number"), List(symbol_string_to_symbol, string_to_symbol_prim, "(string->symbol STRING): return STRING as a symbol"), List(symbol_string_length, string_length_prim, "(string-length STRING): returns the length of a string"), List(symbol_string_ref, string_ref_prim, "(string-ref STRING INDEX): return the character of STRING at position INDEX"), List(symbol_stringLessThan_q, stringLessThan_q_prim, "(string<? STRING1 STRING2): compare two strings to see if STRING1 is less than STRING2"), List(symbol_string_is__q, string_is__q_prim, "(string=? STRING1 STRING2): return #t if STRING1 is the same as STRING2, #f otherwise"), List(symbol_string_q, string_q_prim, "(string? ITEM): return #t if ITEM is a string, #f otherwise"), List(symbol_substring, substring_prim, "(substring STRING START [END]): return the substring of STRING starting with position START and ending before END. If END is not provided, it defaults to the length of the STRING"), List(symbol_symbol_to_string, symbol_to_string_prim, "(symbol->string SYMBOL): return SYMBOL as a string"), List(symbol_symbol_q, symbol_q_prim, "(symbol? ITEM): return #t if ITEM is a symbol, #f otherwise"), List(symbol_unbox, unbox_prim, "(unbox BOX): return the contents of BOX"), List(symbol_unparse, unparse_prim, "(unparse AST): "), List(symbol_unparse_procedure, unparse_procedure_prim, "(unparse-procedure ...): "), List(symbol_use_stack_trace, use_stack_trace_prim, "(use-stack-trace BOOLEAN): set stack-trace usage on/off"), List(symbol_use_tracing, use_tracing_prim, "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given"), List(symbol_vector, vector_prim, "(vector [ITEMS]...): return ITEMs as a vector"), List(symbol_vector_to_list, vector_to_list_prim, "(vector->list VECTOR): return VECTOR as a list"), List(symbol_vector_length, vector_length_prim, "(vector-length VECTOR): returns length of VECTOR"), List(symbol_vector_ref, vector_ref_prim, "(vector-ref VECTOR INDEX): "), List(symbol_vector_set_b, vector_set_b_prim, "(vector-set! VECTOR INDEX VALUE): sets the item at INDEX of VECTOR"), List(symbol_vector_q, vector_q_prim, "(vector? ITEM): return #t if ITEM is a vector, #f otherwise"), List(symbol_void, void_prim, "(void): The null value symbol"), List(symbol_zero_q, zero_q_prim, "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise"), List(symbol_assq, assq_prim, "(assq ...): "), List(symbol_contains, contains_prim, "(contains DICTIONARY ITEM): returns #t if DICTIONARY contains ITEM"), List(symbol_dict, dict_prim, "(dict ...): "), List(symbol_float, float_prim, "(float NUMBER): return NUMBER as a floating point value"), List(symbol_getitem, getitem_prim, "(getitem DICTIONARY ITEM): returns the VALUE of DICTIONARY[ITEM]"), List(symbol_globals, globals_prim, "(globals): get global environment"), List(symbol_int_, int_prim, "(int NUMBER): return NUMBER as an integer"), List(symbol_property, property_prim, "(property ...): "), List(symbol_rational, rational_prim, "(rational NUMERATOR DENOMINTAOR): return a rational number"), List(symbol_reset_toplevel_env, reset_toplevel_env_prim, "(reset-toplevel-env): reset the toplevel environment"), List(symbol_setitem, setitem_prim, "(setitem DICTIONARY ITEM VALUE): sets and returns DICTIONARY[ITEM] with VALUE"), List(symbol_sort, sort_prim, "(sort PROCEDURE LIST): sort the list using PROCEDURE to compare items"), List(symbol_string_append, string_append_prim, "(string-append STRING1 STRING2): append two strings together"), List(symbol_string_split, string_split_prim, "(string-split STRING CHAR): return a list with substrings of STRING where split by CHAR"), List(symbol_typeof, typeof_prim, "(typeof ITEM): returns type of ITEM"), List(symbol_use_lexical_address, use_lexical_address_prim, "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given"))
+    primitives = List(List(symbol_p, modulo_prim, "(% arg0 arg1): modulo procedure for two arguments (aliases mod and modulo)"), List(symbol_multiply, times_prim, "(* ...): multiplication procedure; multiplies all arguments"), List(symbol_plus, plus_prim, "(+ ...): addition procedure; adds all arguments"), List(symbol_minus, minus_prim, "(- ...): subtraction procedure; subtracts all arguments"), List(symbol_divide, divide_prim, "(/ ...): division procedure; divides all arguments"), List(symbol___, quotient_prim, "(// arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases div and quotient)"), List(symbol_LessThan, lt_prim, "(< arg0 arg1): less-than procedure for two arguments"), List(symbol_LessThanEqual, lt_or_eq_prim, "(<= arg0 arg1): less-than or equal procedure for two arguments"), List(symbol_numeric_equal, equal_sign_prim, "(= arg0 arg1): numeric equality procedure for two arguments"), List(symbol_GreaterThan, gt_prim, "(> arg0 arg1): greater-than procedure for two arguments"), List(symbol_GreaterThanEqual, gt_or_eq_prim, "(>= arg0 arg1): greater-than or equal procedure for two arguments"), List(symbol_SCHEMEPATH, SCHEMEPATH, "List of search directories used with (load NAME)"), List(symbol_abort, abort_prim, "(abort) : aborts processing and returns to top level"), List(symbol_abs, abs_prim, "(abs value): absolute value procedure"), List(symbol_append, append_prim, "(append ...): append lists together into a single list"), List(symbol_Apply, apply_prim, "(apply PROCEDURE '(args...)): apply the PROCEDURE to the args"), List(symbol_assert, assert_prim, "(assert OPERATOR EXPRESSION ANSWER): assert that (OPERATOR EXPRESSION ANSWER) is #t"), List(symbol_assv, assv_prim, "(assv KEY ((ITEM VALUE) ...)): look for KEY in ITEMs; return matching (ITEM VALUE) or #f if not found"), List(symbol_atom_q, atom_q_prim, "(atom? ITEM): return #t if ITEM is a atom, #f otherwise"), List(symbol_boolean_q, boolean_q_prim, "(boolean? ITEM): return #t if ITEM is a boolean value"), List(symbol_box, box_prim, "(box ITEM): return a new box containing ITEM"), List(symbol_box_q, box_q_prim, "(box? ITEM): return #t if ITEM is a boxed value"), List(symbol_caaaar, caaaar_prim, "caaaar ...): "), List(symbol_caaadr, caaadr_prim, "(caaadr ...): "), List(symbol_caaar, caaar_prim, "(caaar ...): "), List(symbol_caadar, caadar_prim, "(caadar ...): "), List(symbol_caaddr, caaddr_prim, "(caaddr ...): "), List(symbol_caadr, caadr_prim, "(caadr ...): "), List(symbol_caar, caar_prim, "(caar ...): "), List(symbol_cadaar, cadaar_prim, "(cadaar ...): "), List(symbol_cadadr, cadadr_prim, "(cadadr ...): "), List(symbol_cadar, cadar_prim, "(cadar ...): "), List(symbol_caddar, caddar_prim, "(caddar ...): "), List(symbol_cadddr, cadddr_prim, "(cadddr ...): "), List(symbol_caddr, caddr_prim, "(caddr ITEM): return the (car (cdr (cdr ITEM)))"), List(symbol_cadr, cadr_prim, "(cadr ITEM): return the (car (cdr ITEM))"), List(symbol_call_with_current_continuation, call_cc_prim, "(call-with-current-continuation ...): "), List(symbol_call_cc, call_cc_prim, "(call/cc ...): "), List(symbol_car, car_prim, "(car LIST) returns the first element of LIST"), List(symbol_cd, current_directory_prim, "(cd [PATH]): get the current directory, or set it if PATH is given (alias current-directory)"), List(symbol_cdaaar, cdaaar_prim, "(cdaaar ...): "), List(symbol_cdaadr, cdaadr_prim, "(cdaadr ...): "), List(symbol_cdaar, cdaar_prim, "(cdaar ...): "), List(symbol_cdadar, cdadar_prim, "(cdadar ...): "), List(symbol_cdaddr, cdaddr_prim, "(cdaddr ...): "), List(symbol_cdadr, cdadr_prim, "(cdadr ...): "), List(symbol_cdar, cdar_prim, "(cdar ...): "), List(symbol_cddaar, cddaar_prim, "(cddaar ...): "), List(symbol_cddadr, cddadr_prim, "(cddadr ...): "), List(symbol_cddar, cddar_prim, "(cddar ...): "), List(symbol_cdddar, cdddar_prim, "(cdddar ...): "), List(symbol_cddddr, cddddr_prim, "(cddddr ...): "), List(symbol_cdddr, cdddr_prim, "(cdddr ...): "), List(symbol_cddr, cddr_prim, "(cddr ...): "), List(symbol_cdr, cdr_prim, "(cdr LIST) returns rest of LIST after (car LIST)"), List(symbol_char_to_integer, char_to_integer_prim, "(char->integer CHAR): return associated number of CHAR "), List(symbol_char_to_string, char_to_string_prim, "(char->string CHAR): "), List(symbol_char_alphabetic_q, char_alphabetic_q_prim, "(char-alphabetic? CHAR): return #t if CHAR is an alphabetic character, #f otherwise"), List(symbol_char_numeric_q, char_numeric_q_prim, "(char-numeric? CHAR): return #t if CHAR is a whitespace character, #f otherwise"), List(symbol_char_whitespace_q, char_whitespace_q_prim, "(char-whitespace? CHAR): return #t if CHAR is a whitespace character, #f otherwise"), List(symbol_char_is__q, char_is__q_prim, "(char=? CHAR1 CHAR2): return #t if CHAR1 has the same values as CHAR2, #f otherwise"), List(symbol_char_q, char_q_prim, "(char? ITEM): return #t if ITEM is a character, #f otherwise"), List(symbol_cons, cons_prim, "(cons ITEM1 ITEM2): return a list with ITEM1 as car and ITEM2 as cdr (ITEM2 is typically a list)"), List(symbol_current_directory, current_directory_prim, "(current-directory [PATH]): get the current directory, or set it if PATH is given (alias cd)"), List(symbol_current_environment, current_environment_prim, "(current-environment): returns the current environment"), List(symbol_current_time, current_time_prim, "(current-time): returns the current time as number of seconds since 1970-1-1"), List(symbol_cut, cut_prim, "(cut ARGS...): return to toplevel with ARGS"), List(symbol_dir, dir_prim, "(dir [ITEM]): return items in environment, or, if ITEM is given, the items in module"), List(symbol_display, display_prim, "(display ITEM): display the ITEM as output"), List(symbol_div, quotient_prim, "(div arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases // and quotient)"), List(symbol_eq_q, eq_q_prim, "(eq? ITEM1 ITEM2): return #t if ITEM1 is eq to ITEM2, #f otherwise"), List(symbol_equal_q, equal_q_prim, "(equal? ITEM1 ITEM2): return #t if ITEM1 is equal to ITEM2, #f otherwise"), List(symbol_eqv_q, eqv_q_prim, "(eqv? ITEM1 ITEM2): return #t if ITEM1 and ITEM2 have the same value"), List(symbol_error, error_prim, "(error NAME MESSAGE): create an exception in NAME with MESSAGE"), List(symbol_eval, eval_prim, "(eval LIST): evaluates the LIST as a Scheme expression"), List(symbol_eval_ast, eval_ast_prim, "(eval-ast AST): evaluates the Abstract Syntax Tree as a Scheme expression (see parse and parse-string)"), List(symbol_even_q, even_q_prim, "(even? NUMBER): returns #t if NUMBER is odd, #f otherwise"), List(symbol_exit, exit_prim, "(exit): Exit the interpreter"), List(symbol_expt, expt_prim, "(expt BASE POWER): raise a base number to a power"), List(symbol_for_each, for_each_prim, "(for-each PROCEDURE LIST): apply PROCEDURE to each item in LIST, but don't return results"), List(symbol_format, format_prim, "(format STRING ITEM ...): format the string with ITEMS as arguments"), List(symbol_get, get_prim, "(get ...): "), List(symbol_get_completions, get_completions_prim, "(get-completions ...): returns completions for TAB"), List(symbol_get_stack_trace, get_stack_trace_prim, "(get-stack-trace): return the current stack trace"), List(symbol_import, import_prim, "(import MODULE...): import host-system modules; MODULEs are strings"), List(symbol_import_as, import_as_prim, "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment"), List(symbol_import_from, import_from_prim, "(import-from MODULE NAME...): import from host-system module; MODULE is a string, and NAME is a symbol or string"), List(symbol_integer_to_char, integer_to_char_prim, "(integer->char INTEGER): return the assocated character of INTEGER"), List(symbol_iter_q, iter_q_prim, "(iter? ITEM): return #t if ITEM is a iterator, #f otherwise"), List(symbol_length, length_prim, "(length LIST): returns the number of elements in top level of LIST"), List(symbol_List, list_prim, "(list ITEM ...): returns a list composed of all of the items"), List(symbol_list_to_string, list_to_string_prim, "(list->string LIST): returns the LIST as a string"), List(symbol_list_to_vector, list_to_vector_prim, "(list->vector LIST): returns the LIST as a vector"), List(symbol_list_ref, list_ref_prim, "(list-ref LIST INDEX): returns the item in LIST at INDEX (zero-based)"), List(symbol_list_q, list_q_prim, "(list? ITEM): return #t if ITEM is a list, #f otherwise"), List(symbol_load, load_prim, "(load FILENAME...): loads the given FILENAMEs"), List(symbol_load_as, load_as_prim, "(load-as FILENAME MODULE-NAME): load the filename, putting items in MODULE-NAME namespace"), List(symbol_macros, macros_prim, "(macros): return the names of the macros"), List(symbol_make_set, make_set_prim, "(make-set LIST): returns a list of unique items from LIST"), List(symbol_make_vector, make_vector_prim, "(make-vector LENGTH): returns a vector of length LENGTH"), List(symbol_Map, map_prim, "(map PROCEDURE LIST...): apply PROCEDURE to each element of LIST, and return return results"), List(symbol_max, max_prim, "(max ...): returns the maximum value from the list of values"), List(symbol_member, member_prim, "(member ITEM LIST): return LIST if ITEM in top level of LIST"), List(symbol_memq, memq_prim, "(memq ...): "), List(symbol_memv, memv_prim, "(memv ...): "), List(symbol_min, min_prim, "(min ...): returns the minimum value from the list of values"), List(symbol_mod, modulo_prim, "(mod arg0 arg1): modulo procedure for two arguments (aliases % and modulo)"), List(symbol_modulo, modulo_prim, "(modulo arg0 arg1): modulo procedure for two arguments (aliases mod and %)"), List(symbol_newline, newline_prim, "(newline): displays a new line in output"), List(symbol_not, not_prim, "(not ITEM): returns the boolean not of ITEM; ITEM is only #t when #t, otherwise #f"), List(symbol_null_q, null_q_prim, "(null? ITEM): return #t if ITEM is empty list, #f otherwise"), List(symbol_number_to_string, number_to_string_prim, "(number->string NUMBER): return NUMBER as a string"), List(symbol_number_q, number_q_prim, "(number? ITEM): return #t if ITEM is a number, #f otherwise"), List(symbol_odd_q, odd_q_prim, "(odd? NUMBER): returns #t if NUMBER is even, #f otherwise"), List(symbol_pair_q, pair_q_prim, "(pair? ITEM): "), List(symbol_parse, parse_prim, "(parse LIST): parse a list; returns Abstract Syntax Tree (AST)"), List(symbol_parse_string, parse_string_prim, "(parse-string STRING): parse a string; returns Abstract Syntax Tree (AST)"), List(symbol_print, print_prim, "(print ITEM): "), List(symbol_printf, printf_prim, "(printf FORMAT ARGS...): "), List(symbol_procedure_q, procedure_q_prim, "(procedure? ITEM): return #t if ITEM is a procedure, #f otherwise"), List(symbol_python_eval, python_eval_prim, "(python-eval PYTHON-EXPRESSION [globals [locals]]): return the result of evaluating PYTHON-EXPRESSION string"), List(symbol_python_exec, python_exec_prim, "(python-exec PYTHON-STATEMENTS [globals [locals]]): return the result of evaluating PYTHON-STATEMENTS string"), List(symbol_quit, exit_prim, "(quit): Exit the interpreter"), List(symbol_quotient, quotient_prim, "(quotient arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases // and div)"), List(symbol_rac, rac_prim, "(rac LIST): return the last item of LIST"), List(symbol_random, random_prim, "(random N): return a random number in the range [0, N)"), List(symbol_Range, range_prim, "(range END), (range START END), or (RANGE START END STEP): (all integers)"), List(symbol_rdc, rdc_prim, "(rdc LIST): return everything but last item in LIST"), List(symbol_read_string, read_string_prim, "(read-string ...): "), List(symbol_remainder, remainder_prim, "(remainder NUMBER1 NUMBER2): returns the remainder after dividing NUMBER1 by NUMBER2"), List(symbol_require, require_prim, "(require ...): "), List(symbol_reverse, reverse_prim, "(reverse LIST): "), List(symbol_round, round_prim, "(round NUMBER): round NUMBER to the nearest integer (may return float)"), List(symbol_set_car_b, set_car_b_prim, "(set-car! LIST ITEM): set the car of LIST to be ITEM"), List(symbol_set_cdr_b, set_cdr_b_prim, "(set-cdr! LIST ITEM): set the car of LIST to be ITEM (which is typically a list)"), List(symbol_snoc, snoc_prim, "(snoc ITEM LIST): cons the ITEM onto the end of LIST"), List(symbol_sqrt, sqrt_prim, "(sqrt NUMBER): return the square root of NUMBER"), List(symbol_string, string_prim, "(string ITEM): returns ITEM as a string"), List(symbol_string_to_list, string_to_list_prim, "(string->list STRING): string STRING as a list of characters"), List(symbol_string_to_number, string_to_number_prim, "(string->number STRING): return STRING as a number"), List(symbol_string_to_symbol, string_to_symbol_prim, "(string->symbol STRING): return STRING as a symbol"), List(symbol_string_length, string_length_prim, "(string-length STRING): returns the length of a string"), List(symbol_string_ref, string_ref_prim, "(string-ref STRING INDEX): return the character of STRING at position INDEX"), List(symbol_stringLessThan_q, stringLessThan_q_prim, "(string<? STRING1 STRING2): compare two strings to see if STRING1 is less than STRING2"), List(symbol_string_is__q, string_is__q_prim, "(string=? STRING1 STRING2): return #t if STRING1 is the same as STRING2, #f otherwise"), List(symbol_string_q, string_q_prim, "(string? ITEM): return #t if ITEM is a string, #f otherwise"), List(symbol_substring, substring_prim, "(substring STRING START [END]): return the substring of STRING starting with position START and ending before END. If END is not provided, it defaults to the length of the STRING"), List(symbol_symbol_to_string, symbol_to_string_prim, "(symbol->string SYMBOL): return SYMBOL as a string"), List(symbol_symbol_q, symbol_q_prim, "(symbol? ITEM): return #t if ITEM is a symbol, #f otherwise"), List(symbol_unbox, unbox_prim, "(unbox BOX): return the contents of BOX"), List(symbol_unparse, unparse_prim, "(unparse AST): "), List(symbol_unparse_procedure, unparse_procedure_prim, "(unparse-procedure ...): "), List(symbol_use_stack_trace, use_stack_trace_prim, "(use-stack-trace BOOLEAN): set stack-trace usage on/off"), List(symbol_use_tracing, use_tracing_prim, "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given"), List(symbol_vector, vector_prim, "(vector [ITEMS]...): return ITEMs as a vector"), List(symbol_vector_to_list, vector_to_list_prim, "(vector->list VECTOR): return VECTOR as a list"), List(symbol_vector_length, vector_length_prim, "(vector-length VECTOR): returns length of VECTOR"), List(symbol_vector_ref, vector_ref_prim, "(vector-ref VECTOR INDEX): "), List(symbol_vector_set_b, vector_set_b_prim, "(vector-set! VECTOR INDEX VALUE): sets the item at INDEX of VECTOR"), List(symbol_vector_q, vector_q_prim, "(vector? ITEM): return #t if ITEM is a vector, #f otherwise"), List(symbol_void, void_prim, "(void): The null value symbol"), List(symbol_zero_q, zero_q_prim, "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise"), List(symbol_assq, assq_prim, "(assq ...): "), List(symbol_contains, contains_prim, "(contains DICTIONARY ITEM): returns #t if DICTIONARY contains ITEM"), List(symbol_dict, dict_prim, "(dict ...): "), List(symbol_float, float_prim, "(float NUMBER): return NUMBER as a floating point value"), List(symbol_getitem, getitem_prim, "(getitem DICTIONARY ITEM): returns the VALUE of DICTIONARY[ITEM]"), List(symbol_globals, globals_prim, "(globals): get global environment"), List(symbol_int_, int_prim, "(int NUMBER): return NUMBER as an integer"), List(symbol_property, property_prim, "(property ...): "), List(symbol_rational, rational_prim, "(rational NUMERATOR DENOMINTAOR): return a rational number"), List(symbol_reset_toplevel_env, reset_toplevel_env_prim, "(reset-toplevel-env): reset the toplevel environment"), List(symbol_setitem, setitem_prim, "(setitem DICTIONARY ITEM VALUE): sets and returns DICTIONARY[ITEM] with VALUE"), List(symbol_sort, sort_prim, "(sort PROCEDURE LIST): sort the list using PROCEDURE to compare items"), List(symbol_string_append, string_append_prim, "(string-append STRING1 STRING2): append two strings together"), List(symbol_string_split, string_split_prim, "(string-split STRING CHAR): return a list with substrings of STRING where split by CHAR"), List(symbol_typeof, typeof_prim, "(typeof ITEM): returns type of ITEM"), List(symbol_use_lexical_address, use_lexical_address_prim, "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given"))
     return make_initial_env_extended(Map(car, primitives), Map(cadr, primitives), Map(caddr, primitives))
 
 def reset_toplevel_env():
@@ -8265,7 +8305,7 @@ def reset_toplevel_env():
     return void_value
 
 def make_external_proc(external_function_object):
-    return make_proc(b_proc_175_d, external_function_object)
+    return make_proc(b_proc_176_d, external_function_object)
 
 def process_formals_and_args(params, args, info, handler, fail):
     return cons(process_formals(params, info, handler, fail), process_args(args, params, info, handler, fail))
@@ -8428,7 +8468,7 @@ def instantiate_hat():
             GLOBALS['pc'] = apply_sub_hat
         else:
             if true_q(pair_q(pattern_reg)):
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_109_d, ap_reg, pattern_reg, s_reg, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_110_d, ap_reg, pattern_reg, s_reg, k2_reg)
                 GLOBALS['ap_reg'] = car_hat(ap_reg)
                 GLOBALS['pattern_reg'] = car(pattern_reg)
                 GLOBALS['pc'] = instantiate_hat
@@ -8471,7 +8511,7 @@ def apply_sub_hat():
                 s2 = symbol_undefined
                 s2 = list_ref(temp_1, 2)
                 s1 = list_ref(temp_1, 1)
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_110_d, s2, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_111_d, s2, k2_reg)
                 GLOBALS['s_reg'] = s1
                 GLOBALS['pc'] = apply_sub_hat
             else:
@@ -8618,96 +8658,97 @@ cddddr_prim = make_proc(b_proc_80_d)
 cdddr_prim = make_proc(b_proc_81_d)
 cddr_prim = make_proc(b_proc_82_d)
 list_prim = make_proc(b_proc_83_d)
-make_set_prim = make_proc(b_proc_84_d)
-plus_prim = make_proc(b_proc_85_d)
-minus_prim = make_proc(b_proc_86_d)
-times_prim = make_proc(b_proc_87_d)
-divide_prim = make_proc(b_proc_88_d)
-modulo_prim = make_proc(b_proc_89_d)
-min_prim = make_proc(b_proc_90_d)
-max_prim = make_proc(b_proc_91_d)
-lt_prim = make_proc(b_proc_92_d)
-gt_prim = make_proc(b_proc_93_d)
-lt_or_eq_prim = make_proc(b_proc_94_d)
-gt_or_eq_prim = make_proc(b_proc_95_d)
-equal_sign_prim = make_proc(b_proc_96_d)
-abs_prim = make_proc(b_proc_97_d)
-equal_q_prim = make_proc(b_proc_98_d)
-eq_q_prim = make_proc(b_proc_99_d)
-memq_prim = make_proc(b_proc_100_d)
-member_prim = make_proc(b_proc_101_d)
-random_prim = make_proc(b_proc_102_d)
-range_prim = make_proc(b_proc_103_d)
-snoc_prim = make_proc(b_proc_104_d)
-rac_prim = make_proc(b_proc_105_d)
-rdc_prim = make_proc(b_proc_106_d)
-set_car_b_prim = make_proc(b_proc_107_d)
-set_cdr_b_prim = make_proc(b_proc_108_d)
-load_as_prim = make_proc(b_proc_109_d)
-get_stack_trace_prim = make_proc(b_proc_110_d)
-get_prim = make_proc(b_proc_111_d)
-call_cc_prim = make_proc(b_proc_113_d)
-abort_prim = make_proc(b_proc_114_d)
-require_prim = make_proc(b_proc_115_d)
-cut_prim = make_proc(b_proc_116_d)
-reverse_prim = make_proc(b_proc_117_d)
-append_prim = make_proc(b_proc_118_d)
-string_to_number_prim = make_proc(b_proc_119_d)
-string_is__q_prim = make_proc(b_proc_120_d)
-list_to_vector_prim = make_proc(b_proc_121_d)
-list_to_string_prim = make_proc(b_proc_122_d)
-char_to_string_prim = make_proc(b_proc_123_d)
-string_to_list_prim = make_proc(b_proc_124_d)
-string_to_symbol_prim = make_proc(b_proc_125_d)
-symbol_to_string_prim = make_proc(b_proc_126_d)
-vector_to_list_prim = make_proc(b_proc_127_d)
-vector_length_prim = make_proc(b_proc_128_d)
-get_completions_prim = make_proc(b_proc_129_d)
-dir_prim = make_proc(b_proc_130_d)
-macros_prim = make_proc(b_proc_131_d)
-current_time_prim = make_proc(b_proc_132_d)
-map_prim = make_proc(b_proc_133_d)
-for_each_prim = make_proc(b_proc_134_d)
-format_prim = make_proc(b_proc_135_d)
-current_environment_prim = make_proc(b_proc_136_d)
-import_prim = make_proc(b_proc_137_d)
-import_as_prim = make_proc(b_proc_138_d)
-import_from_prim = make_proc(b_proc_139_d)
-not_prim = make_proc(b_proc_140_d)
-printf_prim = make_proc(b_proc_141_d)
-vector_prim = make_proc(b_proc_142_d)
-vector_set_b_prim = make_proc(b_proc_143_d)
-vector_ref_prim = make_proc(b_proc_144_d)
-make_vector_prim = make_proc(b_proc_145_d)
-error_prim = make_proc(b_proc_146_d)
-list_ref_prim = make_proc(b_proc_147_d)
-current_directory_prim = make_proc(b_proc_148_d)
-round_prim = make_proc(b_proc_149_d)
-use_stack_trace_prim = make_proc(b_proc_150_d)
-use_tracing_prim = make_proc(b_proc_151_d)
-eqv_q_prim = make_proc(b_proc_152_d)
-vector_q_prim = make_proc(b_proc_153_d)
-atom_q_prim = make_proc(b_proc_154_d)
-iter_q_prim = make_proc(b_proc_155_d)
-contains_prim = make_proc(b_proc_156_d)
-getitem_prim = make_proc(b_proc_157_d)
-setitem_prim = make_proc(b_proc_158_d)
-list_q_prim = make_proc(b_proc_159_d)
-procedure_q_prim = make_proc(b_proc_160_d)
-stringLessThan_q_prim = make_proc(b_proc_161_d)
-float_prim = make_proc(b_proc_162_d)
-globals_prim = make_proc(b_proc_163_d)
-int_prim = make_proc(b_proc_164_d)
-assq_prim = make_proc(b_proc_165_d)
-dict_prim = make_proc(b_proc_166_d)
-property_prim = make_proc(b_proc_167_d)
-rational_prim = make_proc(b_proc_168_d)
-reset_toplevel_env_prim = make_proc(b_proc_169_d)
-sort_prim = make_proc(b_proc_170_d)
-string_append_prim = make_proc(b_proc_171_d)
-string_split_prim = make_proc(b_proc_172_d)
-typeof_prim = make_proc(b_proc_173_d)
-use_lexical_address_prim = make_proc(b_proc_174_d)
+assert_prim = make_proc(b_proc_84_d)
+make_set_prim = make_proc(b_proc_85_d)
+plus_prim = make_proc(b_proc_86_d)
+minus_prim = make_proc(b_proc_87_d)
+times_prim = make_proc(b_proc_88_d)
+divide_prim = make_proc(b_proc_89_d)
+modulo_prim = make_proc(b_proc_90_d)
+min_prim = make_proc(b_proc_91_d)
+max_prim = make_proc(b_proc_92_d)
+lt_prim = make_proc(b_proc_93_d)
+gt_prim = make_proc(b_proc_94_d)
+lt_or_eq_prim = make_proc(b_proc_95_d)
+gt_or_eq_prim = make_proc(b_proc_96_d)
+equal_sign_prim = make_proc(b_proc_97_d)
+abs_prim = make_proc(b_proc_98_d)
+equal_q_prim = make_proc(b_proc_99_d)
+eq_q_prim = make_proc(b_proc_100_d)
+memq_prim = make_proc(b_proc_101_d)
+member_prim = make_proc(b_proc_102_d)
+random_prim = make_proc(b_proc_103_d)
+range_prim = make_proc(b_proc_104_d)
+snoc_prim = make_proc(b_proc_105_d)
+rac_prim = make_proc(b_proc_106_d)
+rdc_prim = make_proc(b_proc_107_d)
+set_car_b_prim = make_proc(b_proc_108_d)
+set_cdr_b_prim = make_proc(b_proc_109_d)
+load_as_prim = make_proc(b_proc_110_d)
+get_stack_trace_prim = make_proc(b_proc_111_d)
+get_prim = make_proc(b_proc_112_d)
+call_cc_prim = make_proc(b_proc_114_d)
+abort_prim = make_proc(b_proc_115_d)
+require_prim = make_proc(b_proc_116_d)
+cut_prim = make_proc(b_proc_117_d)
+reverse_prim = make_proc(b_proc_118_d)
+append_prim = make_proc(b_proc_119_d)
+string_to_number_prim = make_proc(b_proc_120_d)
+string_is__q_prim = make_proc(b_proc_121_d)
+list_to_vector_prim = make_proc(b_proc_122_d)
+list_to_string_prim = make_proc(b_proc_123_d)
+char_to_string_prim = make_proc(b_proc_124_d)
+string_to_list_prim = make_proc(b_proc_125_d)
+string_to_symbol_prim = make_proc(b_proc_126_d)
+symbol_to_string_prim = make_proc(b_proc_127_d)
+vector_to_list_prim = make_proc(b_proc_128_d)
+vector_length_prim = make_proc(b_proc_129_d)
+get_completions_prim = make_proc(b_proc_130_d)
+dir_prim = make_proc(b_proc_131_d)
+macros_prim = make_proc(b_proc_132_d)
+current_time_prim = make_proc(b_proc_133_d)
+map_prim = make_proc(b_proc_134_d)
+for_each_prim = make_proc(b_proc_135_d)
+format_prim = make_proc(b_proc_136_d)
+current_environment_prim = make_proc(b_proc_137_d)
+import_prim = make_proc(b_proc_138_d)
+import_as_prim = make_proc(b_proc_139_d)
+import_from_prim = make_proc(b_proc_140_d)
+not_prim = make_proc(b_proc_141_d)
+printf_prim = make_proc(b_proc_142_d)
+vector_prim = make_proc(b_proc_143_d)
+vector_set_b_prim = make_proc(b_proc_144_d)
+vector_ref_prim = make_proc(b_proc_145_d)
+make_vector_prim = make_proc(b_proc_146_d)
+error_prim = make_proc(b_proc_147_d)
+list_ref_prim = make_proc(b_proc_148_d)
+current_directory_prim = make_proc(b_proc_149_d)
+round_prim = make_proc(b_proc_150_d)
+use_stack_trace_prim = make_proc(b_proc_151_d)
+use_tracing_prim = make_proc(b_proc_152_d)
+eqv_q_prim = make_proc(b_proc_153_d)
+vector_q_prim = make_proc(b_proc_154_d)
+atom_q_prim = make_proc(b_proc_155_d)
+iter_q_prim = make_proc(b_proc_156_d)
+contains_prim = make_proc(b_proc_157_d)
+getitem_prim = make_proc(b_proc_158_d)
+setitem_prim = make_proc(b_proc_159_d)
+list_q_prim = make_proc(b_proc_160_d)
+procedure_q_prim = make_proc(b_proc_161_d)
+stringLessThan_q_prim = make_proc(b_proc_162_d)
+float_prim = make_proc(b_proc_163_d)
+globals_prim = make_proc(b_proc_164_d)
+int_prim = make_proc(b_proc_165_d)
+assq_prim = make_proc(b_proc_166_d)
+dict_prim = make_proc(b_proc_167_d)
+property_prim = make_proc(b_proc_168_d)
+rational_prim = make_proc(b_proc_169_d)
+reset_toplevel_env_prim = make_proc(b_proc_170_d)
+sort_prim = make_proc(b_proc_171_d)
+string_append_prim = make_proc(b_proc_172_d)
+string_split_prim = make_proc(b_proc_173_d)
+typeof_prim = make_proc(b_proc_174_d)
+use_lexical_address_prim = make_proc(b_proc_175_d)
 toplevel_env = symbol_undefined
 pc_halt_signal = False
 def run(setup, *args):
