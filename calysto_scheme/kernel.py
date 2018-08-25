@@ -32,7 +32,7 @@ class CalystoScheme(MetaKernel):
     }
 
     kernel_json = {
-        "argv": [sys.executable,
+        "argv": ["python3",
                  "-m", "calysto_scheme",
                  "-f", "{connection_file}"],
         "display_name": "Calysto Scheme %i" % (3 if PY3 else 2),
@@ -316,6 +316,8 @@ MAIN FEATURES
             retval = None
         if retval is scheme.void_value:
             retval = None
+        elif scheme.end_of_session_q(retval):
+            retval = "use ^D to exit from console; use 'Shutdown Kernel` for other Jupyter frontends"
         return retval
 
     def do_function_direct(self, function_name, arg):
