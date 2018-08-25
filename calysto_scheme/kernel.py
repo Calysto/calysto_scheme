@@ -317,7 +317,8 @@ MAIN FEATURES
         if retval is scheme.void_value:
             retval = None
         elif scheme.end_of_session_q(retval):
-            retval = "use ^D to exit from console; use 'Shutdown Kernel` for other Jupyter frontends"
+            self.Print("Use ^D to exit from console; use 'Shutdown Kernel' for other Jupyter frontends.")
+            retval = None
         return retval
 
     def do_function_direct(self, function_name, arg):
