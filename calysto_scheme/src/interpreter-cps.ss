@@ -797,7 +797,7 @@
 ;; exit
 (define exit-prim
   (lambda-proc (args env2 info handler fail k2)
-    (halt* end-of-session)))
+    (k2 "use ^D to exit from console; use 'Shutdown Kernel` for others" fail)))
 
 ;; expt
 (define expt-prim
@@ -2581,7 +2581,8 @@
 	    (list 'error error-prim "(error NAME MESSAGE): create an exception in NAME with MESSAGE")
 	    (list 'eval eval-prim "(eval LIST): evaluates the LIST as a Scheme expression")
 	    (list 'eval-ast eval-ast-prim "(eval-ast AST): evaluates the Abstract Syntax Tree as a Scheme expression (see parse and parse-string)")
-	    (list 'exit exit-prim "(exit): ")
+	    (list 'exit exit-prim "(exit): Exit the interpreter")
+	    (list 'quit exit-prim "(quit): Exit the interpreter")
 	    (list 'expt expt-prim "(expt BASE POWER): raise a base number to a power")
 	    (list 'for-each for-each-prim "(for-each PROCEDURE LIST): apply PROCEDURE to each item in LIST, but don't return results")
 	    (list 'format format-prim "(format STRING ITEM ...): format the string with ITEMS as arguments")
