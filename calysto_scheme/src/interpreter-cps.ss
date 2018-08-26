@@ -98,6 +98,13 @@
   (lambda (dict)
     (map car (cdr dict))))
 
+(define-native hasitem-native
+  (lambda (dict keyword)
+    (let ((entry (assq keyword (cdr dict))))
+      (if entry
+	  #t
+	  #f))))
+
 (define path-join
   (lambda (path filename)
     (cond
@@ -519,8 +526,12 @@
 		  (set-binding-value! binding macro-transformer)
 		  (k void-value fail)))))))
       (define-tests-aexp (name aclauses info)
-      	(setitem-native unit-test-table name (list aclauses env))
-	(k void-value fail))
+	(if (hasitem-native unit-test-table name)
+	    (runtime-error (format "duplicate unit test group name '~a'; did you forget to (clear-unit-tests)?" name)
+			   info handler fail)
+	    (begin
+	      (setitem-native unit-test-table name (list aclauses env))
+	      (k void-value fail))))
       (run-tests-aexp (tests)
 	(if (null? tests)
 	    (run-unit-tests (map list (dict->keys unit-test-table)) handler fail k)
@@ -885,6 +896,11 @@
 	     (all-char? (cdr ls))))))
 
 ;; void
+(define clear-unit-tests-prim
+  (lambda-proc (args env2 info handler fail k2)
+      (set! unit-test-table (dict))
+      (k2 void-value fail)))
+
 (define void-prim
   (lambda-proc (args env2 info handler fail k2)
     (k2 void-value fail)))
@@ -2499,6 +2515,10 @@
   (lambda-proc (args env2 info handler fail k2)
        (k2 (apply setitem-native args) fail)))
 
+(define hasitem-prim
+  (lambda-proc (args env2 info handler fail k2)
+       (k2 (apply hasitem-native args) fail)))
+
 (define list?-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
@@ -2730,6 +2750,7 @@
 	    (list 'char-whitespace? char-whitespace?-prim "(char-whitespace? CHAR): return #t if CHAR is a whitespace character, #f otherwise")
 	    (list 'char=? char=?-prim "(char=? CHAR1 CHAR2): return #t if CHAR1 has the same values as CHAR2, #f otherwise")
 	    (list 'char? char?-prim "(char? ITEM): return #t if ITEM is a character, #f otherwise")
+	    (list 'clear-unit-tests clear-unit-tests-prim "(clear-unit-tests): clear old unit tests. Usually run before define-tests")
 	    (list 'cons cons-prim "(cons ITEM1 ITEM2): return a list with ITEM1 as car and ITEM2 as cdr (ITEM2 is typically a list)")
 	    (list 'current-directory current-directory-prim "(current-directory [PATH]): get the current directory, or set it if PATH is given (alias cd)")
 	    (list 'current-environment current-environment-prim "(current-environment): returns the current environment")
@@ -2752,6 +2773,7 @@
 	    (list 'get get-prim "(get ...): ")
 	    (list 'get-completions get-completions-prim "(get-completions ...): returns completions for TAB")
 	    (list 'get-stack-trace get-stack-trace-prim "(get-stack-trace): return the current stack trace")
+	    (list 'hasitem hasitem-prim "(hasitem DICTIONARY KEY): does the DICTIONARY have this key?")
 	    (list 'import import-prim "(import MODULE...): import host-system modules; MODULEs are strings")
 	    (list 'import-as import-as-prim "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment")
 	    (list 'import-from import-from-prim "(import-from MODULE NAME...): import from host-system module; MODULE is a string, and NAME is a symbol or string")

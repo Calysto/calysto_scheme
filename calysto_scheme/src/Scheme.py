@@ -1193,6 +1193,9 @@ def setitem_native(dictionary, item, value):
         setattr(dictionary, item, value)
     return value
 
+def hasitem_native(dictionary, key):
+    return key in dictionary
+
 def dict_to_keys(dictionary):
     return vector_to_list(list(dictionary.keys()))
 
