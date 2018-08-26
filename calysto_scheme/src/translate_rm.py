@@ -448,13 +448,12 @@ class PythonTranslator(Translator):
         self.Print(0, "")
         for statement in self.program:
             self.process_statement(statement, [], 0)
+        self.Print(0, "initialize_globals()")
         self.Print(0, "")
         self.Print(0, "if __name__ == '__main__':")
         self.Print(4, "print('Calysto Scheme, version %s')" % __version__)
         self.Print(4, "print('----------------------------')")
         self.Print(4, "print('Use (exit) to exit')")
-        self.Print(4, "GLOBALS['toplevel_env'] = make_toplevel_env()")
-        self.Print(4, "GLOBALS['macro_env'] = make_macro_env_hat()")
         self.Print(4, "import sys")
         self.Print(4, "for filename in sys.argv[1:]:")
         self.Print(4, "    if filename.startswith('-'): continue")
@@ -463,8 +462,6 @@ class PythonTranslator(Translator):
         self.Print(4, "if '-i' in sys.argv[1:] or sys.argv[1:] == []:")
         self.Print(4, "    read_eval_print_loop_rm()")
         self.Print(4, "    print()")
-        self.Print(0, "else:")
-        self.Print(4, "initialize_globals()")
 
 class CSharpTranslator(Translator):
     def preamble(self):

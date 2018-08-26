@@ -56,6 +56,7 @@
 ;;         | (define <var> <exp>)
 ;;         | (define <var> <docstring> <exp>)
 ;;         | (define-syntax <keyword> (<pattern> <pattern>) ...)
+;;         | (define-tests <var> <assertion> ...)
 ;;         | (begin <exp> ...)
 ;;         | (lambda (<formal> ...) <exp> ...)
 ;;         | (lambda <formal> <exp> ...)
@@ -126,6 +127,12 @@
     (clauses (list-of define-syntax-clause?))
     (aclauses list-of-define-syntax-clauses?^)
     (info source-info?))
+  (define-tests-aexp
+    (name symbol?)
+    (aclauses (list-of aexpression?))
+    (info source-info?))
+  (run-tests-aexp
+    (tests (list-of list?)))
   (begin-aexp
     (exps (list-of aexpression?))
     (info source-info?))
@@ -267,6 +274,14 @@
 	   (symbol?^ (car^ asexp))
 	   (eq?^ (cadr^ asexp) keyword)))))
 
+(define list-of-integers?^
+  (lambda (x)
+    (or (null?^ x)
+	(and (pair?^ x)
+	     (atom?^ (car^ x))
+	     (integer? (untag-atom^ (car^ x)))
+	     (list-of-integers?^ (cdr^ x))))))
+
 (define quote?^ (tagged-list^ 'quote = 2))
 (define quasiquote?^ (tagged-list^ 'quasiquote = 2))
 (define unquote?^ (tagged-list^ 'unquote >= 2))  ;; >= for alan bawden's qq-expand algorithm
@@ -298,6 +313,8 @@
 (define finally?^ (tagged-list^ 'finally >= 2))
 (define try-finally-exps^ (lambda (x) (cdr^ (caddr^ x))))
 (define try-catch-finally-exps^ (lambda (x) (cdr^ (cadddr^ x))))
+(define define-tests?^ (tagged-list^ 'define-tests >= 2))
+(define run-tests?^ (tagged-list^ 'run-tests >= 1))
 
 (define* aparse
   (lambda (adatum senv handler fail k)   ;; k receives 2 args: aexp, fail
@@ -405,6 +422,23 @@
 	   (unannotate-cps aclauses
 	     (lambda-cont (clauses)
 	       (k (define-syntax-aexp name clauses aclauses info) fail)))))
+	((define-tests?^ adatum)
+	 (let ((name (define-var^ adatum))
+	       (aclauses (cddr^ adatum)))
+	   (aparse-all aclauses senv handler fail
+	     (lambda-cont2 (exps fail)
+	       (k (define-tests-aexp name exps info) fail)))))
+	((run-tests?^ adatum)
+	 (let ((args (cdr^ adatum)))
+	   (cond
+	     ((null?^ args) (k (run-tests-aexp '()) fail))
+	     ((and (symbol?^ (car^ args)) (list-of-integers?^ (cdr^ args)))
+	      (aparse-unit-tests (list^ args) handler fail
+		(lambda-cont2 (tests fail)
+		  (k (run-tests-aexp tests) fail))))
+	     (else (aparse-unit-tests args handler fail
+		     (lambda-cont2 (tests fail)
+		       (k (run-tests-aexp tests) fail)))))))
 	((begin?^ adatum)
 	 (cond
 	   ((null?^ (cdr^ adatum)) (aparse-error "bad concrete syntax:" adatum handler fail))
@@ -484,6 +518,25 @@
 		 (k (app-aexp v1 v2 info) fail))))))
 	(else (aparse-error "bad concrete syntax:" adatum handler fail))))))
 
+(define* aparse-unit-tests
+  (lambda (args handler fail k)
+    (cond
+      ((null?^ args) (k '() fail))
+      ((symbol?^ (car^ args))
+       (aparse-unit-tests (cdr^ args) handler fail
+	 (lambda-cont2 (tests fail)
+	   (k (cons (list (untag-atom^ (car^ args))) tests) fail))))
+      ((and (list?^ (car^ args))
+	    (not (null?^ (car^ args)))
+	    (symbol?^ (caar^ args))
+	    (list-of-integers?^ (cdar^ args)))
+       (aparse-unit-tests (cdr^ args) handler fail
+	 (lambda-cont2 (tests fail)
+	   (unannotate-cps (car^ args)
+	     (lambda-cont (test)
+	       (k (cons test tests) fail))))))
+      (else (aparse-error "bad unit test syntax:" (car^ args) handler fail)))))
+
 (define* aparse-all
   (lambda (adatum-list senv handler fail k)
     (if (null?^ adatum-list)
@@ -499,7 +552,7 @@
     (let ((info (get-source-info adatum)))
       (unannotate-cps adatum
 	(lambda-cont (datum)
-	  (handler (make-exception "ParseError" (format "~s ~a" msg datum)
+	  (handler (make-exception "ParseError" (format "~a ~a" msg datum)
 			 (get-srcfile info)
 			 (get-start-line info)
 			 (get-start-char info))
@@ -566,28 +619,32 @@
 
 (define lambda-transformer^
   (lambda-macro (adatum handler fail k)
-    (let ((formals (cadr^ adatum))
-	  (bodies (cddr^ adatum)))
-      (get-internal-defines^ bodies adatum handler fail
-	(lambda-cont2 (defines bodies2)
-	  (if (null? defines)
-	    (k `(lambda-no-defines ,formals ,@(at^ bodies2)))
-	    (create-letrec-bindings^ defines handler fail
-	      (lambda-cont (bindings)
-		(k `(lambda-no-defines ,formals (letrec ,bindings ,@(at^ bodies2))))))))))))
+    (if (< (length^ adatum) 3)
+	(aparse-error "bad lambda expression:" adatum handler fail)
+	(let ((formals (cadr^ adatum))
+	      (bodies (cddr^ adatum)))
+	  (get-internal-defines^ bodies adatum handler fail
+	    (lambda-cont2 (defines bodies2)
+	      (if (null? defines)
+		  (k `(lambda-no-defines ,formals ,@(at^ bodies2)))
+		  (create-letrec-bindings^ defines handler fail
+		    (lambda-cont (bindings)
+		      (k `(lambda-no-defines ,formals (letrec ,bindings ,@(at^ bodies2)))))))))))))
 
 (define trace-lambda-transformer^
   (lambda-macro (adatum handler fail k)
-    (let ((name (cadr^ adatum))
-	  (formals (caddr^ adatum))
-	  (bodies (cdddr^ adatum)))
-      (get-internal-defines^ bodies adatum handler fail
-	(lambda-cont2 (defines bodies2)
-	  (if (null? defines)
-	    (k `(trace-lambda-no-defines ,name ,formals ,@(at^ bodies2)))
-	    (create-letrec-bindings^ defines handler fail
-	      (lambda-cont (bindings)
-		(k `(trace-lambda-no-defines ,name ,formals (letrec ,bindings ,@(at^ bodies2))))))))))))
+    (if (< (length^ adatum) 4)
+      (aparse-error "bad trace-lambda expression:" adatum handler fail)
+      (let ((name (cadr^ adatum))
+	    (formals (caddr^ adatum))
+	    (bodies (cdddr^ adatum)))
+	(get-internal-defines^ bodies adatum handler fail
+	  (lambda-cont2 (defines bodies2)
+	    (if (null? defines)
+		(k `(trace-lambda-no-defines ,name ,formals ,@(at^ bodies2)))
+		(create-letrec-bindings^ defines handler fail
+		  (lambda-cont (bindings)
+		    (k `(trace-lambda-no-defines ,name ,formals (letrec ,bindings ,@(at^ bodies2)))))))))))))
 
 (define get-internal-defines^
   (lambda (bodies adatum handler fail k)  ;; k receives 2 args: defines, bodies2
@@ -638,7 +695,6 @@
 		    (exp (cadddr^ adatum)))
 		(k name exp))
 	      (aparse-error "bad concrete syntax:" adatum handler fail))))))
-
 
 (define let-transformer^
   (lambda-macro (adatum handler fail k)
@@ -1303,6 +1359,8 @@
 
 (define aparse-string
   (lambda (string)
+    (set! toplevel-env (make-toplevel-env))
+    (set! macro-env (make-macro-env^))
     (aread-datum string 'stdin init-handler2 init-fail
       (lambda-cont3 (adatum tokens-left fail)
 	(aparse adatum (initial-contours toplevel-env) init-handler2 init-fail init-cont2)))))

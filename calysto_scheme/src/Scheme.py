@@ -572,6 +572,9 @@ def char_is__q(c1, c2):
 def number_q(item):
     return isinstance(item, (int, float, fractions.Fraction, complex))
 
+def integer_q(item):
+    return isinstance(item, int)
+
 def null_q(item):
     return item is symbol_emptylist
 
@@ -1176,10 +1179,12 @@ def load_native(filename):
     return True # continue?
 
 def getitem_native(dictionary, item):
-    try:
+    if item in dictionary:
         return dictionary[item]
-    except:
+    elif string_q(item) and hasattr(dictionary, item):
         return getattr(dictionary, item)
+    else:
+        return False
 
 def setitem_native(dictionary, item, value):
     try:
@@ -1187,6 +1192,9 @@ def setitem_native(dictionary, item, value):
     except:
         setattr(dictionary, item, value)
     return value
+
+def dict_to_keys(dictionary):
+    return vector_to_list(list(dictionary.keys()))
 
 def contains_native(dictionary, item):
     return item in dictionary

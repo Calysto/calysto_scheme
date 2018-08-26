@@ -65,19 +65,38 @@
 (define-native iterator? (lambda ignore #f))
 (define-native get_type (lambda (x) 'unknown))
 (define-native char->string (lambda (c) (string c)))
-(define-native dict (lambda (assoc) assoc))
 (define-native float (lambda (n) (exact->inexact n)))
 (define-native int (lambda (n) (inexact->exact n)))
 (define-native iter? (lambda (x) #f))
 (define-native contains-native (lambda (dict x) #f))
-(define-native getitem-native (lambda (dict x) 'unknown))
-(define-native setitem-native (lambda (dict x value) 'unknown))
 (define-native list-native (lambda (v) v))
 (define-native python-eval (lambda v v))
 (define-native python-exec (lambda v v))
 (define-native SCHEMEPATH (list "."))
 (define-native string-startswith? (lambda (string s) #f))
 (define-native expt-native (lambda (base power) (expt base power)))
+
+(define-native dict
+  (lambda assoc
+    (cons 'dictionary '())))
+
+(define-native setitem-native
+  (lambda (dict keyword value)
+    (let ((entry (assq keyword (cdr dict))))
+      (if entry
+	  (set-cdr! entry value)
+	  (set-cdr! dict (cons (cons keyword value) (cdr dict)))))))
+
+(define-native getitem-native
+  (lambda (dict keyword)
+    (let ((entry (assq keyword (cdr dict))))
+      (if entry
+	  (cdr entry)
+	  #f))))
+
+(define-native dict->keys
+  (lambda (dict)
+    (map car (cdr dict))))
 
 (define path-join
   (lambda (path filename)
@@ -242,6 +261,7 @@
     ;; start with fresh environments
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
+    (set! unit-test-table (dict))
     (read-eval-print-loop-rm)))
 
 ;; avoids reinitializing environments on startup (useful for crash recovery)
@@ -333,11 +353,15 @@
 
 (define initialize-globals
   (lambda ()
+    (print "init globals")
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
+    (set! unit-test-table (dict))
     (set! load-stack '())
     (initialize-execute!)
     (set! *last-fail* REP-fail)))
+
+(define unit-test-table 'undefined)
 
 ;;----------------------------------------------------------------------------
 
@@ -479,6 +503,13 @@
 	  (lambda-cont2 (binding fail)
 	    (set-binding-value! binding (make-pattern-macro^ clauses aclauses))
 	    (k void-value fail))))
+      (define-tests-aexp (name aclauses info)
+      	(setitem-native unit-test-table name (list aclauses env))
+	(k void-value fail))
+      (run-tests-aexp (tests)
+	(if (null? tests)
+	    (run-unit-tests (map list (dict->keys unit-test-table)) handler fail k)
+	    (run-unit-tests tests handler fail k)))
       (begin-aexp (exps info)
 	(eval-sequence exps env handler fail k))
       (lambda-aexp (formals bodies info)
@@ -534,9 +565,77 @@
 				       info handler fail))))))))
       (else (error 'm "bad abstract syntax: '~s'" exp))))))
 
+(define* run-unit-tests
+  (lambda (tests handler fail k)
+    (if (null? tests)
+	(k void-value fail)
+	(run-unit-test (car tests) handler fail
+	  (lambda-cont2 (v fail)
+	    (run-unit-tests (cdr tests) handler fail k))))))
+
+(define* run-unit-test
+  (lambda (test handler fail k)
+    (let* ((test-name (car test))
+	   (nums (cdr test))
+	   (entry (getitem-native unit-test-table test-name)))
+      (if (eq? entry #f)
+	(runtime-error (format "test group '~a' not found" test-name) 'none handler fail)
+	(let* ((assertions (car entry))
+	       (env (cadr entry)))
+	  (if (null? nums)
+	      (run-unit-test-cases test-name assertions env handler fail k)
+	      (filter-assertions test-name nums assertions handler fail
+		(lambda-cont2 (assertions fail)
+		  (run-unit-test-cases test-name assertions env handler fail k)))))))))
+
+(define* filter-assertions
+  (lambda (test-name nums assertions handler fail k)
+    (if (null? nums)
+	(k '() fail)
+	(let ((case-name (format "case ~a" (car nums))))
+	  (lookup-assertion test-name case-name assertions handler fail
+	    (lambda-cont2 (exp fail)
+	      (filter-assertions test-name (cdr nums) (cdr assertions) handler fail
+		(lambda-cont2 (exps fail)
+		  (k (cons exp exps) fail)))))))))
+
+(define lookup-assertion
+  (lambda (test-name case-name assertions handler fail k)
+    (if (null? assertions)
+	(runtime-error (format "~a unit test '~a' not found" test-name case-name)
+		       'none handler fail)
+	;; extract <string> from parsed (assert <pred> <exp1> <exp2> <string>)
+	;; (app-aexp <var-aexp> (<parsed-pred> <parsed-exp1> <parsed-exp2> <lit-aexp>))
+	(let* ((assertion (car assertions))
+	       (app-aexp-args (caddr assertion)))
+	  (if (= (length app-aexp-args) 4)
+	    (let ((lit-aexp-datum (cadr (cadddr app-aexp-args))))
+	      (if (and (string? lit-aexp-datum)
+		       (string=? lit-aexp-datum case-name))
+		  (k assertion fail)
+		  (lookup-assertion test-name case-name (cdr assertions) handler fail k))))))))
+
+(define* run-unit-test-cases
+  (lambda (test-name assertions env handler fail k)
+    (if (null? assertions)
+      (begin
+	(printf "Yay! We're done!\n")
+	(k void-value fail))
+      (let ((test-case-handler
+	     (lambda-handler2 (e fail)
+	       (printf "Error testing ~a: ~a\n" test-name e) ;;(get-exception-message e))
+	       (run-unit-test-cases test-name (cdr assertions) env handler fail k))))
+	(m (car assertions) env test-case-handler fail
+	  (lambda-cont2 (v fail)
+	    (run-unit-test-cases test-name (cdr assertions) env handler fail k)))))))
+
 (define make-exception
-  (lambda (exception message source line column)
-    (list exception message source line column (make-stack-trace))))
+  (lambda (exception-type message source line column)
+    (list exception-type message source line column (make-stack-trace))))
+
+(define get-exception-message
+  (lambda (exception)
+    (cadr exception)))
 
 (define make-stack-trace
   (lambda ()

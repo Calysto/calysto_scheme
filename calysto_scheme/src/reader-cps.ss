@@ -566,9 +566,17 @@
 (define map^
   (lambda (f^ asexp)
     (cond
-      ((null?^ asexp) (list atom-tag '() 'none))
+      ((null?^ asexp) (make-null^))
       (else (cons^ (f^ (car^ asexp)) (map^ f^ (cdr^ asexp)) 'none)))))
       
+(define make-null^
+  (lambda ()
+    (list atom-tag '() 'none)))
+
+(define list^
+  (lambda (x)
+    (cons^ x (make-null^) 'none)))
+
 (define *reader-generates-annotated-sexps?* #t)
 
 ;; for manual testing only
@@ -638,31 +646,31 @@
 
 (define get-srcfile
   (lambda (info)
-    (car info)))
+    (if (eq? info 'none) 'none (car info))))
 
 (define get-start-line
   (lambda (info)
-    (cadr info)))
+    (if (eq? info 'none) 'none (cadr info))))
 
 (define get-start-char
   (lambda (info)
-    (caddr info)))
+    (if (eq? info 'none) 'none (caddr info))))
 
 (define get-start-pos
   (lambda (info)
-    (cadddr info)))
+    (if (eq? info 'none) 'none (cadddr info))))
 
 (define get-end-line
   (lambda (info)
-    (car (cddddr info))))
+    (if (eq? info 'none) 'none (car (cddddr info)))))
 
 (define get-end-char
   (lambda (info)
-    (cadr (cddddr info))))
+    (if (eq? info 'none) 'none (cadr (cddddr info)))))
 
 (define get-end-pos
   (lambda (info)
-    (caddr (cddddr info))))
+    (if (eq? info 'none) 'none (caddr (cddddr info)))))
 
 (define get-source-info
   (lambda (asexp)
