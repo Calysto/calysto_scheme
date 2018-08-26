@@ -1225,6 +1225,9 @@ def highlight_expression(exp):
 def string_startswith_q(string, s):
     return string.startswith(s)
 
+def host_environment_native():
+    return "python"
+
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)
 SCHEMEPATH = List(".", os.path.join(path, "modules"))

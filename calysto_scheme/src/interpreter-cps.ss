@@ -534,8 +534,8 @@
 	      (k void-value fail))))
       (run-tests-aexp (tests)
 	(if (null? tests)
-	    (run-unit-tests (map list (dict->keys unit-test-table)) handler fail k)
-	    (run-unit-tests tests handler fail k)))
+	    (run-unit-tests (map list (dict->keys unit-test-table)) (get-current-time) handler fail k)
+	    (run-unit-tests tests (get-current-time) handler fail k)))
       (begin-aexp (exps info)
 	(eval-sequence exps env handler fail k))
       (lambda-aexp (formals bodies info)
@@ -593,12 +593,15 @@
 			   'none handler fail))))))
 
 (define* run-unit-tests
-  (lambda (tests handler fail k)
+  (lambda (tests start-time handler fail k)
     (if (null? tests)
-	(k void-value fail)
+	(begin
+	  (printf "Time: ~s seconds~%" (- (get-current-time) start-time))
+	  (printf "All unit tests completed\n")
+	  (k void-value fail))
 	(run-unit-test (car tests) handler fail
 	  (lambda-cont2 (v fail)
-	    (run-unit-tests (cdr tests) handler fail k))))))
+	    (run-unit-tests (cdr tests) start-time handler fail k))))))
 
 (define* run-unit-test
   (lambda (test handler fail k)
@@ -645,16 +648,14 @@
 (define* run-unit-test-cases
   (lambda (test-name assertions env handler fail k)
     (if (null? assertions)
-      (begin
-	(printf "Yay! We're done!\n")
-	(k void-value fail))
-      (let ((test-case-handler
-	     (lambda-handler2 (e fail)
-	       (printf "Error testing ~a: ~a\n" test-name e) ;;(get-exception-message e))
-	       (run-unit-test-cases test-name (cdr assertions) env handler fail k))))
-	(m (car assertions) env test-case-handler fail
-	  (lambda-cont2 (v fail)
-	    (run-unit-test-cases test-name (cdr assertions) env handler fail k)))))))
+	(k void-value fail)
+	(let ((test-case-handler
+	       (lambda-handler2 (e fail)
+		 (printf "Error testing ~a: ~a\n" test-name e) ;;(get-exception-message e))
+		 (run-unit-test-cases test-name (cdr assertions) env handler fail k))))
+	  (m (car assertions) env test-case-handler fail
+	     (lambda-cont2 (v fail)
+	       (run-unit-test-cases test-name (cdr assertions) env handler fail k)))))))
 
 (define make-exception
   (lambda (exception-type message source line column)
@@ -2673,6 +2674,14 @@
   (lambda-proc (args env2 info handler fail k2)
       (k2 (apply use-lexical-address args) fail)))
 
+(define-native host-environment-native
+  (lambda ()
+    "scheme"))
+
+(define host-environment-prim
+  (lambda-proc (args env2 info handler fail k2)
+      (k2 (host-environment-native) fail)))
+
 ;; -----------------------------------------------------
 ;; To add a new primitive:
 ;; -----------------------------------------------------
@@ -2774,6 +2783,7 @@
 	    (list 'get-completions get-completions-prim "(get-completions ...): returns completions for TAB")
 	    (list 'get-stack-trace get-stack-trace-prim "(get-stack-trace): return the current stack trace")
 	    (list 'hasitem hasitem-prim "(hasitem DICTIONARY KEY): does the DICTIONARY have this key?")
+	    (list 'host-environment host-environment-prim "(host-environment): get the host environment (\"python\" or \"scheme\")")
 	    (list 'import import-prim "(import MODULE...): import host-system modules; MODULEs are strings")
 	    (list 'import-as import-as-prim "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment")
 	    (list 'import-from import-from-prim "(import-from MODULE NAME...): import from host-system module; MODULE is a string, and NAME is a symbol or string")
