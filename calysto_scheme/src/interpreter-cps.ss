@@ -353,7 +353,6 @@
 
 (define initialize-globals
   (lambda ()
-    (print "init globals")
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
     (set! unit-test-table (dict))
@@ -503,6 +502,22 @@
 	  (lambda-cont2 (binding fail)
 	    (set-binding-value! binding (make-pattern-macro^ clauses aclauses))
 	    (k void-value fail))))
+      (define-syntax-transformer-aexp (name rhs-exp info)
+	(m rhs-exp env handler fail
+	  (lambda-cont2 (proc fail)
+	    (let ((macro-transformer
+		    (lambda-macro (adatum handler fail k2)  ;; k2 receives 1 arg
+		      (unannotate-cps adatum
+			(lambda-cont (sexp)
+			  ;;(printf "~a transformer receives ~a\n" name sexp)
+			  (proc (list sexp) env info handler fail
+			    (lambda-cont2 (new-sexp fail)
+			      ;;(printf "transformed expression to ~a\n" new-sexp)
+			      (k2 new-sexp))))))))
+	      (lookup-binding-in-first-frame name macro-env handler fail
+		(lambda-cont2 (binding fail)
+		  (set-binding-value! binding macro-transformer)
+		  (k void-value fail)))))))
       (define-tests-aexp (name aclauses info)
       	(setitem-native unit-test-table name (list aclauses env))
 	(k void-value fail))
@@ -563,7 +578,8 @@
 		       (proc args env info handler fail k)))
 		  (else (runtime-error (format "attempt to apply non-procedure '~a'" proc)
 				       info handler fail))))))))
-      (else (error 'm "bad abstract syntax: '~s'" exp))))))
+      (else (runtime-error (format "unknown abstract syntax type: ~a" (car exp))
+			   'none handler fail))))))
 
 (define* run-unit-tests
   (lambda (tests handler fail k)

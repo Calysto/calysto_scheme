@@ -56,6 +56,7 @@
 ;;         | (define <var> <exp>)
 ;;         | (define <var> <docstring> <exp>)
 ;;         | (define-syntax <keyword> (<pattern> <pattern>) ...)
+;;         | (define-syntax <keyword> <lambda>)
 ;;         | (define-tests <var> <assertion> ...)
 ;;         | (begin <exp> ...)
 ;;         | (lambda (<formal> ...) <exp> ...)
@@ -126,6 +127,11 @@
     (name symbol?)
     (clauses (list-of define-syntax-clause?))
     (aclauses list-of-define-syntax-clauses?^)
+    (info source-info?))
+  ;; new
+  (define-syntax-transformer-aexp
+    (name symbol?)
+    (rhs-exp aexpression?)
     (info source-info?))
   (define-tests-aexp
     (name symbol?)
@@ -299,7 +305,7 @@
 (define define-var^ (lambda (x) (untag-atom^ (cadr^ x))))
 (define define-docstring^ (lambda (x) (untag-atom^ (caddr^ x))))
 (define begin?^ (tagged-list^ 'begin >= 2))
-;;(define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
+(define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
 (define lambda-no-defines?^ (tagged-list^ 'lambda-no-defines >= 3))
 ;;(define trace-lambda?^ (tagged-list^ 'trace-lambda >= 4))
 (define trace-lambda-no-defines?^ (tagged-list^ 'trace-lambda-no-defines >= 4))
@@ -417,11 +423,15 @@
 		(k (define!-aexp (define-var^ adatum) (define-docstring^ adatum) body info) fail))))
 	   (else (aparse-error "bad concrete syntax:" adatum handler fail))))
 	((define-syntax?^ adatum)
-	 (let ((name (define-var^ adatum))
-	       (aclauses (cddr^ adatum)))
-	   (unannotate-cps aclauses
-	     (lambda-cont (clauses)
-	       (k (define-syntax-aexp name clauses aclauses info) fail)))))
+	 (let ((name (define-var^ adatum)))
+	   (if (lambda?^ (caddr^ adatum))
+	     (aparse (caddr^ adatum) senv handler fail
+	       (lambda-cont2 (body fail)
+		 (k (define-syntax-transformer-aexp name body info) fail)))
+	     (let ((aclauses (cddr^ adatum)))
+	       (unannotate-cps aclauses
+		 (lambda-cont (clauses)
+		   (k (define-syntax-aexp name clauses aclauses info) fail)))))))
 	((define-tests?^ adatum)
 	 (let ((name (define-var^ adatum))
 	       (aclauses (cddr^ adatum)))
