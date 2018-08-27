@@ -839,13 +839,13 @@
 
   (assert equal?
 	  (collect (* n n) for n in (range 10))
-	  '(-1 0 1 4 9 16 25 36 49 64 81)
+	  '(0 1 4 9 16 25 36 49 64 81)
 	  "case 1")
 
   (assert equal?
 	  (collect (* n n) for n in (range 5 20 3))
-	  '(-1 25 64 121 196 289)
-	  )
+	  '(25 64 121 196 289)
+	  "case 2")
 
   (assert equal?
 	  '(36 49 64 81)
