@@ -985,7 +985,8 @@ def get_current_time():
 
 def current_directory(*path):
     if len(path) == 1:
-        os.chdir(path[0])
+        path = os.path.expanduser(path[0])
+        os.chdir(path)
     return os.getcwd()
 
 def Range(*args):
