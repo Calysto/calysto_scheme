@@ -214,17 +214,19 @@ class cons(object):
             return retval
 
     def __getitem__(self, pos):
-        ls = list(self)
-        return ls[pos]
+        if pos < 0:
+            raise Exception("negative index not allowed")
+        current = self
+        for i in range(pos):
+            current = current.cdr
+        return current.car
 
 def List(*args):
     # Scheme list
     retval = symbol_emptylist
-    i = 0
-    while i < len(args):
+    for i in range(len(args)):
         arg = args[len(args) - i - 1]
         retval = cons(arg, retval)
-        i += 1
     return retval
 
 def reverse(lyst):
@@ -249,29 +251,37 @@ def length(lyst):
 
 def Map(f, lyst, lyst2=None):
     if lyst2 is None:
-        retval = symbol_emptylist
+        stack = symbol_emptylist
         current = lyst
         while isinstance(current, cons):
-            retval = cons(f(current.car), retval)
+            stack = cons(f(current.car), stack)
             current = current.cdr
         if current != symbol_emptylist:
             raise Exception("not a proper list")
-        # FIXME: rewrite without reverse
-        return reverse(retval)
-    else:
         retval = symbol_emptylist
+        current = stack
+        while isinstance(current, cons):
+            retval = cons(current.car, retval)
+            current = current.cdr
+        return retval
+    else:
+        stack = symbol_emptylist
         current1 = lyst
         current2 = lyst2
         while isinstance(current1, cons) and isinstance(current2, cons):
-            retval = cons(f(current1.car, current2.car), retval)
+            stack = cons(f(current1.car, current2.car), stack)
             current1 = current1.cdr
             current2 = current2.cdr
         if current1 != symbol_emptylist:
             raise Exception("not a proper list")
         if current2 != symbol_emptylist:
             raise Exception("not a proper list")
-        # FIXME: rewrite without reverse
-        return reverse(retval)
+        retval = symbol_emptylist
+        current = stack
+        while isinstance(current, cons):
+            retval = cons(current.car, retval)
+            current = current.cdr
+        return retval
 
 def for_each(f, lyst):
     current = lyst
@@ -293,7 +303,6 @@ def pivot (p, l):
         return car(l)
 
 def make_comparison_function(procedure):
-    # FIXME: should rewrite this using CPS style
     def compare(carl, cadrl):
         GLOBALS["save_k2_reg"] = k2_reg
         GLOBALS["proc_reg"] = procedure
@@ -353,6 +362,16 @@ def append(*objs):
             retval = cons(current.car, retval)
             current = current.cdr
     return retval
+
+# def append(*objs):
+#     retval = objs[-1]
+#     for i in range(-2, -len(objs) - 1, -1):
+#         obj = objs[i]
+#         current = cons(obj, symbol_emptylist)
+#         while isinstance(current, cons):
+#             retval = cons(current.car, retval)
+#             current = current.cdr
+#     return retval
 
 def car(lyst):
     return lyst.car
@@ -462,14 +481,16 @@ def list_tail(lyst, pos):
     return current
 
 def list_head(lyst, pos):
-    retval = symbol_emptylist
+    stack = symbol_emptylist
     current = lyst
-    while pos != 0:
-        retval = cons(current.car, retval)
+    for i in range(pos):
+        stack = cons(current.car, stack)
         current = current.cdr
-        pos = pos - 1
-    # FIXME: rewrite without reverse
-    return reverse(retval)
+    retval = symbol_emptylist
+    for i in range(pos):
+        retval = cons(stack.car, retval)
+        stack = stack.cdr
+    return retval
 
 def list_ref(lyst, pos):
     if pos < 0:
@@ -993,7 +1014,8 @@ def get_current_time():
 
 def current_directory(*path):
     if len(path) == 1:
-        os.chdir(path[0])
+        path = os.path.expanduser(path[0])
+        os.chdir(path)
     return os.getcwd()
 
 def Range(*args):
