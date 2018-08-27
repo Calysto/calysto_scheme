@@ -363,16 +363,6 @@ def append(*objs):
             current = current.cdr
     return retval
 
-# def append(*objs):
-#     retval = objs[-1]
-#     for i in range(-2, -len(objs) - 1, -1):
-#         obj = objs[i]
-#         current = cons(obj, symbol_emptylist)
-#         while isinstance(current, cons):
-#             retval = cons(current.car, retval)
-#             current = current.cdr
-#     return retval
-
 def car(lyst):
     return lyst.car
 
