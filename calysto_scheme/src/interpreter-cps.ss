@@ -679,9 +679,13 @@
                (lambda-handler2 (e fail)
                  (let ((msg (get-exception-message e))
                        (where (get-exception-info e)))
-                   (if (eq? where 'none)
-                     (printf "Error testing ~a: ~a\n" test-name msg)
-                     (printf "Error testing ~a: ~a at ~a\n" test-name msg where))
+		   (if (> (string-length msg) 0)
+		       (if (eq? where 'none)
+			   (printf "  Error: ~a \"~a\"\n" test-name msg)
+			   (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+		       (if (eq? where 'none)
+			   (printf "  Error: ~a\n" test-name)
+			   (printf "  Error: ~a at ~a\n" test-name where)))
                    (run-unit-test-cases test-name (cdr assertions) right (+ wrong 1) env handler fail k)))))
           (m (car assertions) env test-case-handler fail
              (lambda-cont2 (v fail)
@@ -743,6 +747,15 @@
 	    (line_number (get-start-line info))
 	    (char_number (get-start-char info)))
 	(handler (make-exception "RunTimeError" msg src line_number char_number) fail)))))
+
+(define* assertion-error
+  (lambda (msg info handler fail)
+    (if (eq? info 'none)
+      (handler (make-exception "AssertionError" msg 'none 'none 'none) fail)
+      (let ((src (get-srcfile info))
+	    (line_number (get-start-line info))
+	    (char_number (get-start-char info)))
+	(handler (make-exception "AssertionError" msg src line_number char_number) fail)))))
 
 (define* m*
   (lambda (exps env handler fail k)
@@ -1721,9 +1734,8 @@
                       (cond
                         ((eq? v #t) (k2 'ok fail))
                         ((= (length args) 3)
-                         (runtime-error "Assertion failed" info handler fail))
-                        (else (let ((msg (format "Assertion failed: ~a" (cadddr args))))
-                                (runtime-error msg info handler fail)))))))))))
+                         (assertion-error "" info handler fail))
+			(else (assertion-error (cadddr args) info handler fail))))))))))
 
 ;; make-set
 (define make-set-prim

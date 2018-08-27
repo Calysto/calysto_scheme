@@ -3034,16 +3034,14 @@ def b_cont2_102_d(args, info, handler, k2):
             GLOBALS['fail_reg'] = value2_reg
             GLOBALS['handler_reg'] = handler
             GLOBALS['info_reg'] = info
-            GLOBALS['msg_reg'] = "Assertion failed"
-            GLOBALS['pc'] = runtime_error
+            GLOBALS['msg_reg'] = ""
+            GLOBALS['pc'] = assertion_error
         else:
-            msg = symbol_undefined
-            msg = format("Assertion failed: ~a", cadddr(args))
             GLOBALS['fail_reg'] = value2_reg
             GLOBALS['handler_reg'] = handler
             GLOBALS['info_reg'] = info
-            GLOBALS['msg_reg'] = msg
-            GLOBALS['pc'] = runtime_error
+            GLOBALS['msg_reg'] = cadddr(args)
+            GLOBALS['pc'] = assertion_error
 
 def b_cont2_103_d(lst, k2):
     if true_q(member(car(lst), value1_reg)):
@@ -3440,10 +3438,16 @@ def b_handler2_4_d(assertions, right, test_name, wrong, env, handler, k):
     where = symbol_undefined
     where = get_exception_info(exception_reg)
     msg = get_exception_message(exception_reg)
-    if true_q((where) is (symbol_none)):
-        printf("Error testing ~a: ~a\n", test_name, msg)
+    if true_q(GreaterThan(string_length(msg), 0)):
+        if true_q((where) is (symbol_none)):
+            printf("  Error: ~a \"~a\"\n", test_name, msg)
+        else:
+            printf("  Error: ~a \"~a\" at ~a\n", test_name, msg, where)
     else:
-        printf("Error testing ~a: ~a at ~a\n", test_name, msg, where)
+        if true_q((where) is (symbol_none)):
+            printf("  Error: ~a\n", test_name)
+        else:
+            printf("  Error: ~a at ~a\n", test_name, where)
     GLOBALS['k_reg'] = k
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
@@ -8276,6 +8280,20 @@ def runtime_error():
         line_number = get_start_line(info_reg)
         src = get_srcfile(info_reg)
         GLOBALS['exception_reg'] = make_exception("RunTimeError", msg_reg, src, line_number, char_number)
+        GLOBALS['pc'] = apply_handler2
+
+def assertion_error():
+    if true_q((info_reg) is (symbol_none)):
+        GLOBALS['exception_reg'] = make_exception("AssertionError", msg_reg, symbol_none, symbol_none, symbol_none)
+        GLOBALS['pc'] = apply_handler2
+    else:
+        src = symbol_undefined
+        line_number = symbol_undefined
+        char_number = symbol_undefined
+        char_number = get_start_char(info_reg)
+        line_number = get_start_line(info_reg)
+        src = get_srcfile(info_reg)
+        GLOBALS['exception_reg'] = make_exception("AssertionError", msg_reg, src, line_number, char_number)
         GLOBALS['pc'] = apply_handler2
 
 def m_star():
