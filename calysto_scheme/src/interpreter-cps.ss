@@ -73,7 +73,10 @@
 (define-native python-eval (lambda v v))
 (define-native python-exec (lambda v v))
 (define-native SCHEMEPATH (list "."))
-(define-native string-startswith? (lambda (string s) #f))
+(define-native string-startswith?
+  (lambda (string start)
+    (and (>= (string-length string) (string-length start))
+	 (string=? (substring string 0 (string-length start)) start))))
 (define-native expt-native (lambda (base power) (expt base power)))
 (define-native format-float
   (lambda (total right value)
@@ -606,9 +609,10 @@
 	  (printf "=================\n")
 	  (printf "Testing completed!\n")
 	  (printf "  Time : ~a seconds~%" (format-float 4 2 (- (get-current-time) start-time)))
-	  (printf "  Total: ~s ~%" total)
-	  (printf "  Right: ~s ~%" right)
-	  (printf "  Wrong: ~s ~%" wrong)
+	  (printf "  Total tests defined: ~s ~%" total)
+	  (printf "  Total tests tested : ~s ~%" (+ right wrong))
+	  (printf "                Right: ~s ~%" right)
+	  (printf "                Wrong: ~s ~%" wrong)
 	  (k void-value fail))
 	(run-unit-test (car tests) right wrong handler fail
 	  (lambda-cont2 (results fail)
@@ -636,18 +640,23 @@
   (lambda (test-name nums assertions handler fail k)
     (if (null? nums)
 	(k '() fail)
-	(let ((case-name (format "case ~a" (car nums))))
-	  (lookup-assertion test-name case-name assertions handler fail
-	    (lambda-cont2 (exp fail)
+	(let ((case-name 'undefined))
+	  (if (number? (car nums))
+	      (set! case-name (format "case ~a" (car nums)))
+	      (set! case-name (car nums))) ;; string
+	  (lookup-assertions test-name case-name assertions '() handler fail
+	    (lambda-cont2 (matched-exps fail)
 	      (filter-assertions test-name (cdr nums) (cdr assertions) handler fail
 		(lambda-cont2 (exps fail)
-		  (k (cons exp exps) fail)))))))))
+		  (k (append matched-exps exps) fail)))))))))
 
-(define lookup-assertion
-  (lambda (test-name case-name assertions handler fail k)
+(define lookup-assertions
+  (lambda (test-name case-name assertions accum handler fail k)
     (if (null? assertions)
-	(runtime-error (format "~a unit test '~a' not found" test-name case-name)
-		       'none handler fail)
+	(if (null? accum)
+	    (runtime-error (format "~a unit test '~a' not found" test-name case-name)
+			   'none handler fail)
+	    (k accum fail))
 	;; extract <string> from parsed (assert <pred> <exp1> <exp2> <string>)
 	;; (app-aexp <var-aexp> (<parsed-pred> <parsed-exp1> <parsed-exp2> <lit-aexp>))
 	(let* ((assertion (car assertions))
@@ -655,9 +664,12 @@
 	  (if (= (length app-aexp-args) 4)
 	    (let ((lit-aexp-datum (cadr (cadddr app-aexp-args))))
 	      (if (and (string? lit-aexp-datum)
-		       (string=? lit-aexp-datum case-name))
-		  (k assertion fail)
-		  (lookup-assertion test-name case-name (cdr assertions) handler fail k))))))))
+		       (or (and (string-startswith? case-name "case ")
+				(string=? lit-aexp-datum case-name))
+			   (and (not (string-startswith? case-name "case "))
+				(string-startswith? lit-aexp-datum case-name))))
+		  (lookup-assertions test-name case-name (cdr assertions) (cons assertion accum) handler fail k)
+		  (lookup-assertions test-name case-name (cdr assertions) accum handler fail k))))))))
 
 (define* run-unit-test-cases
   (lambda (test-name assertions right wrong env handler fail k)

@@ -2891,8 +2891,8 @@ def b_cont2_85_d(right, test_name, wrong, env, handler, k):
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
 
-def b_cont2_86_d(exp, k):
-    GLOBALS['value1_reg'] = cons(exp, value1_reg)
+def b_cont2_86_d(matched_exps, k):
+    GLOBALS['value1_reg'] = append(matched_exps, value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
@@ -6831,8 +6831,8 @@ def literal_q_hat(asexp):
 def syntactic_sugar_q_hat(asexp):
     return (pair_q_hat(asexp)) and (symbol_q_hat(car_hat(asexp))) and (in_first_frame_q(untag_atom_hat(car_hat(asexp)), macro_env))
 
-def list_of_integers_q_hat(x):
-    return (null_q_hat(x)) or ((pair_q_hat(x)) and (atom_q_hat(car_hat(x))) and (integer_q(untag_atom_hat(car_hat(x)))) and (list_of_integers_q_hat(cdr_hat(x))))
+def list_of_test_groups_q_hat(x):
+    return (null_q_hat(x)) or ((pair_q_hat(x)) and (atom_q_hat(car_hat(x))) and ((integer_q(untag_atom_hat(car_hat(x)))) or (string_q(untag_atom_hat(car_hat(x))))) and (list_of_test_groups_q_hat(cdr_hat(x))))
 
 def define_var_hat(x):
     return untag_atom_hat(cadr_hat(x))
@@ -7010,7 +7010,7 @@ def aparse():
                                                                                         GLOBALS['value1_reg'] = run_tests_aexp(symbol_emptylist)
                                                                                         GLOBALS['pc'] = apply_cont2
                                                                                     else:
-                                                                                        if true_q((symbol_q_hat(car_hat(args))) and (list_of_integers_q_hat(cdr_hat(args)))):
+                                                                                        if true_q((symbol_q_hat(car_hat(args))) and (list_of_test_groups_q_hat(cdr_hat(args)))):
                                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_20_d, k_reg)
                                                                                             GLOBALS['args_reg'] = list_hat(args)
                                                                                             GLOBALS['pc'] = aparse_unit_tests
@@ -7094,7 +7094,7 @@ def aparse_unit_tests():
             GLOBALS['args_reg'] = cdr_hat(args_reg)
             GLOBALS['pc'] = aparse_unit_tests
         else:
-            if true_q((list_q_hat(car_hat(args_reg))) and (not(null_q_hat(car_hat(args_reg)))) and (symbol_q_hat(caar_hat(args_reg))) and (list_of_integers_q_hat(cdar_hat(args_reg)))):
+            if true_q((list_q_hat(car_hat(args_reg))) and (not(null_q_hat(car_hat(args_reg)))) and (symbol_q_hat(caar_hat(args_reg))) and (list_of_test_groups_q_hat(cdar_hat(args_reg)))):
                 GLOBALS['k_reg'] = make_cont2(b_cont2_36_d, args_reg, k_reg)
                 GLOBALS['args_reg'] = cdr_hat(args_reg)
                 GLOBALS['pc'] = aparse_unit_tests
@@ -8097,9 +8097,10 @@ def run_unit_tests():
         printf("=================\n")
         printf("Testing completed!\n")
         printf("  Time : ~a seconds~%", format_float(4, 2, (get_current_time()) - (start_time_reg)))
-        printf("  Total: ~s ~%", total)
-        printf("  Right: ~s ~%", right_reg)
-        printf("  Wrong: ~s ~%", wrong_reg)
+        printf("  Total tests defined: ~s ~%", total)
+        printf("  Total tests tested : ~s ~%", (right_reg) + (wrong_reg))
+        printf("                Right: ~s ~%", right_reg)
+        printf("                Wrong: ~s ~%", wrong_reg)
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
@@ -8144,16 +8145,25 @@ def filter_assertions():
         GLOBALS['pc'] = apply_cont2
     else:
         case_name = symbol_undefined
-        case_name = format("case ~a", car(nums_reg))
-        return lookup_assertion(test_name_reg, case_name, assertions_reg, handler_reg, fail_reg, make_cont2(b_cont2_87_d, assertions_reg, nums_reg, test_name_reg, handler_reg, k_reg))
+        if true_q(number_q(car(nums_reg))):
+            case_name = format("case ~a", car(nums_reg))
+        else:
+            case_name = car(nums_reg)
+        return lookup_assertions(test_name_reg, case_name, assertions_reg, symbol_emptylist, handler_reg, fail_reg, make_cont2(b_cont2_87_d, assertions_reg, nums_reg, test_name_reg, handler_reg, k_reg))
 
-def lookup_assertion(test_name, case_name, assertions, handler, fail, k):
+def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k):
     if true_q(null_q(assertions)):
-        GLOBALS['fail_reg'] = fail
-        GLOBALS['handler_reg'] = handler
-        GLOBALS['info_reg'] = symbol_none
-        GLOBALS['msg_reg'] = format("~a unit test '~a' not found", test_name, case_name)
-        GLOBALS['pc'] = runtime_error
+        if true_q(null_q(accum)):
+            GLOBALS['fail_reg'] = fail
+            GLOBALS['handler_reg'] = handler
+            GLOBALS['info_reg'] = symbol_none
+            GLOBALS['msg_reg'] = format("~a unit test '~a' not found", test_name, case_name)
+            GLOBALS['pc'] = runtime_error
+        else:
+            GLOBALS['value2_reg'] = fail
+            GLOBALS['value1_reg'] = accum
+            GLOBALS['k_reg'] = k
+            GLOBALS['pc'] = apply_cont2
     else:
         assertion = symbol_undefined
         app_aexp_args = symbol_undefined
@@ -8162,13 +8172,10 @@ def lookup_assertion(test_name, case_name, assertions, handler, fail, k):
         if true_q(numeric_equal(length(app_aexp_args), 4)):
             lit_aexp_datum = symbol_undefined
             lit_aexp_datum = cadr(cadddr(app_aexp_args))
-            if true_q((string_q(lit_aexp_datum)) and (string_is__q(lit_aexp_datum, case_name))):
-                GLOBALS['value2_reg'] = fail
-                GLOBALS['value1_reg'] = assertion
-                GLOBALS['k_reg'] = k
-                GLOBALS['pc'] = apply_cont2
+            if true_q((string_q(lit_aexp_datum)) and (((string_startswith_q(case_name, "case ")) and (string_is__q(lit_aexp_datum, case_name))) or ((not(string_startswith_q(case_name, "case "))) and (string_startswith_q(lit_aexp_datum, case_name))))):
+                return lookup_assertions(test_name, case_name, cdr(assertions), cons(assertion, accum), handler, fail, k)
             else:
-                return lookup_assertion(test_name, case_name, cdr(assertions), handler, fail, k)
+                return lookup_assertions(test_name, case_name, cdr(assertions), accum, handler, fail, k)
 
 def run_unit_test_cases():
     if true_q(null_q(assertions_reg)):

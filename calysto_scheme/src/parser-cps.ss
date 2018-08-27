@@ -280,13 +280,14 @@
 	   (symbol?^ (car^ asexp))
 	   (eq?^ (cadr^ asexp) keyword)))))
 
-(define list-of-integers?^
+(define list-of-test-groups?^
   (lambda (x)
     (or (null?^ x)
 	(and (pair?^ x)
 	     (atom?^ (car^ x))
-	     (integer? (untag-atom^ (car^ x)))
-	     (list-of-integers?^ (cdr^ x))))))
+	     (or (integer? (untag-atom^ (car^ x)))
+		 (string? (untag-atom^ (car^ x))))
+	     (list-of-test-groups?^ (cdr^ x))))))
 
 (define quote?^ (tagged-list^ 'quote = 2))
 (define quasiquote?^ (tagged-list^ 'quasiquote = 2))
@@ -442,7 +443,7 @@
 	 (let ((args (cdr^ adatum)))
 	   (cond
 	     ((null?^ args) (k (run-tests-aexp '()) fail))
-	     ((and (symbol?^ (car^ args)) (list-of-integers?^ (cdr^ args)))
+	     ((and (symbol?^ (car^ args)) (list-of-test-groups?^ (cdr^ args)))
 	      (aparse-unit-tests (list^ args) handler fail
 		(lambda-cont2 (tests fail)
 		  (k (run-tests-aexp tests) fail))))
@@ -539,7 +540,7 @@
       ((and (list?^ (car^ args))
 	    (not (null?^ (car^ args)))
 	    (symbol?^ (caar^ args))
-	    (list-of-integers?^ (cdar^ args)))
+	    (list-of-test-groups?^ (cdar^ args)))
        (aparse-unit-tests (cdr^ args) handler fail
 	 (lambda-cont2 (tests fail)
 	   (unannotate-cps (car^ args)

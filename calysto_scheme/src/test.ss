@@ -146,11 +146,11 @@
   (assert equal?
 	  (% 10 3)
 	  1
-	  "1 %")
+	  "modulo")
   (assert equal?
 	  (% 10 3)
 	  1
-	  "2 %")
+	  "modulo")
   (assert equal?
 	  (% 10 3)
 	  1
@@ -840,17 +840,17 @@
   (assert equal?
 	  (collect (* n n) for n in (range 10))
 	  '(0 1 4 9 16 25 36 49 64 81)
-	  "test-1")
+	  "case 1")
 
   (assert equal?
 	  (collect (* n n) for n in (range 5 20 3))
 	  '(25 64 121 196 289)
-	  "test-2")
+	  "case 2")
 
   (assert equal?
 	  '(36 49 64 81)
 	  (collect (* n n) for n in (range 10) if (> n 5))
-	  "test-3")
+	  "case 3")
 
   (assert equal?
 	  (begin (define hello 0)
@@ -859,69 +859,69 @@
 
 
 	  5
-	  "test-4")
+	  "case 4")
 
   (assert equal?
 	  'done
 	  (for sym in '(a b c d) do (define x 1) (set! x sym) x)
-	  "test-5")
+	  "case 5")
   (assert equal?
 	  'done
 	  (for n in (range 10 20 2) do n)
-	  "test-6")
+	  "case 6")
   (assert equal?
 	  'done
 	  (for n at (i j) in matrix2d do (list n 'coords: i j))
-	  "test-7")
+	  "case 7")
   (assert equal?
 	  'done
 	  (for n at (i j k) in matrix3d do (list n 'coords: i j k))
-	  "test-8")
+	  "case 8")
   (assert equal?
 	  120
 	  (! 5)
-	  "test-9")
+	  "case 9")
   (assert equal?
 	  3628800
 	  (nth 10 facts)
-	  "test-10")
+	  "case 10")
   (assert equal?
 	  10946
 	  (nth 20 fibs)
-	  "test-11")
+	  "case 11")
   (assert equal?
 	  '(1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
 	      6765 10946 17711 28657 46368 75025 121393 196418 317811 514229 832040)
 	  (first 30 fibs)
-	  "test-12")
+	  "case 12")
   )
 
 (define-tests mu-lambda
   (assert equal?
 	  '(1 2 3 4 5)
 	  ((lambda x x) 1 2 3 4 5)
-	  "test-13")
+	  "case 13")
   (assert equal?
 	  '(1 (2 3 4 5))
 	  ((lambda (x . y) (list x y)) 1 2 3 4 5)
-	  "test-13-1")
+	  "case 13-1")
   (assert equal?
 	  '(1 2 (3 4 5))
 	  ((lambda (a b . z) (list a b z)) 1 2 3 4 5)
-	  "test-14")
+	  "case 14")
   (assert equal?
 	  '(1 2 (3))
 	  ((lambda (a b . z) (list a b z)) 1 2 3)
-	  "test-15")
+	  "case 15")
   (assert equal?
 	  '(1 2 ())
 	  ((lambda (a b . z) (list a b z)) 1 2)
-	  "test-16")
+	  "case 16")
   (assert equal?
 	  "not enough arguments given"
 	  (try ((lambda (a b . z) (list a b z)) 1)
 	       (catch e e "not enough arguments given"))
-	  "test-17")
+	  "case 17")
   )
 
 (let ()
@@ -934,127 +934,127 @@
     (assert equal?
 	    '((1 2 3) (42) ((1 2 3)) (1 2 3 (4 5)) (1 2 3 4))
 	    (list (f1 1 2 3) (f2) (f3 1 2 3) (f4 1 2 3 4 5) (f5 1 2 3 4))
-	    "test-18")))
+	    "case 18")))
 
 (define-tests call/cc
   (assert equal?
 	  40
 	  (* 10 (call/cc (lambda (k) 4)))
-	  "test-19")
+	  "case 19")
   (assert equal?
 	  40
 	  (* 10 (call/cc (lambda (k) (+ 1 (k 4)))))
-	  "test-20")
+	  "case 20")
   (assert equal?
 	  50
 	  (* 10 (call/cc (lambda (k) (+ 1 (call/cc (lambda (j) (+ 2 (j (k 5)))))))))
-	  "test-21")
+	  "case 21")
   (assert equal?
 	  60
 	  (* 10 (call/cc (lambda (k) (+ 1 (call/cc (lambda (j) (+ 2 (k (j 5)))))))))
-	  "test-22")
+	  "case 22")
   )
 
 (define-tests try
   (assert equal?
 	  3
 	  (try 3)
-	  "test-23")
+	  "case 23")
   (assert equal?
 	  3
 	  (try 3 (finally 'yes 4))
-	  "test-24")
+	  "case 24")
   (assert equal?
 	  'yes
 	  (try (raise 'yes) (catch e e))
-	  "test-25")
+	  "case 25")
   (assert equal?
 	  'yes
 	  (try (try (raise 'yes)) (catch e e))
-	  "test-26")
+	  "case 26")
   (assert equal?
 	  'oops
 	  (try (try (begin 'one (raise 'oops) 'two)) (catch e e))
-	  "test-27")
+	  "case 27")
   (assert equal?
 	  40
 	  (* 10 (try (begin 'one (raise 'oops) 'two)
 		     (catch ex 3 4)))
-	  "test-28")
+	  "case 28")
   (assert equal?
 	  50
 	  (* 10 (try (begin 'one 'two 5)
 		     (catch ex 3 4)))
-	  "test-29")
+	  "case 29")
   (assert equal?
 	  40
 	  (* 10 (try (begin 'one (raise 'oops) 5)
 		     (catch ex (list 'ex: ex) 4)))
-	  "test-30")
+	  "case 30")
   (assert equal?
 	  'oops
 	  (try (* 10 (try (begin 'one (raise 'oops) 5)
 			  (catch ex (list 'ex: ex) (raise ex) 4))) (catch e e))
-	  "test-31")
+	  "case 31")
   (assert equal?
 	  'oops
 	  (try (* 10 (try (begin 'one (raise 'oops) 5)
 			  (catch ex (list 'ex: ex) (raise ex) 4)
 			  (finally 'two 7))) (catch e e))
-	  "test-32")
+	  "case 32")
   (assert equal?
 	  77
 	  (try (* 10 (try (begin 'one (raise 'oops) 5)
 			  (catch ex (list 'ex: ex) (raise 'bar) 4)))
 	       (catch x 'hello 77))
-	  "test-33")
+	  "case 33")
   (assert equal?
 	  3
 	  (try 3 (finally 'hi 4))
-	  "test-34")
+	  "case 34")
   (assert equal?
 	  5
 	  (div 10 2)
-	  "test-35")
+	  "case 35")
   (assert equal?
 	  "division by zero"
 	  (try (div 10 0) (catch e (cadr e)))
-	  "test-36")
+	  "case 36")
   (assert equal?
 	  "division by zero"
 	  (try (let ((x (try (div 10 0)))) x) (catch e (cadr e)))
-	  "test-37")
+	  "case 37")
   (assert equal?
 	  5
 	  (let ((x (try (div 10 2) (catch e -1)))) x)
-	  "test-38")
+	  "case 38")
   (assert equal?
 	  -1
 	  (let ((x (try (div 10 0) (catch e -1)))) x)
-	  "test-39")
+	  "case 39")
   (assert equal?
 	  5
 	  (let ((x (try (div 10 2) (catch e -1) (finally 'closing-files 42))))  x)
-	  "test-40")
+	  "case 40")
   (assert equal?
 	  -1
 	  (let ((x (try (div 10 0) (catch e -1) (finally 'closing-files 42))))  x)
-	  "test-41")
+	  "case 41")
   (assert equal?
 	  5
 	  (let ((x (try (div 10 2) (finally 'closing-files 42))))  x)
-	  "test-42")
+	  "case 42")
   (assert equal?
 	  'foo
 	  (try (let ((x (try (div 10 0) (catch e -1 (raise 'foo)) (finally 'closing-files 42))))  x) (catch e e))
-	  "test-43")
+	  "case 43")
   (assert equal?
 	  'ack
 	  (try (let ((x (try (div 10 0)
 			     (catch e -1 (raise 'foo))
 			     (finally 'closing-files (raise 'ack) 42))))
 		 x) (catch e e))
-	  "test-44")
+	  "case 44")
   (assert equal?
 	  99
 	  (try (let ((x (try (div 10 0)
@@ -1063,7 +1063,7 @@
 		 x)
 	       (catch e (if (equal? e 'ack) 99 (raise 'doug)))
 	       (finally 'closing-outer-files))
-	  "test-45")
+	  "case 45")
   (assert equal?
 	  'doug
 	  (try (try (let ((x (try (div 10 0)
@@ -1072,7 +1072,7 @@
 		      x)
 		    (catch e (if (equal? e 'foo) 99 (raise 'doug)))
 		    (finally 'closing-outer-files)) (catch e e))
-	  "test-46")
+	  "case 46")
   )
 
 (define-tests loop
@@ -1084,7 +1084,7 @@
 		     (raise 'blastoff!))
 		 (loop (- n 1)))
 	       (catch e e))
-	  "test-47")
+	  "case 47")
   )
 
 (define-tests macros
@@ -1092,17 +1092,17 @@
 	  #t
 	  (let ((bool 5))
 	    (or (= bool 4) (= bool 5)))
-	  "test-48")
+	  "case 48")
   (assert equal?
 	  6
 	  (let ((bool 5))
 	    (or (= bool 4) 6))
-	  "test-49")
+	  "case 49")
   (assert equal?
 	  #f
 	  (let ((bool 5))
 	    (and (= bool 5) (> bool 0) (= bool 4)))
-	  "test-50")
+	  "case 50")
   (assert equal?
 	  5
 	  (let ((r 5))
@@ -1110,7 +1110,7 @@
 	      (apple 'no)
 	      ((cherry banana) 1 2 r)
 	      (else 'no)))
-	  "test-51")
+	  "case 51")
   (assert equal?
 	  '((6) orange 5)
 	  (let ((r 5))
@@ -1119,7 +1119,7 @@
 			 ((cherry banana) (a . b) (list b a r))
 			 ((orange) () 'no)
 			 (else 2 3 4)))
-	  "test-52")
+	  "case 52")
   )
 
 (define-tests datatype
