@@ -1236,6 +1236,9 @@ def string_startswith_q(string, s):
 def host_environment_native():
     return "python"
 
+def format_float(total, right, value):
+    return ('%%%s.%sf' % (total, right)) % value
+
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)
 SCHEMEPATH = List(".", os.path.join(path, "modules"))
@@ -1770,6 +1773,7 @@ paths_reg = symbol_undefined
 pattern_reg = symbol_undefined
 proc_reg = symbol_undefined
 procs_reg = symbol_undefined
+right_reg = symbol_undefined
 s_reg = symbol_undefined
 senv_reg = symbol_undefined
 sexps_reg = symbol_undefined
@@ -1782,6 +1786,7 @@ test_reg = symbol_undefined
 tests_reg = symbol_undefined
 token_type_reg = symbol_undefined
 tokens_reg = symbol_undefined
+total_reg = symbol_undefined
 v1_reg = symbol_undefined
 v2_reg = symbol_undefined
 value1_reg = symbol_undefined
@@ -1794,6 +1799,7 @@ var_reg = symbol_undefined
 variant_reg = symbol_undefined
 variants_reg = symbol_undefined
 vars_reg = symbol_undefined
+wrong_reg = symbol_undefined
 x_reg = symbol_undefined
 y_reg = symbol_undefined
 temp_2 = symbol_undefined
@@ -2859,18 +2865,30 @@ def b_cont2_83_d(k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont2_84_d(start_time, tests, handler, k):
+    total2 = symbol_undefined
+    right2 = symbol_undefined
+    wrong2 = symbol_undefined
+    wrong2 = caddr(value1_reg)
+    right2 = cadr(value1_reg)
+    total2 = car(value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
+    GLOBALS['wrong_reg'] = wrong2
+    GLOBALS['right_reg'] = right2
+    GLOBALS['total_reg'] = total2
     GLOBALS['start_time_reg'] = start_time
     GLOBALS['tests_reg'] = cdr(tests)
     GLOBALS['pc'] = run_unit_tests
 
-def b_cont2_85_d(test_name, env, handler, k):
+def b_cont2_85_d(assertions, right, test_name, total, wrong, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
+    GLOBALS['wrong_reg'] = wrong
+    GLOBALS['right_reg'] = right
+    GLOBALS['total_reg'] = (total) + (length(assertions))
     GLOBALS['assertions_reg'] = value1_reg
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
@@ -2889,11 +2907,14 @@ def b_cont2_87_d(assertions, nums, test_name, handler, k):
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = filter_assertions
 
-def b_cont2_88_d(assertions, test_name, env, handler, k):
+def b_cont2_88_d(assertions, right, test_name, total, wrong, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
+    GLOBALS['wrong_reg'] = wrong
+    GLOBALS['right_reg'] = (right) + (1)
+    GLOBALS['total_reg'] = total
     GLOBALS['assertions_reg'] = cdr(assertions)
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
@@ -3417,11 +3438,14 @@ def b_handler2_3_d():
     GLOBALS['final_reg'] = False
     GLOBALS['pc'] = pc_halt_signal
 
-def b_handler2_4_d(assertions, test_name, env, handler, k):
+def b_handler2_4_d(assertions, right, test_name, total, wrong, env, handler, k):
     printf("Error testing ~a: ~a\n", test_name, exception_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
+    GLOBALS['wrong_reg'] = (wrong) + (1)
+    GLOBALS['right_reg'] = right
+    GLOBALS['total_reg'] = total
     GLOBALS['assertions_reg'] = cdr(assertions)
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
@@ -7924,11 +7948,17 @@ def m():
                                                                 tests = list_ref(exp_reg, 1)
                                                                 if true_q(null_q(tests)):
                                                                     GLOBALS['k_reg'] = k
+                                                                    GLOBALS['wrong_reg'] = 0
+                                                                    GLOBALS['right_reg'] = 0
+                                                                    GLOBALS['total_reg'] = 0
                                                                     GLOBALS['start_time_reg'] = get_current_time()
                                                                     GLOBALS['tests_reg'] = Map(List, dict_to_keys(unit_test_table))
                                                                     GLOBALS['pc'] = run_unit_tests
                                                                 else:
                                                                     GLOBALS['k_reg'] = k
+                                                                    GLOBALS['wrong_reg'] = 0
+                                                                    GLOBALS['right_reg'] = 0
+                                                                    GLOBALS['total_reg'] = 0
                                                                     GLOBALS['start_time_reg'] = get_current_time()
                                                                     GLOBALS['tests_reg'] = tests
                                                                     GLOBALS['pc'] = run_unit_tests
@@ -8061,8 +8091,11 @@ def m():
 
 def run_unit_tests():
     if true_q(null_q(tests_reg)):
-        printf("Time: ~s seconds~%", (get_current_time()) - (start_time_reg))
-        printf("All unit tests completed\n")
+        printf("Time: ~a seconds~%", format_float(4, 2, (get_current_time()) - (start_time_reg)))
+        printf("  Right: ~s ~%", right_reg)
+        printf("  Wrong: ~s ~%", wrong_reg)
+        printf("  Total: ~s ~%", total_reg)
+        printf("Testing completed\n")
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
@@ -8089,11 +8122,12 @@ def run_unit_test():
         env = cadr(entry)
         if true_q(null_q(nums)):
             GLOBALS['env_reg'] = env
+            GLOBALS['total_reg'] = (total_reg) + (length(assertions))
             GLOBALS['assertions_reg'] = assertions
             GLOBALS['test_name_reg'] = test_name
             GLOBALS['pc'] = run_unit_test_cases
         else:
-            GLOBALS['k_reg'] = make_cont2(b_cont2_85_d, test_name, env, handler_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_85_d, assertions, right_reg, test_name, total_reg, wrong_reg, env, handler_reg, k_reg)
             GLOBALS['assertions_reg'] = assertions
             GLOBALS['nums_reg'] = nums
             GLOBALS['test_name_reg'] = test_name
@@ -8135,12 +8169,12 @@ def lookup_assertion(test_name, case_name, assertions, handler, fail, k):
 def run_unit_test_cases():
     if true_q(null_q(assertions_reg)):
         GLOBALS['value2_reg'] = fail_reg
-        GLOBALS['value1_reg'] = void_value
+        GLOBALS['value1_reg'] = List(total_reg, right_reg, wrong_reg)
         GLOBALS['pc'] = apply_cont2
     else:
         test_case_handler = symbol_undefined
-        test_case_handler = make_handler2(b_handler2_4_d, assertions_reg, test_name_reg, env_reg, handler_reg, k_reg)
-        GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions_reg, test_name_reg, env_reg, handler_reg, k_reg)
+        test_case_handler = make_handler2(b_handler2_4_d, assertions_reg, right_reg, test_name_reg, total_reg, wrong_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions_reg, right_reg, test_name_reg, total_reg, wrong_reg, env_reg, handler_reg, k_reg)
         GLOBALS['handler_reg'] = test_case_handler
         GLOBALS['exp_reg'] = car(assertions_reg)
         GLOBALS['pc'] = m

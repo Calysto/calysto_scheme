@@ -1228,6 +1228,9 @@ def string_startswith_q(string, s):
 def host_environment_native():
     return "python"
 
+def format_float(total, right, value):
+    return ('%%%s.%sf' % (total, right)) % value
+
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)
 SCHEMEPATH = List(".", os.path.join(path, "modules"))
