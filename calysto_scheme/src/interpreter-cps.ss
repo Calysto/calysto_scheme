@@ -603,11 +603,12 @@
   (lambda (tests start-time right wrong handler fail k)
     (if (null? tests)
 	(let ((total (apply + (map length (map car (dict->values unit-test-table))))))
-	  (printf "Time: ~a seconds~%" (format-float 4 2 (- (get-current-time) start-time)))
+	  (printf "=================\n")
+	  (printf "Testing completed!\n")
+	  (printf "  Time : ~a seconds~%" (format-float 4 2 (- (get-current-time) start-time)))
+	  (printf "  Total: ~s ~%" total)
 	  (printf "  Right: ~s ~%" right)
 	  (printf "  Wrong: ~s ~%" wrong)
-	  (printf "  Total: ~s ~%" total)
-	  (printf "Testing completed\n")
 	  (k void-value fail))
 	(run-unit-test (car tests) right wrong handler fail
 	  (lambda-cont2 (results fail)
@@ -624,6 +625,7 @@
 	(runtime-error (format "test group '~a' not found" test-name) 'none handler fail)
 	(let* ((assertions (car entry))
 	       (env (cadr entry)))
+	  (printf "Testing group '~a'...\n" test-name)
 	  (if (null? nums)
 	      (run-unit-test-cases test-name assertions right wrong env handler fail k)
 	      (filter-assertions test-name nums assertions handler fail

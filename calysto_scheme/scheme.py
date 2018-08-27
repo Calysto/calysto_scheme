@@ -1242,9 +1242,6 @@ def host_environment_native():
 def format_float(total, right, value):
     return ('%%%s.%sf' % (total, right)) % value
 
-def sum_native(list_of_nums):
-    return sum(list_to_vector(list_of_nums))
-
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)
 SCHEMEPATH = List(".", os.path.join(path, "modules"))
@@ -3439,7 +3436,14 @@ def b_handler2_3_d():
     GLOBALS['pc'] = pc_halt_signal
 
 def b_handler2_4_d(assertions, right, test_name, wrong, env, handler, k):
-    printf("Error testing ~a: ~a\n", test_name, exception_reg)
+    msg = symbol_undefined
+    where = symbol_undefined
+    where = get_exception_info(exception_reg)
+    msg = get_exception_message(exception_reg)
+    if true_q((where) is (symbol_none)):
+        printf("Error testing ~a: ~a\n", test_name, msg)
+    else:
+        printf("Error testing ~a: ~a at ~a\n", test_name, msg, where)
     GLOBALS['k_reg'] = k
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
@@ -8089,12 +8093,13 @@ def m():
 def run_unit_tests():
     if true_q(null_q(tests_reg)):
         total = symbol_undefined
-        total = sum_native(Map(length, Map(car, dict_to_values(unit_test_table))))
-        printf("Time: ~a seconds~%", format_float(4, 2, (get_current_time()) - (start_time_reg)))
+        total = Apply(plus, Map(length, Map(car, dict_to_values(unit_test_table))))
+        printf("=================\n")
+        printf("Testing completed!\n")
+        printf("  Time : ~a seconds~%", format_float(4, 2, (get_current_time()) - (start_time_reg)))
+        printf("  Total: ~s ~%", total)
         printf("  Right: ~s ~%", right_reg)
         printf("  Wrong: ~s ~%", wrong_reg)
-        printf("  Total: ~s ~%", total)
-        printf("Testing completed\n")
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
@@ -8119,6 +8124,7 @@ def run_unit_test():
         env = symbol_undefined
         assertions = car(entry)
         env = cadr(entry)
+        printf("Testing group '~a'...\n", test_name)
         if true_q(null_q(nums)):
             GLOBALS['env_reg'] = env
             GLOBALS['assertions_reg'] = assertions
@@ -8176,6 +8182,18 @@ def run_unit_test_cases():
         GLOBALS['handler_reg'] = test_case_handler
         GLOBALS['exp_reg'] = car(assertions_reg)
         GLOBALS['pc'] = m
+
+def get_exception_info(exception):
+    source = symbol_undefined
+    line = symbol_undefined
+    column = symbol_undefined
+    column = car(cddddr(exception))
+    line = cadddr(exception)
+    source = caddr(exception)
+    if true_q((source) is (symbol_none)):
+        return symbol_none
+    else:
+        return format("line ~a, column ~a of ~a", line, column, source)
 
 def make_exception(exception_type, message, source, line, column):
     return List(exception_type, message, source, line, column, make_stack_trace())

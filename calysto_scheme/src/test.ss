@@ -138,7 +138,7 @@
 	   (app-exp (rator rand) (list rator rand)))))
 
 
-(define-tests functions-1
+(define-tests main
   (assert equal?
 	  `(list ,(+ 1 2) 4)
 	  '(list 3 4)
@@ -896,7 +896,7 @@
 	  "test-12")
   )
 
-(define-tests test-mu-lambda
+(define-tests mu-lambda
   (assert equal?
 	  '(1 2 3 4 5)
 	  ((lambda x x) 1 2 3 4 5)
@@ -930,13 +930,13 @@
   (define (f3 . x) (list x))
   (define (f4 a b c . x) (list a b c x))
   (define (f5 a b c x) (list a b c x))
-  (define-tests test-define
+  (define-tests define
     (assert equal?
 	    '((1 2 3) (42) ((1 2 3)) (1 2 3 (4 5)) (1 2 3 4))
 	    (list (f1 1 2 3) (f2) (f3 1 2 3) (f4 1 2 3 4 5) (f5 1 2 3 4))
 	    "test-18")))
 
-(define-tests test-call/cc
+(define-tests call/cc
   (assert equal?
 	  40
 	  (* 10 (call/cc (lambda (k) 4)))
@@ -955,7 +955,7 @@
 	  "test-22")
   )
 
-(define-tests test-try
+(define-tests try
   (assert equal?
 	  3
 	  (try 3)
@@ -1075,7 +1075,7 @@
 	  "test-46")
   )
 
-(define-tests test-loop
+(define-tests loop
   (assert equal?
 	  'blastoff!
 	  (try (let loop ((n 5))
@@ -1087,7 +1087,7 @@
 	  "test-47")
   )
 
-(define-tests test-macros
+(define-tests macros
   (assert equal?
 	  #t
 	  (let ((bool 5))
@@ -1122,7 +1122,7 @@
 	  "test-52")
   )
 
-(define-tests define-datatype
+(define-tests datatype
   (assert (lambda (a b) (procedure? a))
 	  lc-exp?
 	  #t
