@@ -78,11 +78,6 @@
 (define-native format-float
   (lambda (total right value)
     (format (format "~~~a,~aF" total right) value)))
-(define-native sum-native
-  (lambda (list-of-nums)
-    (if (null? list-of-nums)
-	0
-	(+ (car list-of-nums) (sum-native (cdr list-of-nums))))))
 
 (define-native dict
   (lambda assoc
@@ -607,7 +602,7 @@
 (define* run-unit-tests
   (lambda (tests start-time right wrong handler fail k)
     (if (null? tests)
-	(let ((total (sum-native (map length (map car (dict->values unit-test-table))))))
+	(let ((total (apply + (map length (map car (dict->values unit-test-table))))))
 	  (printf "Time: ~a seconds~%" (format-float 4 2 (- (get-current-time) start-time)))
 	  (printf "  Right: ~s ~%" right)
 	  (printf "  Wrong: ~s ~%" wrong)
@@ -665,14 +660,27 @@
 (define* run-unit-test-cases
   (lambda (test-name assertions right wrong env handler fail k)
     (if (null? assertions)
-	(k (list right wrong) fail)
-	(let ((test-case-handler
-	       (lambda-handler2 (e fail)
-		 (printf "Error testing ~a: ~a\n" test-name e) ;;(get-exception-message e))
-		 (run-unit-test-cases test-name (cdr assertions) right (+ wrong 1) env handler fail k))))
-	  (m (car assertions) env test-case-handler fail
-	     (lambda-cont2 (v fail)
-	       (run-unit-test-cases test-name (cdr assertions) (+ right 1) wrong env handler fail k)))))))
+        (k (list right wrong) fail)
+        (let ((test-case-handler
+               (lambda-handler2 (e fail)
+                 (let ((msg (get-exception-message e))
+                       (where (get-exception-info e)))
+                   (if (eq? where 'none)
+                     (printf "Error testing ~a: ~a\n" test-name msg)
+                     (printf "Error testing ~a: ~a at ~a\n" test-name msg where))
+                   (run-unit-test-cases test-name (cdr assertions) right (+ wrong 1) env handler fail k)))))
+          (m (car assertions) env test-case-handler fail
+             (lambda-cont2 (v fail)
+               (run-unit-test-cases test-name (cdr assertions) (+ right 1) wrong env handler fail k)))))))
+
+(define get-exception-info
+  (lambda (exception)
+    (let ((source (caddr exception))
+          (line (cadddr exception))
+          (column (car (cddddr exception))))
+      (if (eq? source 'none)
+          'none
+          (format "line ~a, column ~a of ~a" line column source)))))
 
 (define make-exception
   (lambda (exception-type message source line column)
@@ -3012,3 +3020,6 @@
       (else (let ((keyword (caar dict))
 		  (value (cadar dict)))
 	      (cons (association keyword value) (make-associations (cdr dict))))))))
+
+(if (string=? (host-environment-native) "scheme")
+    (start))

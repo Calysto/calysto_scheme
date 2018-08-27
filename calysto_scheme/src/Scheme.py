@@ -1234,9 +1234,6 @@ def host_environment_native():
 def format_float(total, right, value):
     return ('%%%s.%sf' % (total, right)) % value
 
-def sum_native(list_of_nums):
-    return sum(list_to_vector(list_of_nums))
-
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)
 SCHEMEPATH = List(".", os.path.join(path, "modules"))
