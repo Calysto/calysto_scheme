@@ -1199,6 +1199,9 @@ def hasitem_native(dictionary, key):
 def dict_to_keys(dictionary):
     return vector_to_list(list(dictionary.keys()))
 
+def dict_to_values(dictionary):
+    return vector_to_list(list(dictionary.values()))
+
 def contains_native(dictionary, item):
     return item in dictionary
 
@@ -1230,6 +1233,9 @@ def host_environment_native():
 
 def format_float(total, right, value):
     return ('%%%s.%sf' % (total, right)) % value
+
+def sum_native(list_of_nums):
+    return sum(list_to_vector(list_of_nums))
 
 symbol_emptylist = make_symbol("()") # will be redefined; ok
 path, filename = os.path.split(__file__)

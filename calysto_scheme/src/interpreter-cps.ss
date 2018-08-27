@@ -78,6 +78,11 @@
 (define-native format-float
   (lambda (total right value)
     (format (format "~~~a,~aF" total right) value)))
+(define-native sum-native
+  (lambda (list-of-nums)
+    (if (null? list-of-nums)
+	0
+	(+ (car list-of-nums) (sum-native (cdr list-of-nums))))))
 
 (define-native dict
   (lambda assoc
@@ -100,6 +105,10 @@
 (define-native dict->keys
   (lambda (dict)
     (map car (cdr dict))))
+
+(define-native dict->values
+  (lambda (dict)
+    (map cdr (cdr dict))))
 
 (define-native hasitem-native
   (lambda (dict keyword)
@@ -537,8 +546,8 @@
 	      (k void-value fail))))
       (run-tests-aexp (tests)
 	(if (null? tests)
-	    (run-unit-tests (map list (dict->keys unit-test-table)) (get-current-time) 0 0 0 handler fail k)
-	    (run-unit-tests tests (get-current-time) 0 0 0 handler fail k)))
+	    (run-unit-tests (map list (dict->keys unit-test-table)) (get-current-time) 0 0 handler fail k)
+	    (run-unit-tests tests (get-current-time) 0 0 handler fail k)))
       (begin-aexp (exps info)
 	(eval-sequence exps env handler fail k))
       (lambda-aexp (formals bodies info)
@@ -596,24 +605,23 @@
 			   'none handler fail))))))
 
 (define* run-unit-tests
-  (lambda (tests start-time total right wrong handler fail k)
+  (lambda (tests start-time right wrong handler fail k)
     (if (null? tests)
-	(begin
+	(let ((total (sum-native (map length (map car (dict->values unit-test-table))))))
 	  (printf "Time: ~a seconds~%" (format-float 4 2 (- (get-current-time) start-time)))
 	  (printf "  Right: ~s ~%" right)
 	  (printf "  Wrong: ~s ~%" wrong)
 	  (printf "  Total: ~s ~%" total)
 	  (printf "Testing completed\n")
 	  (k void-value fail))
-	(run-unit-test (car tests) total right wrong handler fail
+	(run-unit-test (car tests) right wrong handler fail
 	  (lambda-cont2 (results fail)
-	     (let ((total2 (car results))
-		   (right2 (cadr results))
-		   (wrong2 (caddr results)))
-	       (run-unit-tests (cdr tests) start-time total2 right2 wrong2 handler fail k)))))))
+	     (let ((right2 (car results))
+		   (wrong2 (cadr results)))
+	       (run-unit-tests (cdr tests) start-time right2 wrong2 handler fail k)))))))
 
 (define* run-unit-test
-  (lambda (test total right wrong handler fail k)
+  (lambda (test right wrong handler fail k)
     (let* ((test-name (car test))
 	   (nums (cdr test))
 	   (entry (getitem-native unit-test-table test-name)))
@@ -622,10 +630,10 @@
 	(let* ((assertions (car entry))
 	       (env (cadr entry)))
 	  (if (null? nums)
-	      (run-unit-test-cases test-name assertions (+ total (length assertions)) right wrong env handler fail k)
+	      (run-unit-test-cases test-name assertions right wrong env handler fail k)
 	      (filter-assertions test-name nums assertions handler fail
 		(lambda-cont2 (filtered-assertions fail)
-		  (run-unit-test-cases test-name filtered-assertions (+ total (length assertions)) right wrong env handler fail k)))))))))
+		  (run-unit-test-cases test-name filtered-assertions right wrong env handler fail k)))))))))
 
 (define* filter-assertions
   (lambda (test-name nums assertions handler fail k)
@@ -655,16 +663,16 @@
 		  (lookup-assertion test-name case-name (cdr assertions) handler fail k))))))))
 
 (define* run-unit-test-cases
-  (lambda (test-name assertions total right wrong env handler fail k)
+  (lambda (test-name assertions right wrong env handler fail k)
     (if (null? assertions)
-	(k (list total right wrong) fail)
+	(k (list right wrong) fail)
 	(let ((test-case-handler
 	       (lambda-handler2 (e fail)
 		 (printf "Error testing ~a: ~a\n" test-name e) ;;(get-exception-message e))
-		 (run-unit-test-cases test-name (cdr assertions) total right (+ wrong 1) env handler fail k))))
+		 (run-unit-test-cases test-name (cdr assertions) right (+ wrong 1) env handler fail k))))
 	  (m (car assertions) env test-case-handler fail
 	     (lambda-cont2 (v fail)
-	       (run-unit-test-cases test-name (cdr assertions) total (+ right 1) wrong env handler fail k)))))))
+	       (run-unit-test-cases test-name (cdr assertions) (+ right 1) wrong env handler fail k)))))))
 
 (define make-exception
   (lambda (exception-type message source line column)
