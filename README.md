@@ -30,21 +30,30 @@ sudo pip3 install --upgrade calysto-scheme
 sudo python3 -m calysto_scheme install
 ```
 
+You can also use the --sys-prefix to install into your virtualenv.
+
 Change pip3/python3 to use a different pip or Python. The version of Python used will determine how Calysto Scheme is run.
 
-Use it in the console, qtconsole, or notebook with IPython 3:
+Use it in the Jupyter console, qtconsole, or notebook:
 
 ```
-ipython console --kernel calysto_scheme
-ipython qtconsole --kernel calysto_scheme
-ipython notebook
+jupyter console --kernel calysto_scheme
+jupyter qtconsole --kernel calysto_scheme
+jupyter notebook
+```
+
+You can also just use the Python program, but it doesn't have a fancy Read-Eval-Print Loop. Just run:
+
+```
+python calysto_scheme/scheme.py
 ```
 
 ## Requires
 
-* ipython=>3.0
-* Python2 or Python3
+* Python3
 * metakernel (installed automatically)
+
+Calysto Scheme can also be un under PyPy for increased performance.
 
 ## Features
 
@@ -63,4 +72,4 @@ Planned:
 
 Limitations:
 
-* Currently a couple of magnitudes slower than Python
+* Runs slow on CPython; try PyPy
