@@ -295,7 +295,11 @@ MAIN FEATURES
 
     def do_execute_file(self, filename):
         # for the %run FILENAME magic
-        scheme.execute_file_rm(filename);
+        retval = scheme.execute_file_rm(filename);
+        if scheme.exception_q(retval):
+            traceback = scheme.get_traceback_string(retval)
+            ename, evalue = scheme.get_exception_values(retval)
+            self.Error(traceback)
         return None
 
     def do_execute_direct(self, code):
