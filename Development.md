@@ -16,4 +16,23 @@ This contains the Python-specific definitions, and will be included in the final
 
 You will need [Chez Scheme](https://github.com/cisco/ChezScheme) (other Scheme implementations may also work). Chez Scheme is now open source. When you install it, call it `scheme`.
 
-Run `make` in the src directory. This will build calysto_scheme/scheme.py.
+Run `make` in the src directory. This will build calysto_scheme/scheme.py. You can run this file directly from Python:
+
+```
+python3 calysto_scheme/scheme.py
+```
+
+From there you can also use the DEBUG flag. Very handy with ipython's %debug magic and interactive flag:
+
+```
+$ ipython3 -i calysto_scheme/scheme.py
+Calysto Scheme, version 1.3.0
+----------------------------
+Use (exit) to exit
+==> (set! DEBUG #t)
+==> (sum 1) ;; do something that causes an unhandled exception
+[CRASH]
+TypeError: 'int' object is not iterable
+In [1] %debug
+ipdb> 
+```
