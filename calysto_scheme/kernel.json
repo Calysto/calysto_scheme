@@ -1,0 +1,9 @@
+{
+    "argv": ["python3",
+	     "-m", "calysto_scheme",
+	     "-f", "{connection_file}"],
+    "codemirror_mode": "scheme",
+    "display_name": "Calysto Scheme 3",
+    "language": "scheme",
+    "name": "calysto_scheme"
+}

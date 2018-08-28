@@ -1,5 +1,6 @@
 import io
 import sys
+import glob
 
 from setuptools import find_packages, setup
 
@@ -22,6 +23,12 @@ setup(name='calysto_scheme',
       install_requires=["metakernel"],
       packages=find_packages(include=["calysto_scheme", "calysto_scheme.*"]),
       package_data={'calysto_scheme': ["images/*.png", "modules/*.ss"]},
+      platforms=["Any"],
+      data_files=[
+          ('share/jupyter/kernels/calysto_scheme',
+           ['calysto_scheme/kernel.json'] + glob.glob('calysto_scheme/images/*.png')
+          )
+      ],
       classifiers = [
           'Framework :: IPython',
           'License :: OSI Approved :: BSD License',
