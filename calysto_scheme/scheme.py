@@ -28,7 +28,7 @@ import io
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 #############################################################
 # Python implementation notes:
@@ -9354,7 +9354,7 @@ def run(setup, *args):
 initialize_globals()
 
 if __name__ == '__main__':
-    print('Calysto Scheme, version 1.3.0')
+    print('Calysto Scheme, version 1.4.0')
     print('----------------------------')
     print('Use (exit) to exit')
     import sys
