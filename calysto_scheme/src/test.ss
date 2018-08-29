@@ -1,7 +1,7 @@
 ;; Unit tests for Scheme functions
 
 ;;(use-lexical-address #f)
-(define! DEBUG #t)
+;;(define! DEBUG #t)
 
 (clear-unit-tests)
 
@@ -1227,5 +1227,4 @@
    (rand lc-exp?)))
 
 
-;;(run-tests)
-;;(exit)
+(run-tests)
