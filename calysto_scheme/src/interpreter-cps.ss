@@ -631,10 +631,10 @@
 	       (env (cadr entry)))
 	  (printf "Testing group '~a'...\n" test-name)
 	  (if (null? nums)
-	      (run-unit-test-cases test-name assertions right wrong env handler fail k)
+	      (run-unit-test-cases test-name assertions #f right wrong env handler fail k)
 	      (filter-assertions test-name nums assertions handler fail
 		(lambda-cont2 (filtered-assertions fail)
-		  (run-unit-test-cases test-name filtered-assertions right wrong env handler fail k)))))))))
+		  (run-unit-test-cases test-name filtered-assertions #t right wrong env handler fail k)))))))))
 
 (define* filter-assertions
   (lambda (test-name nums assertions handler fail k)
@@ -672,7 +672,7 @@
 		  (lookup-assertions test-name case-name (cdr assertions) accum handler fail k))))))))
 
 (define* run-unit-test-cases
-  (lambda (test-name assertions right wrong env handler fail k)
+  (lambda (test-name assertions verbose right wrong env handler fail k)
     (if (null? assertions)
         (k (list right wrong) fail)
         (let ((test-case-handler
@@ -686,10 +686,18 @@
 		       (if (eq? where 'none)
 			   (printf "  Error: ~a\n" test-name)
 			   (printf "  Error: ~a at ~a\n" test-name where)))
-                   (run-unit-test-cases test-name (cdr assertions) right (+ wrong 1) env handler fail k)))))
+		   (if verbose
+		       (let* ((assert-exp (aunparse (car assertions)))
+			      (proc-exp (cadr assert-exp))
+			      (test-exp (caddr assert-exp))
+			      (result-exp (cadddr assert-exp)))
+			 (printf "  Procedure: ~a\n" proc-exp)
+			 (printf "           : ~a\n" test-exp)
+			 (printf "           : ~a\n" result-exp)))
+                   (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))
           (m (car assertions) env test-case-handler fail
              (lambda-cont2 (v fail)
-               (run-unit-test-cases test-name (cdr assertions) (+ right 1) wrong env handler fail k)))))))
+               (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
 
 (define get-exception-info
   (lambda (exception)
@@ -948,12 +956,12 @@
 	(and (char? (car ls))
 	     (all-char? (cdr ls))))))
 
-;; void
 (define clear-unit-tests-prim
   (lambda-proc (args env2 info handler fail k2)
       (set! unit-test-table (dict))
       (k2 void-value fail)))
 
+;; void
 (define void-prim
   (lambda-proc (args env2 info handler fail k2)
     (k2 void-value fail)))
@@ -992,6 +1000,28 @@
   (lambda (x) (eq? x end-of-session)))
 
 (define end-of-session '(exiting the interpreter))
+
+;; (string-join ", " ('a 'b 'c))
+;; "a, b, c"
+(define string-join-prim
+  (lambda-proc (args env2 info handler fail k2)
+     (cond
+      ((not (length-two? args))
+       (runtime-error "incorrect number of args to string-join; should be two" info handler fail))
+      ((not (string? (car args)))
+       (runtime-error "first arg to string-join must be a string" info handler fail))
+      ((not (list? (cadr args)))
+       (runtime-error "second arg to string-join must be a list" info handler fail))
+      (else (string-join (car args) (cadr args) env2 info handler fail k2)))))
+
+(define* string-join
+  (lambda (sep items env2 info handler fail k2)
+    (cond
+     ((null? items) (k2 "" fail))
+     ((null? (cdr items)) (k2 (format "~a" (car items)) fail))
+     (else (string-join sep (cdr items) env2 info handler fail
+	      (lambda-cont2 (v fail)
+                  (k2 (string-append (format "~a" (car items)) sep v) fail)))))))
 
 ;; eval
 (define eval-prim
@@ -2897,6 +2927,7 @@
 	    (list 'string<? string<?-prim "(string<? STRING1 STRING2): compare two strings to see if STRING1 is less than STRING2")
 	    (list 'string=? string=?-prim "(string=? STRING1 STRING2): return #t if STRING1 is the same as STRING2, #f otherwise")
 	    (list 'string? string?-prim "(string? ITEM): return #t if ITEM is a string, #f otherwise")
+	    (list 'string-join string-join-prim "(string-join \", \" '(1 2 3)): gives \"1, 2, 3\"")
 	    (list 'substring substring-prim "(substring STRING START [END]): return the substring of STRING starting with position START and ending before END. If END is not provided, it defaults to the length of the STRING")
 	    (list 'symbol->string symbol->string-prim "(symbol->string SYMBOL): return SYMBOL as a string")
 	    (list 'symbol? symbol?-prim "(symbol? ITEM): return #t if ITEM is a symbol, #f otherwise")
