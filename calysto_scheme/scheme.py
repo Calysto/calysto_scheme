@@ -24,6 +24,7 @@ import math
 import time
 import sys
 import os
+import io
 
 PY3 = sys.version_info[0] == 3
 
@@ -161,16 +162,17 @@ class cons(object):
                 return "#<procedure>"
             elif self.car.name == "environment":
                 return "#<environment>"
-        retval = ""
+        retval = io.StringIO("(")
         current = self
         while isinstance(current, cons):
-            if retval:
-                retval += " "
-            retval += make_safe(current.car)
+            if retval.tell() != 0:
+                retval.write(" ")
+            retval.write(make_safe(current.car))
             current = current.cdr
         if not (isinstance(current, Symbol) and current.name == "()"):
-            retval += " . " + make_safe(current)
-        return "(%s)" % retval
+            retval.write(" . " + make_safe(current))
+        retval.write(")")
+        return retval.getvalue()
 
     def __call__(self, *args, **kwargs):
         if self.car is symbol_procedure:
@@ -734,12 +736,12 @@ def string_to_symbol(string):
 
 def list_to_string(lyst):
     # only on list of chars
-    retval = ""
+    retval = io.StringIO()
     current = lyst
     while isinstance(current, cons):
-        retval += current.car.char
+        retval.write(current.car.char)
         current = current.cdr
-    return retval
+    return retval.getvalue()
 
 def list_to_vector(lyst):
     # this works because cons implements iter
@@ -789,13 +791,13 @@ def string_ref(string, pos):
     return make_char(string[pos])
 
 def string(*chars):
-    retval = ""
+    retval = io.StringIO()
     for c in chars:
         if isinstance(c, Char):
-            retval += c.char
+            retval.write(c.char)
         else:
             raise Exception("invalid argument to string: '%s' is not a character" % c)
-    return retval
+    return retval.getvalue()
 
 def string_split(string, delim):
     return List(*string.split(delim.char))
@@ -918,27 +920,27 @@ def ready_to_eval(text):
 
 # native:
 def read_multiline(prompt):
-    retval = ""
+    retval = io.StringIO()
     while True:
         try:
-            if retval:
-                retval += "\n"
+            if retval.tell() != 0:
+                retval.write("\n")
             if PY3:
-                retval += input(prompt) ## Python 3
+                retval.write(input(prompt)) ## Python 3
             else:
-                retval += raw_input(prompt) ## Python 2
+                retval.write(raw_input(prompt)) ## Python 2
             prompt = "... "
         except EOFError:
             return "(exit)"
         except:
             return ""
         if ready_to_eval(retval):
-            return retval
-        retval += " "
+            return retval.getvalue()
+        retval.write(" ")
 
 def format(formatting, *lyst):
     args = list_to_vector(lyst)
-    retval = ""
+    retval = io.StringIO()
     i = 0
     count = 0
     while i < len(formatting):
@@ -947,21 +949,21 @@ def format(formatting, *lyst):
         elif formatting[i] == "~":
             if formatting[i+1] == 's' and count < len(args):
                 i += 1
-                retval += make_safe(args[count])
+                retval.write(make_safe(args[count]))
                 count += 1
             elif formatting[i+1] == 'a' and count < len(args):
                 i += 1
-                retval += str(args[count])
+                retval.write(str(args[count]))
                 count += 1
             elif formatting[i+1] == '%':
                 i += 1
-                retval += "\n"
+                retval.write("\n")
             else:
-                retval += formatting[i] # unknown ~X
+                retval.write(formatting[i]) # unknown ~X
         else:
-            retval += formatting[i]
+            retval.write(formatting[i])
         i += 1
-    return retval
+    return retval.getvalue()
 
 def pretty_print(thing):
     print(thing)
