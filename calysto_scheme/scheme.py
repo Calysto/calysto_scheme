@@ -1140,11 +1140,9 @@ def dlr_apply(f, args):
         if association_q(larg):
             sym = symbol_to_string(car(larg))
             if sym == "*":
-                ## FIXME: Handle (* : ...)
-                pass
+                fargs = caddr(larg)
             elif sym == "**":
-                ## FIXME: Handle (** : ...)
-                pass
+                fkwargs = caddr(larg)
             else:
                 fkwargs[sym] = caddr(larg)
         else:
@@ -3208,7 +3206,7 @@ def b_cont2_118_d(arg_list, proc, env, handler, k):
     GLOBALS['pc'] = for_each_primitive
 
 def b_cont2_119_d(k2):
-    GLOBALS['value1_reg'] = Apply(dict, List(value1_reg))
+    GLOBALS['value1_reg'] = apply_native(dict, List(value1_reg))
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
@@ -8840,6 +8838,12 @@ def for_each_primitive():
                 GLOBALS['env2_reg'] = env_reg
                 GLOBALS['args_reg'] = Map(car, arg_list)
                 GLOBALS['pc'] = apply_proc
+
+def apply_native(proc, args):
+    if true_q(dlr_proc_q(proc)):
+        return dlr_apply(proc, args)
+    else:
+        return Apply(proc, args)
 
 def make_dict():
     if true_q(null_q(args_reg)):

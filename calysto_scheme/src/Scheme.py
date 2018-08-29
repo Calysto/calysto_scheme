@@ -1132,11 +1132,9 @@ def dlr_apply(f, args):
         if association_q(larg):
             sym = symbol_to_string(car(larg))
             if sym == "*":
-                ## FIXME: Handle (* : ...)
-                pass
+                fargs = caddr(larg)
             elif sym == "**":
-                ## FIXME: Handle (** : ...)
-                pass
+                fkwargs = caddr(larg)
             else:
                 fkwargs[sym] = caddr(larg)
         else:

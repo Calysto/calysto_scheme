@@ -2685,7 +2685,16 @@
        (k2 (dict) fail))
       (else (make-dict (car args) fail
 	      (lambda-cont2 (pairs fail)
-	         (k2 (apply dict (list pairs)) fail)))))))
+	         (k2 (apply-native dict (list pairs)) fail)))))))
+
+;; so that we can use scheme or python natives anywhere
+;; only needed until apply can use associations with scheme
+;; native functions
+(define apply-native
+  (lambda (proc args)
+    (if (dlr-proc? proc)
+	(dlr-apply proc args)
+	(apply proc args))))
 
 (define* make-dict
   (lambda (args fail k2)
@@ -3016,10 +3025,12 @@
 
 (define process-formals
   (lambda (params info handler fail)
+    ;;(printf "formals: ~a~%" params)
     (map get-symbol params)))
 
 (define process-args
   (lambda (args params info handler fail)
+    ;;(printf "args: ~a params: ~a~%" args params)
     args))
 
 ;; (define process-args
