@@ -1,7 +1,7 @@
 ;; Unit tests for Scheme functions
 
 ;;(use-lexical-address #f)
-;;(define! DEBUG #t)
+(define! DEBUG #t)
 
 (clear-unit-tests)
 
@@ -1173,7 +1173,7 @@
   ;; (verify2 'default-2 2 ((lambda ((n : 2)) n)))
   ;; (verify2 'default-3 3 ((lambda ((n : 1)) n) 3))
   (assert equal?
-	  '(1 2 3)
+	  '(0 1 2 3)
 	  ((lambda (a b c) (list a b c)) 1 2 3)
 	  "named-1")
   ;; (verify2 'named-2 '(1 2 3) ((lambda (a b c) (list a b c)) 1 2 (c : 3)))

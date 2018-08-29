@@ -218,7 +218,7 @@
 	(let ((error-type (car (cadr exc)))
 	      (message (cadr (cadr exc))))
 	  (list->vector (list error-type message)))
-	(list-vector (list "UnhandledException" (cadr exc))))))
+	(list->vector (list "UnhandledException" (cadr exc))))))
 
 (define format-exception-line
   (lambda (line)
@@ -671,33 +671,52 @@
 		  (lookup-assertions test-name case-name (cdr assertions) (cons assertion accum) handler fail k)
 		  (lookup-assertions test-name case-name (cdr assertions) accum handler fail k))))))))
 
+(define internal-exception?
+  (lambda (exception)
+    (and (pair? exception)
+	 (string? (car exception))
+	 (or (string=? (car exception)
+		       "AssertionError")
+	     (string=? (car exception)
+		       "UnhandledException")
+	     (string=? (car exception)
+		       "RunTimeError")
+	     (string=? (car exception)
+		       "ScanError")
+	     (string=? (car exception)
+		       "ParseError")
+	     (string=? (car exception)
+		       "ReadError")))))
+
 (define* run-unit-test-cases
   (lambda (test-name assertions verbose right wrong env handler fail k)
     (if (null? assertions)
         (k (list right wrong) fail)
         (let ((test-case-handler
                (lambda-handler2 (e fail)
-                 (let ((msg (get-exception-message e))
-                       (where (get-exception-info e)))
-		   (if (> (string-length msg) 0)
-		       (if (eq? where 'none)
-			   (printf "  Error: ~a \"~a\"\n" test-name msg)
-			   (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
-		       (if (eq? where 'none)
-			   (printf "  Error: ~a\n" test-name)
-			   (printf "  Error: ~a at ~a\n" test-name where)))
-		   (if verbose
-		       (let* ((assert-exp (aunparse (car assertions)))
-			      (proc-exp (cadr assert-exp))
-			      (test-exp (caddr assert-exp))
-			      (result-exp (cadddr assert-exp)))
-			 (printf "  Procedure: ~a\n" proc-exp)
-			 (printf "           : ~a\n" test-exp)
-			 (printf "           : ~a\n" result-exp)))
-                   (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))
-          (m (car assertions) env test-case-handler fail
-             (lambda-cont2 (v fail)
-               (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
+		 (if (internal-exception? e) ;; FIXME?: (exception? e) (make-exception ...) is not an exception
+		     (let ((msg (get-exception-message e))
+			   (where (get-exception-info e)))
+		       (if (> (string-length msg) 0)
+			   (if (eq? where 'none)
+			       (printf "  Error: ~a \"~a\"\n" test-name msg)
+			       (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+			   (if (eq? where 'none)
+			       (printf "  Error: ~a\n" test-name)
+			       (printf "  Error: ~a at ~a\n" test-name where)))))
+		 (let* ((assert-exp (car assertions)) ;; (app-exp assert op e1 e2 name)
+			(proc-exp (car (cdr^ assert-exp)))
+			(test-exp (cadr (cdr^ assert-exp)))
+			(result-exp (caddr (cdr^ assert-exp))))
+		   (m result-exp env handler fail ;; FIXME: could have an error in result?
+		      (lambda-cont2 (result-val fail)
+			 (if verbose
+			     (begin
+			       (printf "  Procedure: ~a\n" (aunparse proc-exp))
+			       (printf "           : ~a\n" (aunparse test-exp))
+			       (printf "           : ~a\n" result-val)))
+			 (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
+          (m (car assertions) env test-case-handler fail test-case-handler)))))
 
 (define get-exception-info
   (lambda (exception)
