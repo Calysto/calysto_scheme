@@ -154,10 +154,11 @@ class cons(object):
                 return "#<procedure>"
             elif self.car.name == "environment":
                 return "#<environment>"
-        retval = io.StringIO("(")
+        retval = io.StringIO()
+        retval.write("(")
         current = self
         while isinstance(current, cons):
-            if retval.tell() != 0:
+            if retval.tell() != 1:
                 retval.write(" ")
             retval.write(make_safe(current.car))
             current = current.cdr
@@ -1214,8 +1215,17 @@ def dict_to_keys(dictionary):
 def dict_to_values(dictionary):
     return vector_to_list(list(dictionary.values()))
 
-def contains_native(dictionary, item):
-    return item in dictionary
+def vlist():
+    return list()
+
+def vlist_append_native(vec, item):
+    vec.append(item)
+
+def vlist_length_native(vec):
+    return len(vec)
+
+def vlist_ref_native(vec, index):
+    return vec[index]
 
 def python_eval(arg):
     return eval(arg, ENVIRONMENT)

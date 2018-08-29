@@ -9,6 +9,7 @@
 ;; http://cs.brynmawr.edu/~dblank
 
 (load "transformer-macros.ss")
+(load "datastructures.ss")
 
 ;;------------------------------------------------------------------------
 ;; scanner - character stream represented as a position number
@@ -634,9 +635,26 @@
 	   (k (list->vector ls)))))
       (else (k x)))))
 
+(define *filename-dict* (dict))
+(define *filename-vector* (vlist))
+
+(define filename-cache
+  (lambda (filename)
+    (if (hasitem-native *filename-dict* filename)
+	(getitem-native *filename-dict* filename)
+	(begin
+	  (let ((index (vlist-length-native *filename-vector*)))
+	    (vlist-append-native *filename-vector* filename)
+	    (setitem-native *filename-dict* filename index)
+	    index)))))
+
+(define get-filename-from-index
+  (lambda (index)
+    (vlist-ref-native *filename-vector* index)))
+
 (define make-info
   (lambda (src start end)
-    (cons src (append start end))))
+    (cons (filename-cache src) (append start end))))
 
 (define replace-info
   (lambda (asexp new-info)
@@ -646,7 +664,7 @@
 
 (define get-srcfile
   (lambda (info)
-    (if (eq? info 'none) 'none (car info))))
+    (if (eq? info 'none) 'none (get-filename-from-index (car info)))))
 
 (define get-start-line
   (lambda (info)

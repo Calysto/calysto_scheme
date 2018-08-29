@@ -68,7 +68,6 @@
 (define-native float (lambda (n) (exact->inexact n)))
 (define-native int (lambda (n) (inexact->exact n)))
 (define-native iter? (lambda (x) #f))
-(define-native contains-native (lambda (dict x) #f))
 (define-native list-native (lambda (v) v))
 (define-native python-eval (lambda v v))
 (define-native python-exec (lambda v v))
@@ -81,39 +80,6 @@
 (define-native format-float
   (lambda (total right value)
     (format (format "~~~a,~aF" total right) value)))
-
-(define-native dict
-  (lambda assoc
-    (cons 'dictionary '())))
-
-(define-native setitem-native
-  (lambda (dict keyword value)
-    (let ((entry (assq keyword (cdr dict))))
-      (if entry
-	  (set-cdr! entry value)
-	  (set-cdr! dict (cons (cons keyword value) (cdr dict)))))))
-
-(define-native getitem-native
-  (lambda (dict keyword)
-    (let ((entry (assq keyword (cdr dict))))
-      (if entry
-	  (cdr entry)
-	  #f))))
-
-(define-native dict->keys
-  (lambda (dict)
-    (map car (cdr dict))))
-
-(define-native dict->values
-  (lambda (dict)
-    (map cdr (cdr dict))))
-
-(define-native hasitem-native
-  (lambda (dict keyword)
-    (let ((entry (assq keyword (cdr dict))))
-      (if entry
-	  #t
-	  #f))))
 
 (define path-join
   (lambda (path filename)
@@ -370,6 +336,9 @@
 
 (define initialize-globals
   (lambda ()
+    (set! *filename-dict* (dict))
+    (set! *filename-vector* (vlist))
+    (filename-cache 'stdin)
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
     (set! unit-test-table (dict))
@@ -2608,10 +2577,6 @@
       (runtime-error "incorrect number of arguments to iter?" info handler fail))
      (else (k2 (apply iter? args) fail)))))
 
-(define contains-prim
-  (lambda-proc (args env2 info handler fail k2)
-       (k2 (apply contains-native args) fail)))
-
 (define getitem-prim
   (lambda-proc (args env2 info handler fail k2)
        (k2 (apply getitem-native args) fail)))
@@ -2977,7 +2942,6 @@
 	    (list 'void void-prim "(void): The null value symbol")
 	    (list 'zero? zero?-prim "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise")
  	    (list 'assq assq-prim "(assq ...): ")
- 	    (list 'contains contains-prim "(contains DICTIONARY ITEM): returns #t if DICTIONARY contains ITEM")
  	    (list 'dict dict-prim "(dict ...): ")
  	    (list 'float float-prim "(float NUMBER): return NUMBER as a floating point value")
  	    (list 'getitem getitem-prim "(getitem DICTIONARY ITEM): returns the VALUE of DICTIONARY[ITEM]")
