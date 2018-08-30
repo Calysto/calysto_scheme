@@ -1,5 +1,7 @@
 # Calysto Scheme
 
+[![codecov](https://codecov.io/gh/Calysto/calysto_scheme/branch/master/graph/badge.svg)](https://codecov.io/gh/Calysto/calysto_scheme) [![CircleCI](https://circleci.com/gh/Calysto/calysto_scheme.svg?style=svg)](https://circleci.com/gh/Calysto/calysto_scheme)
+
 You can try Calysto Scheme without installing anything by clicking on the following button:
 
 [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/Calysto/calysto_scheme/master?filepath=notebooks%2FReference%20Guide%20for%20Calysto%20Scheme.ipynb)
