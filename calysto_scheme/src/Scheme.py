@@ -289,13 +289,13 @@ def for_each(f, lyst):
 def pivot (p, l):
     if null_q(l):
         return make_symbol("done")
-    elif null_q(cdr(l)):
+    elif null_q(l.cdr):
         return make_symbol("done")
-    result = apply_comparison(p, car(l), cadr(l))
+    result = apply_comparison(p, l.car, l.cdr.car)
     if result:
-        return pivot(p, cdr(l))
+        return pivot(p, l.cdr)
     else:
-        return car(l)
+        return l.car
 
 def make_comparison_function(procedure):
     def compare(carl, cadrl):
@@ -325,15 +325,15 @@ def random(number):
 def partition (p, piv, l, p1, p2):
     if (null_q(l)):
         return List(p1, p2)
-    result = apply_comparison(p, car(l), piv)
+    result = apply_comparison(p, l.car, piv)
     if (result):
-        return partition(p, piv, cdr(l), cons(car(l), p1), p2)
+        return partition(p, piv, l.cdr, cons(l.car, p1), p2)
     else:
-        return partition(p, piv, cdr(l), p1, cons(car(l), p2))
+        return partition(p, piv, l.cdr, p1, cons(l.car, p2))
 
 def sort_native(args, env2, info, handler, fail):
-    p = car(args)
-    l = cadr(args)
+    p = args.car
+    l = args.cdr.car
     if procedure_q(p):
         f = make_comparison_function(p)
     else:
@@ -344,8 +344,8 @@ def sort(f, l):
     piv = pivot(f, l)
     if (piv is make_symbol("done")): return l
     parts = partition(f, piv, l, symbol_emptylist, symbol_emptylist)
-    return append(sort(f, car(parts)),
-                  sort(f, cadr(parts)))
+    return append(sort(f, parts.car),
+                  sort(f, parts.cdr.car))
 
 def append(*objs):
     retval = objs[-1]
@@ -606,7 +606,7 @@ def list_q(item):
     return current is symbol_emptylist
 
 def procedure_q(item):
-    return pair_q(item) and (car(item) is symbol_procedure)
+    return pair_q(item) and (item.car is symbol_procedure)
 
 def symbol_q(item):
     return ((isinstance(item, Symbol) or association_q(item))
@@ -822,27 +822,42 @@ def Apply(f, lyst):
 
 ### Annotated expression support:
 
+def list_q_or_length_hat(lyst):
+    current = lyst
+    count = 0
+    while not null_q_hat(current):
+        if not pair_q_hat(current):
+            return False
+        count += 1
+        current = cdr_hat(current)
+    return count
+
 def tagged_list_hat(keyword, op, length):
     def tagged_list(asexp):
-        return (list_q_hat(asexp) and
-                op(length_hat(asexp), length) and
-                symbol_q_hat(car_hat(asexp)) and
-                eq_q_hat(car_hat(asexp), keyword))
+        len_q = list_q_or_length_hat(asexp)
+        car_hat_item = car_hat(asexp)
+        return (len_q is not False and
+                op(len_q, length) and
+                symbol_q_hat(car_hat_item) and
+                eq_q_hat(car_hat_item, keyword))
     return tagged_list
 
 def tagged_list_or_hat(keyword1, keyword2, op, length):
     def tagged_list(asexp):
-        return (list_q_hat(asexp) and
-                op(length_hat(asexp), length) and
-                symbol_q_hat(car_hat(asexp)) and
-                (eq_q_hat(car_hat(asexp), keyword1) or
-                 eq_q_hat(car_hat(asexp), keyword2)))
+        len_q = list_q_or_length_hat(asexp)
+        car_hat_item = car_hat(asexp)
+        return (len_q is not False and
+                op(len_q, length) and
+                symbol_q_hat(car_hat_item) and
+                (eq_q_hat(car_hat_item, keyword1) or
+                 eq_q_hat(car_hat_item, keyword2)))
     return tagged_list
 
 def tagged2_list_hat(keyword, op, length):
     def tagged2_list(asexp):
-        return (list_q_hat(asexp) and
-                op(length_hat(asexp), length) and
+        len_q = list_q_or_length_hat(asexp)
+        return (len_q is not False and
+                op(len_q, length) and
                 symbol_q_hat(car_hat(asexp)) and
                 eq_q_hat(cadr_hat(asexp), keyword))
     return tagged2_list
@@ -927,8 +942,9 @@ def read_multiline(prompt):
             return "(exit)"
         except:
             return ""
-        if ready_to_eval(retval):
-            return retval.getvalue()
+        s = retval.getvalue()
+        if ready_to_eval(s):
+            return s
         retval.write(" ")
 
 def format(formatting, *lyst):
@@ -976,13 +992,13 @@ def make_safe(item):
 
 def search_frame(frame, variable):
     if isinstance(frame, cons):
-        bindings = car(frame)
-        variables = cadr(frame)
+        bindings = frame.car
+        variables = frame.cdr.car
         i = 0
         while not null_q(variables):
-            if eq_q(car(variables), variable):
+            if eq_q(variables.car, variable):
                 return bindings[i]
-            variables = cdr(variables)
+            variables = variables.cdr
             i += 1
         return False
     else:
@@ -1008,7 +1024,7 @@ def Range(*args):
 
 def assv(x, ls):
     while isinstance(ls, cons):
-        if x is caar(ls):
+        if x is ls.car.car:
             return ls.car
         ls = ls.cdr
     return False
@@ -1051,9 +1067,9 @@ def iter_q(item):
 
 def assq(x, ls):
     while not null_q(ls):
-        if eq_q(x, caar(ls)):
-            return car(ls)
-        ls = cdr(ls)
+        if eq_q(x, ls.car.car):
+            return ls.car
+        ls = ls.cdr
     return False
 
 ### External env interface:
@@ -1110,7 +1126,7 @@ def dlr_env_lookup(variable):
 def dlr_object_contains(obj, components):
     # components: (math sqrt)
     retval = obj
-    for component in cdr(components):
+    for component in components.cdr:
         if hasattr(retval, component.name):
             retval = getattr(retval, component.name)
         else:
@@ -1120,7 +1136,7 @@ def dlr_object_contains(obj, components):
 def get_external_member(obj, components):
     # components: (math sqrt)
     retval = obj
-    for component in cdr(components):
+    for component in components.cdr:
         if hasattr(retval, component.name):
             retval = getattr(retval, component.name)
         else:
@@ -1133,13 +1149,13 @@ def dlr_apply(f, args):
     fkwargs = {}
     for larg in largs:
         if association_q(larg):
-            sym = symbol_to_string(car(larg))
+            sym = symbol_to_string(larg.car)
             if sym == "*":
-                fargs = caddr(larg)
+                fargs = larg.cdr.cdr.car
             elif sym == "**":
-                fkwargs = caddr(larg)
+                fkwargs = larg.cdr.cdr.car
             else:
-                fkwargs[sym] = caddr(larg)
+                fkwargs[sym] = larg.cdr.cdr.car
         else:
             fargs.append(larg)
     return f(*fargs, **fkwargs)

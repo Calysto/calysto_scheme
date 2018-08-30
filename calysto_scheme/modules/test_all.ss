@@ -1227,4 +1227,4 @@
    (rand lc-exp?)))
 
 
-(run-tests)
+;;(run-tests)

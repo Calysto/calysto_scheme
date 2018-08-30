@@ -5,6 +5,41 @@ class Translator(object):
         self.program = []
         self.symbols = self.get_initial_symbols()
         self.options = {}
+        self.convert_to_expression = {
+            "car": ".car",
+            "cdr": ".cdr",
+            ##
+            "caar": ".car.car",
+            "cadr": ".cdr.car",
+            "cdar": ".car.cdr",
+            "cddr": ".cdr.cdr",
+            ##
+            "caaar": ".car.car.car",
+            "caadr": ".cdr.car.car",
+            "cadar": ".car.cdr.car",
+            "caddr": ".cdr.cdr.car",
+            "cdaar": ".car.car.cdr",
+            "cdadr": ".cdr.car.cdr",
+            "cddar": ".car.cdr.cdr",
+            "cdddr": ".cdr.cdr.cdr",
+            ##
+            "caaaar": ".car.car.car.car",
+            "caaadr": ".cdr.car.car.car",
+            "caadar": ".car.cdr.car.car",
+            "caaddr": ".cdr.cdr.car.car",
+            "cadaar": ".car.car.cdr.car",
+            "cadadr": ".cdr.car.cdr.car",
+            "caddar": ".car.cdr.cdr.car",
+            "cadddr": ".cdr.cdr.cdr.car",
+            "cdaaar": ".car.car.car.cdr",
+            "cdaadr": ".cdr.car.car.cdr",
+            "cdadar": ".car.cdr.car.cdr",
+            "cdaddr": ".cdr.cdr.car.cdr",
+            "cddaar": ".car.car.cdr.cdr",
+            "cddadr": ".cdr.car.cdr.cdr",
+            "cdddar": ".car.cdr.cdr.cdr",
+            "cddddr": ".cdr.cdr.cdr.cdr",
+            }
         ## --noprimitives
         if flags:
             for flag in flags:
@@ -336,8 +371,12 @@ class PythonTranslator(Translator):
                     return "raise Exception(%s)" % exception_message
                 else:
                     ## function call:
-                    return "%s(%s)" % (self.fix_name(expr[0]),
-                                       ", ".join([self.process_app(e) for e in expr[1:]]))
+                    if expr[0] in self.convert_to_expression:
+                        return "(%s)%s" % (", ".join([self.process_app(e) for e in expr[1:]]),
+                                           self.convert_to_expression[expr[0]])
+                    else:
+                        return "%s(%s)" % (self.fix_name(expr[0]),
+                                           ", ".join([self.process_app(e) for e in expr[1:]]))
         else:
             return self.fix_name(expr)
 
@@ -699,8 +738,12 @@ public class PJScheme:Scheme
                             self.methods[what]["count"] = max(self.methods[what]["count"], int(id))
                             return "%s(%s)" % (self.fix_name(expr[0]),
                                                ", ".join([self.process_app(e) for e in (['"%s"' % what, id] + expr[2:])]))
-                    return "%s(%s)" % (self.fix_name(expr[0]),
-                                       ", ".join([self.process_app(e) for e in expr[1:]]))
+                    if expr[0] in self.convert_to_expression:
+                        return "(%s)%s" % (", ".join([self.process_app(e) for e in expr[1:]]),
+                                           self.convert_to_expression[expr[0]])
+                    else:
+                        return "%s(%s)" % (self.fix_name(expr[0]),
+                                           ", ".join([self.process_app(e) for e in expr[1:]]))
         else:
             return self.fix_function_name_as_argument(expr)
 
