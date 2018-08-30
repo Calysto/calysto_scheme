@@ -12,7 +12,7 @@ http://nbviewer.jupyter.org/github/Calysto/calysto_scheme/blob/master/notebooks/
 
 In Jupyter notebooks, because **Calysto Scheme** uses [MetaKernel](https://github.com/Calysto/metakernel/blob/master/README.rst), it has a fully-supported set of "magics"---meta-commands for additional functionality. This includes running Scheme in parallel. See all of the [MetaKernel Magics](https://github.com/Calysto/metakernel/blob/master/metakernel/magics/README.md).
 
-Calysto Scheme is written in Scheme, and then translated into Python (and other backends). The entire functionality lies in a single Python file: https://github.com/Calysto/calysto_scheme/blob/master/calysto_scheme/src/Scheme.py However, you can easily install it (see below).
+Calysto Scheme is written in Scheme, and then translated into Python (and other backends). The entire functionality lies in a single Python file: https://github.com/Calysto/calysto_scheme/blob/master/calysto_scheme/scheme.py However, you can easily install it (see below).
 
 **Calysto Scheme** in use:
 
