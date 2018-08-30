@@ -81,6 +81,11 @@
   (lambda (total right value)
     (format (format "~~~a,~aF" total right) value)))
 
+;; is set to run unit tests from host language
+(define make-test-callback
+  (lambda (group-name case-name result traceback proc-exp test-exp result-val)
+    void-value))
+
 (define path-join
   (lambda (path filename)
     (cond
@@ -139,7 +144,7 @@
   (lambda ()
     (let ((input (read-multiline "==> ")))
       ;; execute gets redefined as execute-rm when no-csharp-support.ss is loaded
-      (let ((result (execute input 'stdin)))
+      (let ((result (execute input "stdin")))
 	(if (not (void? result))
 	    (if (exception? result)
 		(handle-exception result)
@@ -199,7 +204,7 @@
 
 (define execute-string
   (lambda (input)
-    (execute input 'stdin)))
+    (execute input "stdin")))
 
 (define execute-file
   (lambda (filename)
@@ -256,7 +261,7 @@
 (define read-eval-print-loop-rm
   (lambda ()
     (let ((input (read-multiline "==> ")))
-      (let ((result (execute-rm input 'stdin)))
+      (let ((result (execute-rm input "stdin")))
 	(while (not (end-of-session? result))
 	   (cond
 	    ((exception? result) (handle-exception result))
@@ -265,7 +270,7 @@
 	       (if *need-newline* (newline))
 	       (safe-print result))))
 	   (set! input (read-multiline "==> "))
-	   (set! result (execute-rm input 'stdin)))
+	   (set! result (execute-rm input "stdin")))
 	'goodbye))))
 
 ;;----------------------------------------------------------------------------
@@ -273,12 +278,12 @@
 
 (define execute-string-top
   (lambda (input source)
-    ;; source is input symbol, aka 'stdin
+    ;; source is input symbol, aka "stdin"
     (execute-rm input source)))
 
 (define execute-string-rm
   (lambda (input)
-    (execute-rm input 'stdin)))
+    (execute-rm input "stdin")))
 
 (define execute-file-rm
   (lambda (filename)
@@ -327,9 +332,9 @@
 (define try-parse
   (lambda (input)
     (set! load-stack '())
-    (scan-input input 'stdin try-parse-handler *last-fail*
+    (scan-input input "stdin" try-parse-handler *last-fail*
       (lambda-cont2 (tokens fail)
-	(aparse-sexps tokens 'stdin (initial-contours toplevel-env) try-parse-handler fail
+	(aparse-sexps tokens "stdin" (initial-contours toplevel-env) try-parse-handler fail
 	  (lambda-cont2 (result fail)
 	    (halt* #t)))))
     (trampoline)))
@@ -338,7 +343,7 @@
   (lambda ()
     (set! *filename-dict* (dict))
     (set! *filename-vector* (vlist))
-    (filename-cache 'stdin)
+    (filename-cache "stdin")
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
     (set! unit-test-table (dict))
@@ -663,33 +668,36 @@
         (k (list right wrong) fail)
         (let ((test-case-handler
                (lambda-handler2 (e fail)
-		 (let ((msg (get-exception-message e))
-		       (where (get-exception-info e)))
+		 (let* ((msg (get-exception-message e))
+			(where (get-exception-info e))
+			(assert-exp (car assertions)) ;; (app-exp assert op e1 e2 name)
+			(proc-exp (aunparse (car (cdr^ assert-exp))))
+			(test-exp (aunparse (cadr (cdr^ assert-exp))))
+			(result-exp (caddr (cdr^ assert-exp)))
+			(traceback (get_traceback_string (list 'exception e))))
 		   (if (> (string-length msg) 0)
 		       (if (eq? where 'none)
 			   (printf "  Error: ~a \"~a\"\n" test-name msg)
 			   (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
 		       (if (eq? where 'none)
 			   (printf "  Error: ~a\n" test-name)
-			   (printf "  Error: ~a at ~a\n" test-name where))))
-		 (let* ((assert-exp (car assertions)) ;; (app-exp assert op e1 e2 name)
-			(proc-exp (car (cdr^ assert-exp)))
-			(test-exp (cadr (cdr^ assert-exp)))
-			(result-exp (caddr (cdr^ assert-exp))))
+			   (printf "  Error: ~a at ~a\n" test-name where)))
 		   (initialize-stack-trace!)
 		   (m result-exp env handler fail ;; FIXME: could have an error in result?
 		      (lambda-cont2 (result-val fail)
 			 (if verbose
 			     (begin
-			       (printf "~a\n" (get_traceback_string (list 'exception e)))
-			       (printf "  Procedure: ~a\n" (aunparse proc-exp))
-			       (printf "           : ~a\n" (aunparse test-exp))
+			       (printf "~a\n" traceback)
+			       (printf "  Procedure: ~a\n" proc-exp)
+			       (printf "           : ~a\n" test-exp)
 			       (printf "           : ~a\n" result-val)))
+			 (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
 			 (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
 	  (initialize-stack-trace!)
           (m (car assertions) env test-case-handler fail
 	     (lambda-cont2 (v fail)
-			   (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
+		(make-test-callback test-name "test" #t "" "" "" "") ;; traceback proc test result
+		(run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
 
 (define get-exception-info
   (lambda (exception)
@@ -1085,24 +1093,24 @@
 ;; parse-string
 (define parse-string-prim
   (lambda-proc (args env2 info handler fail k2)
-    (scan-input (car args) 'stdin handler fail
+    (scan-input (car args) "stdin" handler fail
       (lambda-cont2 (tokens fail)
-	(read-sexp tokens 'stdin handler fail
+	(read-sexp tokens "stdin" handler fail
 	  (lambda-cont4 (adatum end tokens-left fail)
 	    (if (token-type? (first tokens-left) 'end-marker)
 	      (aparse adatum (initial-contours toplevel-env) handler fail k2)  ;; was env2
-	      (read-error "tokens left over" tokens-left 'stdin handler fail))))))))
+	      (read-error "tokens left over" tokens-left "stdin" handler fail))))))))
 
 ;; read-string
 (define read-string-prim
   (lambda-proc (args env2 info handler fail k2)
-    (scan-input (car args) 'stdin handler fail
+    (scan-input (car args) "stdin" handler fail
       (lambda-cont2 (tokens fail)
-	(read-sexp tokens 'stdin handler fail
+	(read-sexp tokens "stdin" handler fail
 	  (lambda-cont4 (adatum end tokens-left fail)
 	    (if (token-type? (first tokens-left) 'end-marker)
 	      (k2 adatum fail)
-	      (read-error "tokens left over" tokens-left 'stdin handler fail))))))))
+	      (read-error "tokens left over" tokens-left "stdin" handler fail))))))))
 
 ;; apply
 (define apply-prim

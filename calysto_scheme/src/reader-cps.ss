@@ -906,7 +906,7 @@
 
 (define scan-string
   (lambda (input)
-    (scan-input input 'stdin init-handler2 init-fail init-cont2)))
+    (scan-input input "stdin" init-handler2 init-fail init-cont2)))
 
 (define scan-file
   (lambda (filename)
@@ -914,7 +914,7 @@
 
 (define aread-string
   (lambda (input)
-    (aread-datum input 'stdin init-handler2 init-fail init-cont3)))
+    (aread-datum input "stdin" init-handler2 init-fail init-cont3)))
 
 (define* aread-datum
   (lambda (input src handler fail k)  ;; k receives 3 args: sexp, tokens-left, fail

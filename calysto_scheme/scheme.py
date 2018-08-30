@@ -1337,8 +1337,6 @@ symbol_pair_q = make_symbol("pair?")
 symbol_not = make_symbol("not")
 symbol_begin = make_symbol("begin")
 symbol_cases = make_symbol("cases")
-symbol_stdin = make_symbol("stdin")
-symbol_exception = make_symbol("exception")
 symbol_end_marker = make_symbol("end-marker")
 symbol_ok = make_symbol("ok")
 symbol_continuation3 = make_symbol("continuation3")
@@ -1346,6 +1344,7 @@ symbol_continuation4 = make_symbol("continuation4")
 symbol_dot = make_symbol("dot")
 symbol_fail_continuation = make_symbol("fail-continuation")
 symbol_handler = make_symbol("handler")
+symbol_exception = make_symbol("exception")
 symbol_handler2 = make_symbol("handler2")
 symbol_procedure = make_symbol("procedure")
 symbol_macro_transformer = make_symbol("macro-transformer")
@@ -2685,7 +2684,7 @@ def b_cont2_60_d():
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = try_parse_handler
     GLOBALS['senv_reg'] = initial_contours(toplevel_env)
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = aparse_sexps
 
@@ -2930,12 +2929,13 @@ def b_cont2_87_d(assertions, nums, test_name, handler, k):
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = filter_assertions
 
-def b_cont2_88_d(assertions, e, proc_exp, right, test_exp, test_name, verbose, wrong, env, handler, k):
+def b_cont2_88_d(assertions, msg, proc_exp, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
     if true_q(verbose):
-        printf("~a\n", get_traceback_string(List(symbol_exception, e)))
-        printf("  Procedure: ~a\n", aunparse(proc_exp))
-        printf("           : ~a\n", aunparse(test_exp))
+        printf("~a\n", traceback)
+        printf("  Procedure: ~a\n", proc_exp)
+        printf("           : ~a\n", test_exp)
         printf("           : ~a\n", value1_reg)
+    make_test_callback(test_name, msg, False, traceback, proc_exp, test_exp, value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -2948,6 +2948,7 @@ def b_cont2_88_d(assertions, e, proc_exp, right, test_exp, test_name, verbose, w
     GLOBALS['pc'] = run_unit_test_cases
 
 def b_cont2_89_d(assertions, right, test_name, verbose, wrong, env, handler, k):
+    make_test_callback(test_name, "test", True, "", "", "", "")
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3012,7 +3013,7 @@ def b_cont2_97_d(handler, k2):
     GLOBALS['k_reg'] = make_cont4(b_cont4_11_d, handler, k2)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = read_sexp
 
@@ -3020,7 +3021,7 @@ def b_cont2_98_d(handler, k2):
     GLOBALS['k_reg'] = make_cont4(b_cont4_12_d, handler, k2)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = read_sexp
 
@@ -3402,7 +3403,7 @@ def b_cont4_11_d(handler, k2):
     else:
         GLOBALS['fail_reg'] = value4_reg
         GLOBALS['handler_reg'] = handler
-        GLOBALS['src_reg'] = symbol_stdin
+        GLOBALS['src_reg'] = "stdin"
         GLOBALS['tokens_reg'] = value3_reg
         GLOBALS['msg_reg'] = "tokens left over"
         GLOBALS['pc'] = read_error
@@ -3415,7 +3416,7 @@ def b_cont4_12_d(handler, k2):
     else:
         GLOBALS['fail_reg'] = value4_reg
         GLOBALS['handler_reg'] = handler
-        GLOBALS['src_reg'] = symbol_stdin
+        GLOBALS['src_reg'] = "stdin"
         GLOBALS['tokens_reg'] = value3_reg
         GLOBALS['msg_reg'] = "tokens left over"
         GLOBALS['pc'] = read_error
@@ -3484,8 +3485,18 @@ def b_handler2_3_d():
 def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k):
     msg = symbol_undefined
     where = symbol_undefined
-    where = get_exception_info(exception_reg)
+    assert_exp = symbol_undefined
+    proc_exp = symbol_undefined
+    test_exp = symbol_undefined
+    result_exp = symbol_undefined
+    traceback = symbol_undefined
     msg = get_exception_message(exception_reg)
+    where = get_exception_info(exception_reg)
+    assert_exp = car(assertions)
+    proc_exp = aunparse(car(cdr_hat(assert_exp)))
+    test_exp = aunparse(cadr(cdr_hat(assert_exp)))
+    result_exp = caddr(cdr_hat(assert_exp))
+    traceback = get_traceback_string(List(symbol_exception, exception_reg))
     if true_q(GreaterThan(string_length(msg), 0)):
         if true_q((where) is (symbol_none)):
             printf("  Error: ~a \"~a\"\n", test_name, msg)
@@ -3496,16 +3507,8 @@ def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k
             printf("  Error: ~a\n", test_name)
         else:
             printf("  Error: ~a at ~a\n", test_name, where)
-    assert_exp = symbol_undefined
-    proc_exp = symbol_undefined
-    test_exp = symbol_undefined
-    result_exp = symbol_undefined
-    assert_exp = car(assertions)
-    proc_exp = car(cdr_hat(assert_exp))
-    test_exp = cadr(cdr_hat(assert_exp))
-    result_exp = caddr(cdr_hat(assert_exp))
     initialize_stack_trace_b()
-    GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions, exception_reg, proc_exp, right, test_exp, test_name, verbose, wrong, env, handler, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions, msg, proc_exp, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
     GLOBALS['exp_reg'] = result_exp
@@ -3749,13 +3752,13 @@ def b_proc_19_d():
 
 def b_proc_20_d():
     GLOBALS['k_reg'] = make_cont2(b_cont2_97_d, handler_reg, k2_reg)
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['input_reg'] = car(args_reg)
     GLOBALS['pc'] = scan_input
 
 def b_proc_21_d():
     GLOBALS['k_reg'] = make_cont2(b_cont2_98_d, handler_reg, k2_reg)
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['input_reg'] = car(args_reg)
     GLOBALS['pc'] = scan_input
 
@@ -7689,6 +7692,9 @@ def aunparse(aexp):
 def exception_q(x):
     return (pair_q(x)) and ((car(x)) is (symbol_exception))
 
+def make_test_callback(group_name, case_name, result, traceback, proc_exp, test_exp, result_val):
+    return void_value
+
 def path_join(path, filename):
     if true_q(null_q(path)):
         return filename
@@ -7770,7 +7776,7 @@ def read_eval_print_loop_rm():
     input_ = symbol_undefined
     input_ = read_multiline("==> ")
     result = symbol_undefined
-    result = execute_rm(input_, symbol_stdin)
+    result = execute_rm(input_, "stdin")
     while not(end_of_session_q(result)):
         if true_q(exception_q(result)):
             handle_exception(result)
@@ -7780,14 +7786,14 @@ def read_eval_print_loop_rm():
                     newline()
                 safe_print(result)
         input_ = read_multiline("==> ")
-        result = execute_rm(input_, symbol_stdin)
+        result = execute_rm(input_, "stdin")
     return symbol_goodbye
 
 def execute_string_top(input_, source):
     return execute_rm(input_, source)
 
 def execute_string_rm(input_):
-    return execute_rm(input_, symbol_stdin)
+    return execute_rm(input_, "stdin")
 
 def execute_file_rm(filename):
     return execute_rm(read_content(filename), filename)
@@ -7834,7 +7840,7 @@ def try_parse(input_):
     GLOBALS['k_reg'] = make_cont2(b_cont2_60_d)
     GLOBALS['fail_reg'] = _starlast_fail_star
     GLOBALS['handler_reg'] = try_parse_handler
-    GLOBALS['src_reg'] = symbol_stdin
+    GLOBALS['src_reg'] = "stdin"
     GLOBALS['input_reg'] = input_
     GLOBALS['pc'] = scan_input
     return trampoline()
@@ -7842,7 +7848,7 @@ def try_parse(input_):
 def initialize_globals():
     GLOBALS['_starfilename_dict_star'] = dict()
     GLOBALS['_starfilename_vector_star'] = vlist()
-    filename_cache(symbol_stdin)
+    filename_cache("stdin")
     GLOBALS['toplevel_env'] = make_toplevel_env()
     GLOBALS['macro_env'] = make_macro_env_hat()
     GLOBALS['unit_test_table'] = dict()

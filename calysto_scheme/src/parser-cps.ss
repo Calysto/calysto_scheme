@@ -1372,7 +1372,7 @@
   (lambda (string)
     (set! toplevel-env (make-toplevel-env))
     (set! macro-env (make-macro-env^))
-    (aread-datum string 'stdin init-handler2 init-fail
+    (aread-datum string "stdin" init-handler2 init-fail
       (lambda-cont3 (adatum tokens-left fail)
 	(aparse adatum (initial-contours toplevel-env) init-handler2 init-fail init-cont2)))))
 
