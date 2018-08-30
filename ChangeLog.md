@@ -97,7 +97,7 @@
 	* add vector-length
 	* import CalystoScheme at top
 
-## Release 1.0.6 (Ju 16, 2016)
+## Release 1.0.6 (Jul 16, 2016)
 
 	* Updated install
 	* Fix error in (eqv? long long)
