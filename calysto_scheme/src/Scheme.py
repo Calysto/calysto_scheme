@@ -1201,7 +1201,7 @@ def next_item(iter_item):
         return symbol_emptylist
 
 def load_native(filename):
-    result = execute_rm('(load "%s")' % filename, symbol_stdin)
+    result = execute_rm('(load "%s")' % filename, "stdin")
     if true_q(exception_q(result)):
         handle_exception(result)
         return False # continue?
