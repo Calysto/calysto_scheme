@@ -160,9 +160,10 @@ MAIN FEATURES
                 if item_str.startswith(token) and item_str not in matches:
                     matches.append(item_str)
         # special forms and constants:
-        for item in ["define", "define!", "func", "callback", "if",
-                     "help", "define-syntax", "begin", "lambda", "trace-lambda",
-                     "try", "catch", "finally", "raise", "choose"]:
+        for item in ["assert", "begin", "callback", "catch", "choose",
+                     "define!", "define", "define-syntax", "define-tests",
+                     "finally", "func", "help", "if", "raise", "run-tests",
+                     "try"]:
             if item.startswith(token) and item not in matches:
                 matches.append(item)
         # add items from scheme.ENVIRONMENT
