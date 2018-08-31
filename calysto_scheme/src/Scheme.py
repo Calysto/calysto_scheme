@@ -532,8 +532,14 @@ def length_two_q(ls):
             (ls.cdr.cdr is symbol_emptylist))
 
 def length_at_least_q(n, ls):
-    length = len(list(ls))
-    return length >= n
+    count = 0
+    current = ls
+    while count < n:
+        if not pair_q(current):
+            return False
+        current = current.cdr
+        count += 1
+    return True
 
 def all_numeric_q(ls):
     for item in ls:

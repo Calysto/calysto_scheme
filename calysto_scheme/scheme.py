@@ -540,8 +540,14 @@ def length_two_q(ls):
             (ls.cdr.cdr is symbol_emptylist))
 
 def length_at_least_q(n, ls):
-    length = len(list(ls))
-    return length >= n
+    count = 0
+    current = ls
+    while count < n:
+        if not pair_q(current):
+            return False
+        current = current.cdr
+        count += 1
+    return True
 
 def all_numeric_q(ls):
     for item in ls:
@@ -1959,7 +1965,7 @@ def b_cont_16_d(aclauses, name, info, fail, k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont_17_d(adatum, senv, info, handler, fail, k):
-    if true_q(original_source_info_q(adatum)):
+    if (False if ((original_source_info_q(adatum)) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['fail_reg'] = fail
         GLOBALS['handler_reg'] = handler
@@ -2015,7 +2021,7 @@ def b_cont_24_d(bodies2, name, formals, k):
     GLOBALS['pc'] = apply_cont
 
 def b_cont_25_d(adatum, bodies, handler, fail, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['fail_reg'] = fail
         GLOBALS['handler_reg'] = handler
         GLOBALS['adatum_reg'] = adatum
@@ -2038,12 +2044,12 @@ def b_cont_27_d(bindings, k):
 def b_cont_28_d(clauses, var, k):
     clause = symbol_undefined
     clause = car_hat(clauses)
-    if true_q(eq_q_hat(car_hat(clause), symbol_else)):
+    if (False if ((eq_q_hat(car_hat(clause), symbol_else)) is False) else True):
         GLOBALS['value_reg'] = cons(clause, value_reg)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(symbol_q_hat(car_hat(clause))):
+        if (False if ((symbol_q_hat(car_hat(clause))) is False) else True):
             GLOBALS['value_reg'] = cons(append(List(append(List(symbol_eq_q), append(List(var), List(append(List(symbol_quote), List(car_hat(clause))))))), at_hat(cdr_hat(clause))), value_reg)
             GLOBALS['k_reg'] = k
             GLOBALS['pc'] = apply_cont
@@ -2066,7 +2072,7 @@ def b_cont_30_d(cdrs, fields, name, k):
     GLOBALS['pc'] = apply_cont
 
 def b_cont_31_d(adatum, macro_keyword, fail, k):
-    if true_q(has_source_info_q(value_reg)):
+    if (False if ((has_source_info_q(value_reg)) is False) else True):
         GLOBALS['value2_reg'] = fail
         GLOBALS['value1_reg'] = value_reg
         GLOBALS['k_reg'] = k
@@ -2074,7 +2080,7 @@ def b_cont_31_d(adatum, macro_keyword, fail, k):
     else:
         info = symbol_undefined
         info = get_source_info(adatum)
-        if true_q(original_source_info_q(adatum)):
+        if (False if ((original_source_info_q(adatum)) is False) else True):
             GLOBALS['value2_reg'] = fail
             GLOBALS['value1_reg'] = replace_info(value_reg, snoc(macro_keyword, info))
             GLOBALS['k_reg'] = k
@@ -2092,7 +2098,7 @@ def b_cont_32_d(adatum, macro_keyword, fail, k):
     GLOBALS['pc'] = annotate_cps
 
 def b_cont_33_d(aclauses, adatum, clauses, right_apattern, right_pattern, handler, fail, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['k2_reg'] = make_cont2(b_cont2_56_d, fail, k)
         GLOBALS['ap_reg'] = right_apattern
         GLOBALS['s_reg'] = value_reg
@@ -2214,7 +2220,7 @@ def b_cont_50_d(fail, k2):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont_51_d(x, y, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['y_reg'] = (y).cdr
         GLOBALS['x_reg'] = (x).cdr
@@ -2225,7 +2231,7 @@ def b_cont_51_d(x, y, k):
         GLOBALS['pc'] = apply_cont
 
 def b_cont_52_d(i, v1, v2, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['i_reg'] = (i) - (1)
         GLOBALS['v2_reg'] = v2
@@ -2237,7 +2243,7 @@ def b_cont_52_d(i, v1, v2, k):
         GLOBALS['pc'] = apply_cont
 
 def b_cont_53_d(ls, x, y, info, handler, fail, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['value2_reg'] = fail
         GLOBALS['value1_reg'] = y
         GLOBALS['k_reg'] = k
@@ -2253,7 +2259,7 @@ def b_cont_53_d(ls, x, y, info, handler, fail, k):
         GLOBALS['pc'] = member_loop
 
 def b_cont_54_d(pattern, var, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['value_reg'] = True
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2264,7 +2270,7 @@ def b_cont_54_d(pattern, var, k):
         GLOBALS['pc'] = occurs_q
 
 def b_cont_55_d(ap2, p1, p2, k):
-    if true_q(value_reg):
+    if (False if ((value_reg) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2274,7 +2280,7 @@ def b_cont_55_d(ap2, p1, p2, k):
         GLOBALS['pc'] = apply_cont
 
 def b_cont_56_d(s_car, k):
-    if true_q(not(value_reg)):
+    if (False if ((not(value_reg)) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2284,7 +2290,7 @@ def b_cont_56_d(s_car, k):
         GLOBALS['pc'] = apply_cont
 
 def b_cont_57_d(apair1, apair2, pair1, pair2, k):
-    if true_q(not(value_reg)):
+    if (False if ((not(value_reg)) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2341,7 +2347,7 @@ def b_cont2_8_d(info, k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont2_9_d(name, formals, info, k):
-    if true_q((list_q(formals)) and (not(association_q(formals)))):
+    if (False if (((list_q(formals)) and (not(association_q(formals)))) is False) else True):
         GLOBALS['value1_reg'] = trace_lambda_aexp(name, formals, value1_reg, info)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -2407,7 +2413,7 @@ def b_cont2_17_d(info, k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont2_18_d(formals, info, k):
-    if true_q((list_q(formals)) and (not(association_q(formals)))):
+    if (False if (((list_q(formals)) and (not(association_q(formals)))) is False) else True):
         GLOBALS['value1_reg'] = lambda_aexp(formals, value1_reg, info)
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -2555,7 +2561,7 @@ def b_cont2_41_d(senv, src, tokens_left, handler, k):
     GLOBALS['pc'] = aparse_sexps
 
 def b_cont2_42_d(formals, handler, fail, k):
-    if true_q(null_q(value1_reg)):
+    if (False if ((((value1_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value_reg'] = append(List(symbol_lambda_no_defines), append(List(formals), at_hat(value2_reg)))
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2563,7 +2569,7 @@ def b_cont2_42_d(formals, handler, fail, k):
         return create_letrec_bindings_hat(value1_reg, handler, fail, make_cont(b_cont_23_d, value2_reg, formals, k))
 
 def b_cont2_43_d(name, formals, handler, fail, k):
-    if true_q(null_q(value1_reg)):
+    if (False if ((((value1_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value_reg'] = append(List(symbol_trace_lambda_no_defines), append(List(name), append(List(formals), at_hat(value2_reg))))
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -2599,13 +2605,13 @@ def b_cont2_48_d(exp, k):
 def b_cont2_49_d(clauses, var, k2):
     clause = symbol_undefined
     clause = car_hat(clauses)
-    if true_q(eq_q_hat(car_hat(clause), symbol_else)):
+    if (False if ((eq_q_hat(car_hat(clause), symbol_else)) is False) else True):
         GLOBALS['value2_reg'] = cons(List(symbol_else, List(symbol_else_code)), value2_reg)
         GLOBALS['value1_reg'] = cons(append(List(symbol_else_code), List(append(List(symbol_lambda), append(List(symbol_emptylist), at_hat(cdr_hat(clause)))))), value1_reg)
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(symbol_q_hat(car_hat(clause))):
+        if (False if ((symbol_q_hat(car_hat(clause))) is False) else True):
             name = symbol_undefined
             name = car_hat(clause)
             GLOBALS['value2_reg'] = cons(append(List(append(List(symbol_eq_q), append(List(var), List(append(List(symbol_quote), List(car_hat(clause))))))), List(List(name))), value2_reg)
@@ -2623,13 +2629,13 @@ def b_cont2_49_d(clauses, var, k2):
 def b_cont2_50_d(clauses, var, k2):
     clause = symbol_undefined
     clause = car_hat(clauses)
-    if true_q(eq_q_hat(car_hat(clause), symbol_else)):
+    if (False if ((eq_q_hat(car_hat(clause), symbol_else)) is False) else True):
         GLOBALS['value2_reg'] = cons(append(List(symbol_else), List(List(symbol_else_code))), value2_reg)
         GLOBALS['value1_reg'] = cons(append(List(symbol_else_code), List(append(List(symbol_lambda), append(List(symbol_emptylist), at_hat(cdr_hat(clause)))))), value1_reg)
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(symbol_q_hat(car_hat(clause))):
+        if (False if ((symbol_q_hat(car_hat(clause))) is False) else True):
             name = symbol_undefined
             name = car_hat(clause)
             GLOBALS['value2_reg'] = cons(append(List(append(List(symbol_eq_q), append(List(append(List(symbol_car), List(var))), List(append(List(symbol_quote), List(car_hat(clause))))))), List(append(List(symbol_Apply), append(List(name), List(append(List(symbol_cdr), List(var))))))), value2_reg)
@@ -2715,19 +2721,19 @@ def b_cont2_62_d(exp, k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont2_63_d(args, exp, env, info, handler, k):
-    if true_q(_staruse_stack_trace_star):
+    if (False if ((_staruse_stack_trace_star) is False) else True):
         push_stack_trace_b(exp)
-    if true_q(dlr_proc_q(value1_reg)):
+    if (False if ((dlr_proc_q(value1_reg)) is False) else True):
         result = symbol_undefined
         result = dlr_apply(value1_reg, args)
-        if true_q(_staruse_stack_trace_star):
+        if (False if ((_staruse_stack_trace_star) is False) else True):
             pop_stack_trace_b(exp)
         GLOBALS['value1_reg'] = result
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(procedure_object_q(value1_reg)):
-            if true_q(_staruse_stack_trace_star):
+        if (False if ((procedure_object_q(value1_reg)) is False) else True):
+            if (False if ((_staruse_stack_trace_star) is False) else True):
                 GLOBALS['k2_reg'] = make_cont2(b_cont2_62_d, exp, k)
                 GLOBALS['fail_reg'] = value2_reg
                 GLOBALS['handler_reg'] = handler
@@ -2801,7 +2807,7 @@ def b_cont2_70_d(name, env, info, handler, k):
     GLOBALS['pc'] = lookup_binding_in_first_frame
 
 def b_cont2_71_d(docstring, var, k):
-    if true_q(procedure_object_q(value1_reg)):
+    if (False if ((procedure_object_q(value1_reg)) is False) else True):
         set_global_value_b(var, dlr_func(value1_reg))
     else:
         set_global_value_b(var, value1_reg)
@@ -2885,7 +2891,7 @@ def b_cont2_81_d(k):
     GLOBALS['pc'] = apply_cont2
 
 def b_cont2_82_d(else_exp, then_exp, env, handler, k):
-    if true_q(value1_reg):
+    if (False if ((value1_reg) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['fail_reg'] = value2_reg
         GLOBALS['handler_reg'] = handler
@@ -2946,7 +2952,7 @@ def b_cont2_87_d(assertions, nums, test_name, handler, k):
     GLOBALS['pc'] = filter_assertions
 
 def b_cont2_88_d(assertions, msg, proc_exp, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
-    if true_q(verbose):
+    if (False if ((verbose) is False) else True):
         printf("~a\n", traceback)
         printf("  Procedure: ~a\n", proc_exp)
         printf("           : ~a\n", test_exp)
@@ -3042,7 +3048,7 @@ def b_cont2_98_d(handler, k2):
     GLOBALS['pc'] = read_sexp
 
 def b_cont2_99_d(k):
-    if true_q(null_q(load_stack)):
+    if (False if ((((load_stack) is symbol_emptylist)) is False) else True):
         printf("WARNING: empty load-stack encountered!\n")
     else:
         GLOBALS['load_stack'] = (load_stack).cdr
@@ -3060,7 +3066,7 @@ def b_cont2_100_d(filename, env2, handler, k):
     GLOBALS['pc'] = read_and_eval_asexps
 
 def b_cont2_101_d(src, tokens_left, env2, handler, k):
-    if true_q(token_type_q(first(tokens_left), symbol_end_marker)):
+    if (False if ((token_type_q(first(tokens_left), symbol_end_marker)) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
     else:
@@ -3090,12 +3096,12 @@ def b_cont2_103_d(filenames, env2, info, handler, k):
     GLOBALS['pc'] = load_files
 
 def b_cont2_104_d(args, info, handler, k2):
-    if true_q((value1_reg) is (True)):
+    if (False if (((value1_reg) is (True)) is False) else True):
         GLOBALS['value1_reg'] = symbol_ok
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(numeric_equal(length(args), 3)):
+        if (False if ((numeric_equal(length(args), 3)) is False) else True):
             GLOBALS['fail_reg'] = value2_reg
             GLOBALS['handler_reg'] = handler
             GLOBALS['info_reg'] = info
@@ -3109,7 +3115,7 @@ def b_cont2_104_d(args, info, handler, k2):
             GLOBALS['pc'] = assertion_error
 
 def b_cont2_105_d(lst, k2):
-    if true_q(member((lst).car, value1_reg)):
+    if (False if ((member((lst).car, value1_reg)) is False) else True):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
     else:
@@ -3131,11 +3137,11 @@ def b_cont2_106_d(filename, handler, k2):
     GLOBALS['pc'] = find_file_and_load
 
 def b_cont2_107_d(args, sym, info, handler, k):
-    if true_q(null_q((args).cdr)):
+    if (False if (((((args).cdr) is symbol_emptylist)) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(not(environment_q(value1_reg))):
+        if (False if ((not(environment_q(value1_reg))) is False) else True):
             GLOBALS['fail_reg'] = value2_reg
             GLOBALS['handler_reg'] = handler
             GLOBALS['info_reg'] = info
@@ -3286,7 +3292,7 @@ def apply_cont3():
     Apply((k_reg).cdr.car, (k_reg).cdr.cdr)
 
 def b_cont3_1_d(src, handler, k):
-    if true_q(token_type_q(value1_reg, symbol_end_marker)):
+    if (False if ((token_type_q(value1_reg, symbol_end_marker)) is False) else True):
         GLOBALS['value2_reg'] = value3_reg
         GLOBALS['value1_reg'] = List(value1_reg)
         GLOBALS['k_reg'] = k
@@ -3371,7 +3377,7 @@ def b_cont4_6_d(expected_terminator, sexp1, src, handler, k):
     GLOBALS['pc'] = close_sexp_sequence
 
 def b_cont4_7_d(expected_terminator, src, handler, k):
-    if true_q(token_type_q(first(value3_reg), symbol_dot)):
+    if (False if ((token_type_q(first(value3_reg), symbol_dot)) is False) else True):
         GLOBALS['k_reg'] = make_cont4(b_cont4_6_d, expected_terminator, value1_reg, src, handler, k)
         GLOBALS['fail_reg'] = value4_reg
         GLOBALS['handler_reg'] = handler
@@ -3409,7 +3415,7 @@ def b_cont4_10_d():
     GLOBALS['pc'] = aparse
 
 def b_cont4_11_d(handler, k2):
-    if true_q(token_type_q(first(value3_reg), symbol_end_marker)):
+    if (False if ((token_type_q(first(value3_reg), symbol_end_marker)) is False) else True):
         GLOBALS['k_reg'] = k2
         GLOBALS['fail_reg'] = value4_reg
         GLOBALS['handler_reg'] = handler
@@ -3425,7 +3431,7 @@ def b_cont4_11_d(handler, k2):
         GLOBALS['pc'] = read_error
 
 def b_cont4_12_d(handler, k2):
-    if true_q(token_type_q(first(value3_reg), symbol_end_marker)):
+    if (False if ((token_type_q(first(value3_reg), symbol_end_marker)) is False) else True):
         GLOBALS['value2_reg'] = value4_reg
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
@@ -3513,13 +3519,13 @@ def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k
     test_exp = aunparse((cdr_hat(assert_exp)).cdr.car)
     result_exp = (cdr_hat(assert_exp)).cdr.cdr.car
     traceback = get_traceback_string(List(symbol_exception, exception_reg))
-    if true_q(GreaterThan(string_length(msg), 0)):
-        if true_q((where) is (symbol_none)):
+    if (False if ((GreaterThan(string_length(msg), 0)) is False) else True):
+        if (False if (((where) is (symbol_none)) is False) else True):
             printf("  Error: ~a \"~a\"\n", test_name, msg)
         else:
             printf("  Error: ~a \"~a\" at ~a\n", test_name, msg, where)
     else:
-        if true_q((where) is (symbol_none)):
+        if (False if (((where) is (symbol_none)) is False) else True):
             printf("  Error: ~a\n", test_name)
         else:
             printf("  Error: ~a at ~a\n", test_name, where)
@@ -3567,7 +3573,7 @@ def b_proc_1_d(bodies, formals, env):
     formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
     new_formals = (formals_and_args).car
     new_args = (formals_and_args).cdr
-    if true_q(numeric_equal(length(new_args), length(new_formals))):
+    if (False if ((numeric_equal(length(new_args), length(new_formals))) is False) else True):
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['env_reg'] = extend(env, new_formals, new_args, make_empty_docstrings(length(new_args)))
         GLOBALS['exps_reg'] = bodies
@@ -3581,7 +3587,7 @@ def b_proc_2_d(bodies, formals, runt, env):
     new_args = symbol_undefined
     new_args = args_reg
     new_formals = formals
-    if true_q(GreaterThanEqual(length(new_args), length(new_formals))):
+    if (False if ((GreaterThanEqual(length(new_args), length(new_formals))) is False) else True):
         new_env = symbol_undefined
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
         GLOBALS['k_reg'] = k2_reg
@@ -3599,7 +3605,7 @@ def b_proc_3_d(bodies, name, trace_depth, formals, env):
     formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
     new_formals = (formals_and_args).car
     new_args = (formals_and_args).cdr
-    if true_q(numeric_equal(length(new_args), length(new_formals))):
+    if (False if ((numeric_equal(length(new_args), length(new_formals))) is False) else True):
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
         GLOBALS['trace_depth'] = (trace_depth) + (1)
         GLOBALS['k_reg'] = make_cont2(b_cont2_93_d, trace_depth, k2_reg)
@@ -3615,7 +3621,7 @@ def b_proc_4_d(bodies, name, trace_depth, formals, runt, env):
     new_args = symbol_undefined
     new_args = args_reg
     new_formals = formals
-    if true_q(GreaterThanEqual(length(args_reg), length(new_formals))):
+    if (False if ((GreaterThanEqual(length(args_reg), length(new_formals))) is False) else True):
         new_env = symbol_undefined
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
@@ -3670,15 +3676,15 @@ def b_proc_11_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_12_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of args to string-join; should be two"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(string_q((args_reg).car))):
+        if (False if ((not(string_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "first arg to string-join must be a string"
             GLOBALS['pc'] = runtime_error
         else:
-            if true_q(not(list_q((args_reg).cdr.car))):
+            if (False if ((not(list_q((args_reg).cdr.car))) is False) else True):
                 GLOBALS['msg_reg'] = "second arg to string-join must be a list"
                 GLOBALS['pc'] = runtime_error
             else:
@@ -3687,13 +3693,13 @@ def b_proc_12_d():
                 GLOBALS['pc'] = string_join
 
 def b_proc_13_d():
-    if true_q(length_one_q(args_reg)):
+    if (False if ((length_one_q(args_reg)) is False) else True):
         GLOBALS['k_reg'] = make_cont(b_cont_47_d, handler_reg, fail_reg, k2_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['x_reg'] = (args_reg).car
         GLOBALS['pc'] = annotate_cps
     else:
-        if true_q(length_two_q(args_reg)):
+        if (False if ((length_two_q(args_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont(b_cont_48_d, args_reg, handler_reg, fail_reg, k2_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['x_reg'] = (args_reg).car
@@ -3703,11 +3709,11 @@ def b_proc_13_d():
             GLOBALS['pc'] = runtime_error
 
 def b_proc_14_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to eval-ast"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(list_q((args_reg).car))):
+        if (False if ((not(list_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "eval-ast called on non-abstract syntax tree argument"
             GLOBALS['pc'] = runtime_error
         else:
@@ -3723,11 +3729,11 @@ def b_proc_15_d():
     GLOBALS['pc'] = annotate_cps
 
 def b_proc_16_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-length"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(string_q((args_reg).car))):
+        if (False if ((not(string_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "string-length called on non-string argument"
             GLOBALS['pc'] = runtime_error
         else:
@@ -3737,15 +3743,15 @@ def b_proc_16_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_17_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-ref"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(string_q((args_reg).car))):
+        if (False if ((not(string_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "string-ref called with non-string first argument"
             GLOBALS['pc'] = runtime_error
         else:
-            if true_q(not(number_q((args_reg).cdr.car))):
+            if (False if ((not(number_q((args_reg).cdr.car))) is False) else True):
                 GLOBALS['msg_reg'] = "string-ref called with non-numberic second argument"
                 GLOBALS['pc'] = runtime_error
             else:
@@ -3783,7 +3789,7 @@ def b_proc_22_d():
     proc_args = symbol_undefined
     proc_args = (args_reg).cdr.car
     proc = (args_reg).car
-    if true_q(dlr_proc_q(proc)):
+    if (False if ((dlr_proc_q(proc)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = dlr_apply(proc, proc_args)
         GLOBALS['k_reg'] = k2_reg
@@ -3794,7 +3800,7 @@ def b_proc_22_d():
         GLOBALS['pc'] = apply_proc
 
 def b_proc_23_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to sqrt"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3804,7 +3810,7 @@ def b_proc_23_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_24_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to odd?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3814,7 +3820,7 @@ def b_proc_24_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_25_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to even?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3824,11 +3830,11 @@ def b_proc_25_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_26_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to quotient"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(member(0, (args_reg).cdr)):
+        if (False if ((member(0, (args_reg).cdr)) is False) else True):
             GLOBALS['msg_reg'] = "division by zero"
             GLOBALS['pc'] = runtime_error
         else:
@@ -3838,7 +3844,7 @@ def b_proc_26_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_27_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to remainder"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3861,7 +3867,7 @@ def b_proc_29_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_30_d():
-    if true_q(numeric_equal(length(args_reg), 3)):
+    if (False if ((numeric_equal(length(args_reg), 3)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = substring((args_reg).car, (args_reg).cdr.car, (args_reg).cdr.cdr.car)
         GLOBALS['k_reg'] = k2_reg
@@ -3909,7 +3915,7 @@ def b_proc_35_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_36_d():
-    if true_q(not(length_at_least_q(1, args_reg))):
+    if (False if ((not(length_at_least_q(1, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to load"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3919,7 +3925,7 @@ def b_proc_36_d():
         GLOBALS['pc'] = load_files
 
 def b_proc_37_d():
-    if true_q(length_one_q(args_reg)):
+    if (False if ((length_one_q(args_reg)) is False) else True):
         GLOBALS['ls_reg'] = (args_reg).car
         GLOBALS['sum_reg'] = 0
         GLOBALS['x_reg'] = (args_reg).car
@@ -3929,7 +3935,7 @@ def b_proc_37_d():
         GLOBALS['pc'] = runtime_error
 
 def b_proc_38_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = format("incorrect number of arguments to symbol?: you gave ~s, should have been 1 argument", args_reg)
         GLOBALS['pc'] = runtime_error
     else:
@@ -3939,7 +3945,7 @@ def b_proc_38_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_39_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to number?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3949,7 +3955,7 @@ def b_proc_39_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_40_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to boolean?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3959,7 +3965,7 @@ def b_proc_40_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_41_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3969,7 +3975,7 @@ def b_proc_41_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_42_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -3979,11 +3985,11 @@ def b_proc_42_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_43_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char=?"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q((not(char_q((args_reg).car))) or (not(char_q((args_reg).cdr.car)))):
+        if (False if (((not(char_q((args_reg).car))) or (not(char_q((args_reg).cdr.car)))) is False) else True):
             GLOBALS['msg_reg'] = "char=? requires arguments of type char"
             GLOBALS['pc'] = runtime_error
         else:
@@ -3993,7 +3999,7 @@ def b_proc_43_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_44_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char-whitespace?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4003,7 +4009,7 @@ def b_proc_44_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_45_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char->integer"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4013,7 +4019,7 @@ def b_proc_45_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_46_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to integer->char"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4023,7 +4029,7 @@ def b_proc_46_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_47_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char-alphabetic?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4033,7 +4039,7 @@ def b_proc_47_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_48_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char-numeric?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4043,7 +4049,7 @@ def b_proc_48_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_49_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to null?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4053,7 +4059,7 @@ def b_proc_49_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_50_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to box?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4063,7 +4069,7 @@ def b_proc_50_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_51_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to pair?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4073,7 +4079,7 @@ def b_proc_51_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_52_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to box"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4083,11 +4089,11 @@ def b_proc_52_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_53_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to unbox"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(box_q((args_reg).car))):
+        if (False if ((not(box_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("unbox called on non-box ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4097,7 +4103,7 @@ def b_proc_53_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_54_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cons"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4107,11 +4113,11 @@ def b_proc_54_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_55_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to car"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("car called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4121,11 +4127,11 @@ def b_proc_55_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_56_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4135,11 +4141,11 @@ def b_proc_56_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_57_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(length_at_least_q(2, (args_reg).car))):
+        if (False if ((not(length_at_least_q(2, (args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cadr called on incorrect list structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4149,11 +4155,11 @@ def b_proc_57_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_58_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(length_at_least_q(3, (args_reg).car))):
+        if (False if ((not(length_at_least_q(3, (args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caddr called on incorrect list structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4163,11 +4169,11 @@ def b_proc_58_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_59_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caaaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caaaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4177,11 +4183,11 @@ def b_proc_59_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_60_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caaadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caaadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4191,11 +4197,11 @@ def b_proc_60_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_61_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4205,11 +4211,11 @@ def b_proc_61_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_62_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caadar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caadar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4219,11 +4225,11 @@ def b_proc_62_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_63_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caaddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caaddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4233,11 +4239,11 @@ def b_proc_63_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_64_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4247,11 +4253,11 @@ def b_proc_64_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_65_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4261,11 +4267,11 @@ def b_proc_65_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_66_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cadaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cadaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4275,11 +4281,11 @@ def b_proc_66_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_67_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cadadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cadadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4289,11 +4295,11 @@ def b_proc_67_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_68_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cadar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cadar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4303,11 +4309,11 @@ def b_proc_68_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_69_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to caddar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("caddar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4317,11 +4323,11 @@ def b_proc_69_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_70_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cadddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cadddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4331,11 +4337,11 @@ def b_proc_70_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_71_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdaaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdaaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4345,11 +4351,11 @@ def b_proc_71_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_72_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdaadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdaadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4359,11 +4365,11 @@ def b_proc_72_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_73_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4373,11 +4379,11 @@ def b_proc_73_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_74_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdadar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdadar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4387,11 +4393,11 @@ def b_proc_74_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_75_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdaddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdaddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4401,11 +4407,11 @@ def b_proc_75_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_76_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4415,11 +4421,11 @@ def b_proc_76_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_77_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4429,11 +4435,11 @@ def b_proc_77_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_78_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cddaar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cddaar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4443,11 +4449,11 @@ def b_proc_78_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_79_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cddadr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cddadr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4457,11 +4463,11 @@ def b_proc_79_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_80_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cddar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cddar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4471,11 +4477,11 @@ def b_proc_80_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_81_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdddar"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdddar called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4485,11 +4491,11 @@ def b_proc_81_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_82_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cddddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cddddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4499,11 +4505,11 @@ def b_proc_82_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_83_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cdddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cdddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4513,11 +4519,11 @@ def b_proc_83_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_84_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to cddr"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("cddr called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4533,11 +4539,11 @@ def b_proc_85_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_86_d():
-    if true_q(not((numeric_equal(length(args_reg), 3)) or (numeric_equal(length(args_reg), 4)))):
+    if (False if ((not((numeric_equal(length(args_reg), 3)) or (numeric_equal(length(args_reg), 4)))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to assert"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(procedure_object_q((args_reg).car))):
+        if (False if ((not(procedure_object_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "assertion predicate is not a procedure"
             GLOBALS['pc'] = runtime_error
         else:
@@ -4553,7 +4559,7 @@ def b_proc_86_d():
             GLOBALS['pc'] = apply_proc
 
 def b_proc_87_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4567,7 +4573,7 @@ def b_proc_88_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_89_d():
-    if true_q(null_q(args_reg)):
+    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to -"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4583,7 +4589,7 @@ def b_proc_90_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_91_d():
-    if true_q((GreaterThan(length(args_reg), 1)) and (member(0, (args_reg).cdr))):
+    if (False if (((GreaterThan(length(args_reg), 1)) and (member(0, (args_reg).cdr))) is False) else True):
         GLOBALS['msg_reg'] = "division by zero"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4593,11 +4599,11 @@ def b_proc_91_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_92_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to %"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(numeric_equal((args_reg).cdr.car, 0)):
+        if (False if ((numeric_equal((args_reg).cdr.car, 0)) is False) else True):
             GLOBALS['msg_reg'] = "modulo by zero"
             GLOBALS['pc'] = runtime_error
         else:
@@ -4619,7 +4625,7 @@ def b_proc_94_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_95_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to <"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4629,7 +4635,7 @@ def b_proc_95_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_96_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to >"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4639,7 +4645,7 @@ def b_proc_96_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_97_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to <="
         GLOBALS['pc'] = runtime_error
     else:
@@ -4649,7 +4655,7 @@ def b_proc_97_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_98_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to >="
         GLOBALS['pc'] = runtime_error
     else:
@@ -4659,11 +4665,11 @@ def b_proc_98_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_99_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to ="
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(all_numeric_q(args_reg))):
+        if (False if ((not(all_numeric_q(args_reg))) is False) else True):
             GLOBALS['msg_reg'] = "attempt to apply = on non-numeric argument"
             GLOBALS['pc'] = runtime_error
         else:
@@ -4673,7 +4679,7 @@ def b_proc_99_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_100_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to abs"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4683,7 +4689,7 @@ def b_proc_100_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_101_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to equal?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4693,7 +4699,7 @@ def b_proc_101_d():
         GLOBALS['pc'] = equal_objects_q
 
 def b_proc_102_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to eq?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4703,7 +4709,7 @@ def b_proc_102_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_103_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to memq"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4713,7 +4719,7 @@ def b_proc_103_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_104_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to member"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4724,11 +4730,11 @@ def b_proc_104_d():
         GLOBALS['pc'] = member_loop
 
 def b_proc_105_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to random"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(positive_q((args_reg).car))):
+        if (False if ((not(positive_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = "argument to random must be positive"
             GLOBALS['pc'] = runtime_error
         else:
@@ -4738,7 +4744,7 @@ def b_proc_105_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_106_d():
-    if true_q((null_q(args_reg)) or (length_at_least_q(4, args_reg))):
+    if (False if (((((args_reg) is symbol_emptylist)) or (length_at_least_q(4, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to range"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4766,11 +4772,11 @@ def b_proc_109_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_110_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set-car!"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("set-car! called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4780,11 +4786,11 @@ def b_proc_110_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_111_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to set-cdr!"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(pair_q((args_reg).car))):
+        if (False if ((not(pair_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("set-cdr! called on non-pair ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4794,7 +4800,7 @@ def b_proc_111_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_112_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to load-as"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4825,19 +4831,19 @@ def b_proc_115_d(k):
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_116_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to call/cc"
         GLOBALS['pc'] = runtime_error
     else:
         proc = symbol_undefined
         proc = (args_reg).car
-        if true_q(not(procedure_object_q(proc))):
+        if (False if ((not(procedure_object_q(proc))) is False) else True):
             GLOBALS['msg_reg'] = "call/cc called with non-procedure"
             GLOBALS['pc'] = runtime_error
         else:
             fake_k = symbol_undefined
             fake_k = make_proc(b_proc_115_d, k2_reg)
-            if true_q(dlr_proc_q(proc)):
+            if (False if ((dlr_proc_q(proc)) is False) else True):
                 GLOBALS['value2_reg'] = fail_reg
                 GLOBALS['value1_reg'] = dlr_apply(proc, List(fake_k))
                 GLOBALS['k_reg'] = k2_reg
@@ -4848,7 +4854,7 @@ def b_proc_116_d():
                 GLOBALS['pc'] = apply_proc
 
 def b_proc_117_d():
-    if true_q(null_q(args_reg)):
+    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['k_reg'] = REP_k
@@ -4860,11 +4866,11 @@ def b_proc_117_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_118_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to require"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(true_q((args_reg).car)):
+        if (False if ((true_q((args_reg).car)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = symbol_ok
             GLOBALS['k_reg'] = k2_reg
@@ -4879,11 +4885,11 @@ def b_proc_119_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_120_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to reverse"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(list_q(args_reg))):
+        if (False if ((not(list_q(args_reg))) is False) else True):
             GLOBALS['msg_reg'] = format("reverse called on incorrect list structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4897,7 +4903,7 @@ def b_proc_121_d():
     GLOBALS['pc'] = append_all
 
 def b_proc_122_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->number"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4907,7 +4913,7 @@ def b_proc_122_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_123_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string=?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -4917,11 +4923,11 @@ def b_proc_123_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_124_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list->vector"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(list_q((args_reg).car))):
+        if (False if ((not(list_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("list->vector called on incorrect list structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4931,15 +4937,15 @@ def b_proc_124_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_125_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list->string"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(list_q((args_reg).car))):
+        if (False if ((not(list_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("list->string called on incorrect list structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
-            if true_q(not(all_char_q((args_reg).car))):
+            if (False if ((not(all_char_q((args_reg).car))) is False) else True):
                 GLOBALS['msg_reg'] = format("list->string called on non-char list ~s", (args_reg).car)
                 GLOBALS['pc'] = runtime_error
             else:
@@ -4949,11 +4955,11 @@ def b_proc_125_d():
                 GLOBALS['pc'] = apply_cont2
 
 def b_proc_126_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to char->string"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(char_q((args_reg).car))):
+        if (False if ((not(char_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("char->string called on non-char item ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4963,11 +4969,11 @@ def b_proc_126_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_127_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->list"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(string_q((args_reg).car))):
+        if (False if ((not(string_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("string->list called on non-string item ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4977,11 +4983,11 @@ def b_proc_127_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_128_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string->symbol"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(string_q((args_reg).car))):
+        if (False if ((not(string_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("string->symbol called on non-string item ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -4991,11 +4997,11 @@ def b_proc_128_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_129_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to symbol->string"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(symbol_q((args_reg).car))):
+        if (False if ((not(symbol_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("symbol->string called on non-symbol item ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -5005,11 +5011,11 @@ def b_proc_129_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_130_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector->list"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(vector_q((args_reg).car))):
+        if (False if ((not(vector_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("vector->list called on incorrect vector structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -5019,11 +5025,11 @@ def b_proc_130_d():
             GLOBALS['pc'] = apply_cont2
 
 def b_proc_131_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector-length"
         GLOBALS['pc'] = runtime_error
     else:
-        if true_q(not(vector_q((args_reg).car))):
+        if (False if ((not(vector_q((args_reg).car))) is False) else True):
             GLOBALS['msg_reg'] = format("vector-length called on incorrect vector structure ~s", (args_reg).car)
             GLOBALS['pc'] = runtime_error
         else:
@@ -5065,7 +5071,7 @@ def b_proc_137_d():
     GLOBALS['pc'] = for_each_primitive
 
 def b_proc_138_d():
-    if true_q(LessThan(length(args_reg), 1)):
+    if (False if ((LessThan(length(args_reg), 1)) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to format"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5099,7 +5105,7 @@ def b_proc_142_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_143_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to not"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5141,7 +5147,7 @@ def b_proc_148_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_149_d():
-    if true_q(not(length_at_least_q(1, args_reg))):
+    if (False if ((not(length_at_least_q(1, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to 'error' (should at least 1)"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5153,7 +5159,7 @@ def b_proc_149_d():
         GLOBALS['pc'] = runtime_error
 
 def b_proc_150_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list-ref"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5163,14 +5169,14 @@ def b_proc_150_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_151_d():
-    if true_q(null_q(args_reg)):
+    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = current_directory()
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(length_one_q(args_reg)):
-            if true_q(string_q((args_reg).car)):
+        if (False if ((length_one_q(args_reg)) is False) else True):
+            if (False if ((string_q((args_reg).car)) is False) else True):
                 GLOBALS['value2_reg'] = fail_reg
                 GLOBALS['value1_reg'] = current_directory((args_reg).car)
                 GLOBALS['k_reg'] = k2_reg
@@ -5183,7 +5189,7 @@ def b_proc_151_d():
             GLOBALS['pc'] = runtime_error
 
 def b_proc_152_d():
-    if true_q((length_one_q(args_reg)) and (number_q((args_reg).car))):
+    if (False if (((length_one_q(args_reg)) and (number_q((args_reg).car))) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = round((args_reg).car)
         GLOBALS['k_reg'] = k2_reg
@@ -5193,14 +5199,14 @@ def b_proc_152_d():
         GLOBALS['pc'] = runtime_error
 
 def b_proc_153_d():
-    if true_q((length_one_q(args_reg)) and (boolean_q((args_reg).car))):
+    if (False if (((length_one_q(args_reg)) and (boolean_q((args_reg).car))) is False) else True):
         set_use_stack_trace_b((args_reg).car)
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(null_q(args_reg)):
+        if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = _staruse_stack_trace_star
             GLOBALS['k_reg'] = k2_reg
@@ -5210,14 +5216,14 @@ def b_proc_153_d():
             GLOBALS['pc'] = runtime_error
 
 def b_proc_154_d():
-    if true_q((length_one_q(args_reg)) and (boolean_q((args_reg).car))):
+    if (False if (((length_one_q(args_reg)) and (boolean_q((args_reg).car))) is False) else True):
         GLOBALS['_startracing_on_q_star'] = true_q((args_reg).car)
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(null_q(args_reg)):
+        if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = _startracing_on_q_star
             GLOBALS['k_reg'] = k2_reg
@@ -5227,7 +5233,7 @@ def b_proc_154_d():
             GLOBALS['pc'] = runtime_error
 
 def b_proc_155_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to eqv?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5237,7 +5243,7 @@ def b_proc_155_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_156_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to vector?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5247,7 +5253,7 @@ def b_proc_156_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_157_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to atom?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5257,7 +5263,7 @@ def b_proc_157_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_158_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to iter?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5285,7 +5291,7 @@ def b_proc_161_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_162_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to list?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5295,7 +5301,7 @@ def b_proc_162_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_163_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to procedure?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5305,7 +5311,7 @@ def b_proc_163_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_164_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string<?"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5315,7 +5321,7 @@ def b_proc_164_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_165_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to float"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5325,7 +5331,7 @@ def b_proc_165_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_166_d():
-    if true_q(not(null_q(args_reg))):
+    if (False if ((not(((args_reg) is symbol_emptylist))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to globals"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5335,7 +5341,7 @@ def b_proc_166_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_167_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to int"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5345,7 +5351,7 @@ def b_proc_167_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_168_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to assq"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5355,7 +5361,7 @@ def b_proc_168_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_169_d():
-    if true_q(null_q(args_reg)):
+    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = dict()
         GLOBALS['k_reg'] = k2_reg
@@ -5366,7 +5372,7 @@ def b_proc_169_d():
         GLOBALS['pc'] = make_dict
 
 def b_proc_170_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to property"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5376,7 +5382,7 @@ def b_proc_170_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_171_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to rational"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5386,7 +5392,7 @@ def b_proc_171_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_172_d():
-    if true_q(not(null_q(args_reg))):
+    if (False if ((not(((args_reg) is symbol_emptylist))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to reset-toplevel-env"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5396,7 +5402,7 @@ def b_proc_172_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_173_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to sort"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5406,7 +5412,7 @@ def b_proc_173_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_174_d():
-    if true_q(not(length_at_least_q(2, args_reg))):
+    if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-append"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5416,7 +5422,7 @@ def b_proc_174_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_175_d():
-    if true_q(not(length_two_q(args_reg))):
+    if (False if ((not(length_two_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to string-split"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5426,7 +5432,7 @@ def b_proc_175_d():
         GLOBALS['pc'] = apply_cont2
 
 def b_proc_176_d():
-    if true_q(not(length_one_q(args_reg))):
+    if (False if ((not(length_one_q(args_reg))) is False) else True):
         GLOBALS['msg_reg'] = "incorrect number of arguments to typeof"
         GLOBALS['pc'] = runtime_error
     else:
@@ -5457,7 +5463,7 @@ def apply_macro():
     Apply((macro_reg).cdr.car, (macro_reg).cdr.cdr)
 
 def b_macro_1_d():
-    if true_q(LessThan(length_hat(datum_reg), 3)):
+    if (False if ((LessThan(length_hat(datum_reg), 3)) is False) else True):
         GLOBALS['adatum_reg'] = datum_reg
         GLOBALS['msg_reg'] = "bad lambda expression:"
         GLOBALS['pc'] = aparse_error
@@ -5469,7 +5475,7 @@ def b_macro_1_d():
         return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_42_d, formals, handler_reg, fail_reg, k_reg))
 
 def b_macro_2_d():
-    if true_q(LessThan(length_hat(datum_reg), 4)):
+    if (False if ((LessThan(length_hat(datum_reg), 4)) is False) else True):
         GLOBALS['adatum_reg'] = datum_reg
         GLOBALS['msg_reg'] = "bad trace-lambda expression:"
         GLOBALS['pc'] = aparse_error
@@ -5483,7 +5489,7 @@ def b_macro_2_d():
         return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_43_d, name, formals, handler_reg, fail_reg, k_reg))
 
 def b_macro_3_d():
-    if true_q(symbol_q_hat(cadr_hat(datum_reg))):
+    if (False if ((symbol_q_hat(cadr_hat(datum_reg))) is False) else True):
         name = symbol_undefined
         bindings = symbol_undefined
         vars = symbol_undefined
@@ -5535,11 +5541,11 @@ def b_macro_5_d():
 def b_macro_6_d():
     exps = symbol_undefined
     exps = cdr_hat(datum_reg)
-    if true_q(null_q_hat(exps)):
+    if (False if ((null_q_hat(exps)) is False) else True):
         GLOBALS['value_reg'] = True
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(null_q_hat(cdr_hat(exps))):
+        if (False if ((null_q_hat(cdr_hat(exps))) is False) else True):
             GLOBALS['value_reg'] = car_hat(exps)
             GLOBALS['pc'] = apply_cont
         else:
@@ -5549,11 +5555,11 @@ def b_macro_6_d():
 def b_macro_7_d():
     exps = symbol_undefined
     exps = cdr_hat(datum_reg)
-    if true_q(null_q_hat(exps)):
+    if (False if ((null_q_hat(exps)) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(null_q_hat(cdr_hat(exps))):
+        if (False if ((null_q_hat(cdr_hat(exps))) is False) else True):
             GLOBALS['value_reg'] = car_hat(exps)
             GLOBALS['pc'] = apply_cont
         else:
@@ -5563,7 +5569,7 @@ def b_macro_7_d():
 def b_macro_8_d():
     clauses = symbol_undefined
     clauses = cdr_hat(datum_reg)
-    if true_q(null_q_hat(clauses)):
+    if (False if ((null_q_hat(clauses)) is False) else True):
         GLOBALS['adatum_reg'] = datum_reg
         GLOBALS['msg_reg'] = "empty (cond) expression"
         GLOBALS['pc'] = amacro_error
@@ -5572,7 +5578,7 @@ def b_macro_8_d():
         other_clauses = symbol_undefined
         other_clauses = cdr_hat(clauses)
         first_clause = car_hat(clauses)
-        if true_q((null_q_hat(first_clause)) or (not(list_q_hat(first_clause)))):
+        if (False if (((null_q_hat(first_clause)) or (not(list_q_hat(first_clause)))) is False) else True):
             GLOBALS['adatum_reg'] = first_clause
             GLOBALS['msg_reg'] = "improper cond clause"
             GLOBALS['pc'] = amacro_error
@@ -5581,49 +5587,49 @@ def b_macro_8_d():
             then_exps = symbol_undefined
             then_exps = cdr_hat(first_clause)
             test_exp = car_hat(first_clause)
-            if true_q(eq_q_hat(test_exp, symbol_else)):
-                if true_q(null_q_hat(then_exps)):
+            if (False if ((eq_q_hat(test_exp, symbol_else)) is False) else True):
+                if (False if ((null_q_hat(then_exps)) is False) else True):
                     GLOBALS['adatum_reg'] = first_clause
                     GLOBALS['msg_reg'] = "improper else clause"
                     GLOBALS['pc'] = amacro_error
                 else:
-                    if true_q(null_q_hat(cdr_hat(then_exps))):
+                    if (False if ((null_q_hat(cdr_hat(then_exps))) is False) else True):
                         GLOBALS['value_reg'] = car_hat(then_exps)
                         GLOBALS['pc'] = apply_cont
                     else:
                         GLOBALS['value_reg'] = append(List(symbol_begin), at_hat(then_exps))
                         GLOBALS['pc'] = apply_cont
             else:
-                if true_q(null_q_hat(then_exps)):
-                    if true_q(null_q_hat(other_clauses)):
+                if (False if ((null_q_hat(then_exps)) is False) else True):
+                    if (False if ((null_q_hat(other_clauses)) is False) else True):
                         GLOBALS['value_reg'] = append(List(symbol_let), append(List(List(append(List(symbol_bool), List(test_exp)))), List(append(List(symbol_if), append(List(symbol_bool), List(symbol_bool))))))
                         GLOBALS['pc'] = apply_cont
                     else:
                         GLOBALS['value_reg'] = append(List(symbol_let), append(List(append(List(append(List(symbol_bool), List(test_exp))), List(append(List(symbol_else_code), List(append(List(symbol_lambda), append(List(symbol_emptylist), List(append(List(symbol_cond), at_hat(other_clauses)))))))))), List(append(List(symbol_if), append(List(symbol_bool), append(List(symbol_bool), List(List(symbol_else_code))))))))
                         GLOBALS['pc'] = apply_cont
                 else:
-                    if true_q(eq_q_hat(car_hat(then_exps), symbol__is_to_)):
-                        if true_q(null_q_hat(cdr_hat(then_exps))):
+                    if (False if ((eq_q_hat(car_hat(then_exps), symbol__is_to_)) is False) else True):
+                        if (False if ((null_q_hat(cdr_hat(then_exps))) is False) else True):
                             GLOBALS['adatum_reg'] = first_clause
                             GLOBALS['msg_reg'] = "improper => clause"
                             GLOBALS['pc'] = amacro_error
                         else:
-                            if true_q(null_q_hat(other_clauses)):
+                            if (False if ((null_q_hat(other_clauses)) is False) else True):
                                 GLOBALS['value_reg'] = append(List(symbol_let), append(List(append(List(append(List(symbol_bool), List(test_exp))), List(append(List(symbol_th), List(append(List(symbol_lambda), append(List(symbol_emptylist), List(cadr_hat(then_exps))))))))), List(append(List(symbol_if), append(List(symbol_bool), List(append(List(List(symbol_th)), List(symbol_bool))))))))
                                 GLOBALS['pc'] = apply_cont
                             else:
                                 GLOBALS['value_reg'] = append(List(symbol_let), append(List(append(List(append(List(symbol_bool), List(test_exp))), append(List(append(List(symbol_th), List(append(List(symbol_lambda), append(List(symbol_emptylist), List(cadr_hat(then_exps))))))), List(append(List(symbol_else_code), List(append(List(symbol_lambda), append(List(symbol_emptylist), List(append(List(symbol_cond), at_hat(other_clauses))))))))))), List(append(List(symbol_if), append(List(symbol_bool), append(List(append(List(List(symbol_th)), List(symbol_bool))), List(List(symbol_else_code))))))))
                                 GLOBALS['pc'] = apply_cont
                     else:
-                        if true_q(null_q_hat(other_clauses)):
-                            if true_q(null_q_hat(cdr_hat(then_exps))):
+                        if (False if ((null_q_hat(other_clauses)) is False) else True):
+                            if (False if ((null_q_hat(cdr_hat(then_exps))) is False) else True):
                                 GLOBALS['value_reg'] = append(List(symbol_if), append(List(test_exp), List(car_hat(then_exps))))
                                 GLOBALS['pc'] = apply_cont
                             else:
                                 GLOBALS['value_reg'] = append(List(symbol_if), append(List(test_exp), List(append(List(symbol_begin), at_hat(then_exps)))))
                                 GLOBALS['pc'] = apply_cont
                         else:
-                            if true_q(null_q_hat(cdr_hat(then_exps))):
+                            if (False if ((null_q_hat(cdr_hat(then_exps))) is False) else True):
                                 GLOBALS['value_reg'] = append(List(symbol_if), append(List(test_exp), append(List(car_hat(then_exps)), List(append(List(symbol_cond), at_hat(other_clauses))))))
                                 GLOBALS['pc'] = apply_cont
                             else:
@@ -5664,7 +5670,7 @@ def b_macro_12_d():
     type_tester_name = symbol_undefined
     datatype_name = cadr_hat(datum_reg)
     type_tester_name = string_to_symbol(string_append(symbol_to_string_hat(datatype_name), "?"))
-    if true_q(not(eq_q_hat(caddr_hat(datum_reg), type_tester_name))):
+    if (False if ((not(eq_q_hat(caddr_hat(datum_reg), type_tester_name))) is False) else True):
         GLOBALS['adatum_reg'] = caddr_hat(datum_reg)
         GLOBALS['msg_reg'] = format("datatype tester predicate not named ~a", type_tester_name)
         GLOBALS['pc'] = amacro_error
@@ -5712,7 +5718,7 @@ def increment_scan_counters(chars):
     GLOBALS['last_scan_line'] = scan_line
     GLOBALS['last_scan_char'] = scan_char
     GLOBALS['last_scan_position'] = scan_position
-    if true_q(char_is__q(next_avail(chars), make_char('\n'))):
+    if (False if ((char_is__q(next_avail(chars), make_char('\n'))) is False) else True):
         GLOBALS['scan_line'] = (1) + (scan_line)
         GLOBALS['scan_char'] = 1
     else:
@@ -5737,7 +5743,7 @@ def scan_input_loop():
     GLOBALS['pc'] = apply_action
 
 def apply_action():
-    if true_q(((action_reg).car) is (symbol_shift)):
+    if (False if ((((action_reg).car) is (symbol_shift)) is False) else True):
         next = symbol_undefined
         next = list_ref(action_reg, 1)
         increment_scan_counters(chars_reg)
@@ -5746,7 +5752,7 @@ def apply_action():
         GLOBALS['action_reg'] = next
         GLOBALS['pc'] = apply_action
     else:
-        if true_q(((action_reg).car) is (symbol_replace)):
+        if (False if ((((action_reg).car) is (symbol_replace)) is False) else True):
             new_char = symbol_undefined
             next = symbol_undefined
             next = list_ref(action_reg, 2)
@@ -5757,7 +5763,7 @@ def apply_action():
             GLOBALS['action_reg'] = next
             GLOBALS['pc'] = apply_action
         else:
-            if true_q(((action_reg).car) is (symbol_drop)):
+            if (False if ((((action_reg).car) is (symbol_drop)) is False) else True):
                 next = symbol_undefined
                 next = list_ref(action_reg, 1)
                 increment_scan_counters(chars_reg)
@@ -5765,20 +5771,20 @@ def apply_action():
                 GLOBALS['action_reg'] = next
                 GLOBALS['pc'] = apply_action
             else:
-                if true_q(((action_reg).car) is (symbol_goto)):
+                if (False if ((((action_reg).car) is (symbol_goto)) is False) else True):
                     state = symbol_undefined
                     state = list_ref(action_reg, 1)
-                    if true_q((state) is (symbol_token_start_state)):
+                    if (False if (((state) is (symbol_token_start_state)) is False) else True):
                         mark_token_start()
                     action = symbol_undefined
                     action = apply_state(state, next_avail(chars_reg))
-                    if true_q((action) is (symbol_error)):
+                    if (False if (((action) is (symbol_error)) is False) else True):
                         GLOBALS['pc'] = unexpected_char_error
                     else:
                         GLOBALS['action_reg'] = action
                         GLOBALS['pc'] = apply_action
                 else:
-                    if true_q(((action_reg).car) is (symbol_emit)):
+                    if (False if ((((action_reg).car) is (symbol_emit)) is False) else True):
                         token_type = symbol_undefined
                         token_type = list_ref(action_reg, 1)
                         GLOBALS['k_reg'] = make_cont(b_cont_1_d, chars_reg, fail_reg, k_reg)
@@ -5794,7 +5800,7 @@ def scan_error():
 def unexpected_char_error():
     c = symbol_undefined
     c = next_avail(chars_reg)
-    if true_q(char_is__q(c, make_char('\0'))):
+    if (False if ((char_is__q(c, make_char('\0'))) is False) else True):
         GLOBALS['char_reg'] = scan_char
         GLOBALS['line_reg'] = scan_line
         GLOBALS['msg_reg'] = "unexpected end of input"
@@ -5808,66 +5814,66 @@ def unexpected_char_error():
 def convert_buffer_to_token():
     buffer = symbol_undefined
     buffer = reverse(buffer_reg)
-    if true_q((token_type_reg) is (symbol_end_marker)):
+    if (False if (((token_type_reg) is (symbol_end_marker)) is False) else True):
         GLOBALS['value_reg'] = make_token1(symbol_end_marker)
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q((token_type_reg) is (symbol_integer)):
+        if (False if (((token_type_reg) is (symbol_integer)) is False) else True):
             GLOBALS['value_reg'] = make_token2(symbol_integer, list_to_string(buffer))
             GLOBALS['pc'] = apply_cont
         else:
-            if true_q((token_type_reg) is (symbol_decimal)):
+            if (False if (((token_type_reg) is (symbol_decimal)) is False) else True):
                 GLOBALS['value_reg'] = make_token2(symbol_decimal, list_to_string(buffer))
                 GLOBALS['pc'] = apply_cont
             else:
-                if true_q((token_type_reg) is (symbol_rational)):
+                if (False if (((token_type_reg) is (symbol_rational)) is False) else True):
                     GLOBALS['value_reg'] = make_token2(symbol_rational, list_to_string(buffer))
                     GLOBALS['pc'] = apply_cont
                 else:
-                    if true_q((token_type_reg) is (symbol_identifier)):
+                    if (False if (((token_type_reg) is (symbol_identifier)) is False) else True):
                         GLOBALS['value_reg'] = make_token2(symbol_identifier, string_to_symbol(list_to_string(buffer)))
                         GLOBALS['pc'] = apply_cont
                     else:
-                        if true_q((token_type_reg) is (symbol_boolean)):
+                        if (False if (((token_type_reg) is (symbol_boolean)) is False) else True):
                             GLOBALS['value_reg'] = make_token2(symbol_boolean, (char_is__q((buffer).car, make_char('t'))) or (char_is__q((buffer).car, make_char('T'))))
                             GLOBALS['pc'] = apply_cont
                         else:
-                            if true_q((token_type_reg) is (symbol_character)):
+                            if (False if (((token_type_reg) is (symbol_character)) is False) else True):
                                 GLOBALS['value_reg'] = make_token2(symbol_character, (buffer).car)
                                 GLOBALS['pc'] = apply_cont
                             else:
-                                if true_q((token_type_reg) is (symbol_named_character)):
+                                if (False if (((token_type_reg) is (symbol_named_character)) is False) else True):
                                     name = symbol_undefined
                                     name = list_to_string(buffer)
-                                    if true_q(string_is__q(name, "nul")):
+                                    if (False if ((string_is__q(name, "nul")) is False) else True):
                                         GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\0'))
                                         GLOBALS['pc'] = apply_cont
                                     else:
-                                        if true_q(string_is__q(name, "space")):
+                                        if (False if ((string_is__q(name, "space")) is False) else True):
                                             GLOBALS['value_reg'] = make_token2(symbol_character, make_char(' '))
                                             GLOBALS['pc'] = apply_cont
                                         else:
-                                            if true_q(string_is__q(name, "tab")):
+                                            if (False if ((string_is__q(name, "tab")) is False) else True):
                                                 GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\t'))
                                                 GLOBALS['pc'] = apply_cont
                                             else:
-                                                if true_q(string_is__q(name, "newline")):
+                                                if (False if ((string_is__q(name, "newline")) is False) else True):
                                                     GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\n'))
                                                     GLOBALS['pc'] = apply_cont
                                                 else:
-                                                    if true_q(string_is__q(name, "linefeed")):
+                                                    if (False if ((string_is__q(name, "linefeed")) is False) else True):
                                                         GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\n'))
                                                         GLOBALS['pc'] = apply_cont
                                                     else:
-                                                        if true_q(string_is__q(name, "backspace")):
+                                                        if (False if ((string_is__q(name, "backspace")) is False) else True):
                                                             GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\b'))
                                                             GLOBALS['pc'] = apply_cont
                                                         else:
-                                                            if true_q(string_is__q(name, "return")):
+                                                            if (False if ((string_is__q(name, "return")) is False) else True):
                                                                 GLOBALS['value_reg'] = make_token2(symbol_character, make_char('\r'))
                                                                 GLOBALS['pc'] = apply_cont
                                                             else:
-                                                                if true_q(string_is__q(name, "page")):
+                                                                if (False if ((string_is__q(name, "page")) is False) else True):
                                                                     GLOBALS['value_reg'] = make_token2(symbol_character, make_char(u"\u000C"))
                                                                     GLOBALS['pc'] = apply_cont
                                                                 else:
@@ -5876,7 +5882,7 @@ def convert_buffer_to_token():
                                                                     GLOBALS['msg_reg'] = format("invalid character name #\\~a", name)
                                                                     GLOBALS['pc'] = scan_error
                                 else:
-                                    if true_q((token_type_reg) is (symbol_string)):
+                                    if (False if (((token_type_reg) is (symbol_string)) is False) else True):
                                         GLOBALS['value_reg'] = make_token2(symbol_string, list_to_string(buffer))
                                         GLOBALS['pc'] = apply_cont
                                     else:
@@ -5888,7 +5894,7 @@ def make_token1(token_type):
     end = symbol_undefined
     end = List(last_scan_line, last_scan_char, last_scan_position)
     start = List(token_start_line, token_start_char, token_start_position)
-    if true_q((token_type) is (symbol_end_marker)):
+    if (False if (((token_type) is (symbol_end_marker)) is False) else True):
         return List(token_type, end, end)
     else:
         return List(token_type, start, end)
@@ -5915,7 +5921,7 @@ def get_token_start_pos(token):
     return (get_token_start(token)).cdr.cdr.car
 
 def rac(ls):
-    if true_q(null_q((ls).cdr)):
+    if (False if (((((ls).cdr) is symbol_emptylist)) is False) else True):
         return (ls).car
     else:
         current = symbol_undefined
@@ -5925,7 +5931,7 @@ def rac(ls):
         return (current).car
 
 def rdc(ls):
-    if true_q(null_q((ls).cdr)):
+    if (False if (((((ls).cdr) is symbol_emptylist)) is False) else True):
         return List()
     else:
         retval = symbol_undefined
@@ -5941,7 +5947,7 @@ def rdc(ls):
         return front
 
 def snoc(x, ls):
-    if true_q(null_q(ls)):
+    if (False if ((((ls) is symbol_emptylist)) is False) else True):
         return List(x)
     else:
         retval = symbol_undefined
@@ -5976,287 +5982,287 @@ def char_boolean_q(c):
     return (char_is__q(c, make_char('t'))) or (char_is__q(c, make_char('T'))) or (char_is__q(c, make_char('f'))) or (char_is__q(c, make_char('F')))
 
 def apply_state(state, c):
-    if true_q((state) is (symbol_start_state)):
-        if true_q(char_whitespace_q(c)):
+    if (False if (((state) is (symbol_start_state)) is False) else True):
+        if (False if ((char_whitespace_q(c)) is False) else True):
             return List(symbol_drop, List(symbol_goto, symbol_start_state))
         else:
-            if true_q(char_is__q(c, make_char(';'))):
+            if (False if ((char_is__q(c, make_char(';'))) is False) else True):
                 return List(symbol_drop, List(symbol_goto, symbol_comment_state))
             else:
-                if true_q(char_is__q(c, make_char('\0'))):
+                if (False if ((char_is__q(c, make_char('\0'))) is False) else True):
                     return List(symbol_drop, List(symbol_emit, symbol_end_marker))
                 else:
                     return List(symbol_goto, symbol_token_start_state)
     else:
-        if true_q((state) is (symbol_token_start_state)):
-            if true_q(char_is__q(c, make_char('('))):
+        if (False if (((state) is (symbol_token_start_state)) is False) else True):
+            if (False if ((char_is__q(c, make_char('('))) is False) else True):
                 return List(symbol_drop, List(symbol_emit, symbol_lparen))
             else:
-                if true_q(char_is__q(c, make_char('['))):
+                if (False if ((char_is__q(c, make_char('['))) is False) else True):
                     return List(symbol_drop, List(symbol_emit, symbol_lbracket))
                 else:
-                    if true_q(char_is__q(c, make_char(')'))):
+                    if (False if ((char_is__q(c, make_char(')'))) is False) else True):
                         return List(symbol_drop, List(symbol_emit, symbol_rparen))
                     else:
-                        if true_q(char_is__q(c, make_char(']'))):
+                        if (False if ((char_is__q(c, make_char(']'))) is False) else True):
                             return List(symbol_drop, List(symbol_emit, symbol_rbracket))
                         else:
-                            if true_q(char_is__q(c, make_char("'"))):
+                            if (False if ((char_is__q(c, make_char("'"))) is False) else True):
                                 return List(symbol_drop, List(symbol_emit, symbol_apostrophe))
                             else:
-                                if true_q(char_is__q(c, make_char('`'))):
+                                if (False if ((char_is__q(c, make_char('`'))) is False) else True):
                                     return List(symbol_drop, List(symbol_emit, symbol_backquote))
                                 else:
-                                    if true_q(char_is__q(c, make_char(','))):
+                                    if (False if ((char_is__q(c, make_char(','))) is False) else True):
                                         return List(symbol_drop, List(symbol_goto, symbol_comma_state))
                                     else:
-                                        if true_q(char_is__q(c, make_char('#'))):
+                                        if (False if ((char_is__q(c, make_char('#'))) is False) else True):
                                             return List(symbol_drop, List(symbol_goto, symbol_hash_prefix_state))
                                         else:
-                                            if true_q(char_is__q(c, make_char('"'))):
+                                            if (False if ((char_is__q(c, make_char('"'))) is False) else True):
                                                 return List(symbol_drop, List(symbol_goto, symbol_string_state))
                                             else:
-                                                if true_q(char_initial_q(c)):
+                                                if (False if ((char_initial_q(c)) is False) else True):
                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                 else:
-                                                    if true_q(char_sign_q(c)):
+                                                    if (False if ((char_sign_q(c)) is False) else True):
                                                         return List(symbol_shift, List(symbol_goto, symbol_signed_state))
                                                     else:
-                                                        if true_q(char_is__q(c, make_char('.'))):
+                                                        if (False if ((char_is__q(c, make_char('.'))) is False) else True):
                                                             return List(symbol_shift, List(symbol_goto, symbol_decimal_point_state))
                                                         else:
-                                                            if true_q(char_numeric_q(c)):
+                                                            if (False if ((char_numeric_q(c)) is False) else True):
                                                                 return List(symbol_shift, List(symbol_goto, symbol_whole_number_state))
                                                             else:
                                                                 return symbol_error
         else:
-            if true_q((state) is (symbol_comment_state)):
-                if true_q(char_is__q(c, make_char('\n'))):
+            if (False if (((state) is (symbol_comment_state)) is False) else True):
+                if (False if ((char_is__q(c, make_char('\n'))) is False) else True):
                     return List(symbol_drop, List(symbol_goto, symbol_start_state))
                 else:
-                    if true_q(char_is__q(c, make_char('\0'))):
+                    if (False if ((char_is__q(c, make_char('\0'))) is False) else True):
                         return List(symbol_drop, List(symbol_emit, symbol_end_marker))
                     else:
                         return List(symbol_drop, List(symbol_goto, symbol_comment_state))
             else:
-                if true_q((state) is (symbol_comma_state)):
-                    if true_q(char_is__q(c, make_char('@'))):
+                if (False if (((state) is (symbol_comma_state)) is False) else True):
+                    if (False if ((char_is__q(c, make_char('@'))) is False) else True):
                         return List(symbol_drop, List(symbol_emit, symbol_comma_at))
                     else:
                         return List(symbol_emit, symbol_comma)
                 else:
-                    if true_q((state) is (symbol_hash_prefix_state)):
-                        if true_q(char_boolean_q(c)):
+                    if (False if (((state) is (symbol_hash_prefix_state)) is False) else True):
+                        if (False if ((char_boolean_q(c)) is False) else True):
                             return List(symbol_shift, List(symbol_emit, symbol_boolean))
                         else:
-                            if true_q(char_is__q(c, make_char('\\'))):
+                            if (False if ((char_is__q(c, make_char('\\'))) is False) else True):
                                 return List(symbol_drop, List(symbol_goto, symbol_character_state))
                             else:
-                                if true_q(char_is__q(c, make_char('('))):
+                                if (False if ((char_is__q(c, make_char('('))) is False) else True):
                                     return List(symbol_drop, List(symbol_emit, symbol_lvector))
                                 else:
                                     return symbol_error
                     else:
-                        if true_q((state) is (symbol_character_state)):
-                            if true_q(char_alphabetic_q(c)):
+                        if (False if (((state) is (symbol_character_state)) is False) else True):
+                            if (False if ((char_alphabetic_q(c)) is False) else True):
                                 return List(symbol_shift, List(symbol_goto, symbol_alphabetic_character_state))
                             else:
-                                if true_q(not(char_is__q(c, make_char('\0')))):
+                                if (False if ((not(char_is__q(c, make_char('\0')))) is False) else True):
                                     return List(symbol_shift, List(symbol_emit, symbol_character))
                                 else:
                                     return symbol_error
                         else:
-                            if true_q((state) is (symbol_alphabetic_character_state)):
-                                if true_q(char_alphabetic_q(c)):
+                            if (False if (((state) is (symbol_alphabetic_character_state)) is False) else True):
+                                if (False if ((char_alphabetic_q(c)) is False) else True):
                                     return List(symbol_shift, List(symbol_goto, symbol_named_character_state))
                                 else:
                                     return List(symbol_emit, symbol_character)
                             else:
-                                if true_q((state) is (symbol_named_character_state)):
-                                    if true_q(char_delimiter_q(c)):
+                                if (False if (((state) is (symbol_named_character_state)) is False) else True):
+                                    if (False if ((char_delimiter_q(c)) is False) else True):
                                         return List(symbol_emit, symbol_named_character)
                                     else:
                                         return List(symbol_shift, List(symbol_goto, symbol_named_character_state))
                                 else:
-                                    if true_q((state) is (symbol_string_state)):
-                                        if true_q(char_is__q(c, make_char('"'))):
+                                    if (False if (((state) is (symbol_string_state)) is False) else True):
+                                        if (False if ((char_is__q(c, make_char('"'))) is False) else True):
                                             return List(symbol_drop, List(symbol_emit, symbol_string))
                                         else:
-                                            if true_q(char_is__q(c, make_char('\\'))):
+                                            if (False if ((char_is__q(c, make_char('\\'))) is False) else True):
                                                 return List(symbol_drop, List(symbol_goto, symbol_string_escape_state))
                                             else:
-                                                if true_q(not(char_is__q(c, make_char('\0')))):
+                                                if (False if ((not(char_is__q(c, make_char('\0')))) is False) else True):
                                                     return List(symbol_shift, List(symbol_goto, symbol_string_state))
                                                 else:
                                                     return symbol_error
                                     else:
-                                        if true_q((state) is (symbol_string_escape_state)):
-                                            if true_q(char_is__q(c, make_char('"'))):
+                                        if (False if (((state) is (symbol_string_escape_state)) is False) else True):
+                                            if (False if ((char_is__q(c, make_char('"'))) is False) else True):
                                                 return List(symbol_shift, List(symbol_goto, symbol_string_state))
                                             else:
-                                                if true_q(char_is__q(c, make_char('\\'))):
+                                                if (False if ((char_is__q(c, make_char('\\'))) is False) else True):
                                                     return List(symbol_shift, List(symbol_goto, symbol_string_state))
                                                 else:
-                                                    if true_q(char_is__q(c, make_char('b'))):
+                                                    if (False if ((char_is__q(c, make_char('b'))) is False) else True):
                                                         return List(symbol_replace, make_char('\b'), List(symbol_goto, symbol_string_state))
                                                     else:
-                                                        if true_q(char_is__q(c, make_char('f'))):
+                                                        if (False if ((char_is__q(c, make_char('f'))) is False) else True):
                                                             return List(symbol_replace, make_char(u"\u000C"), List(symbol_goto, symbol_string_state))
                                                         else:
-                                                            if true_q(char_is__q(c, make_char('n'))):
+                                                            if (False if ((char_is__q(c, make_char('n'))) is False) else True):
                                                                 return List(symbol_replace, make_char('\n'), List(symbol_goto, symbol_string_state))
                                                             else:
-                                                                if true_q(char_is__q(c, make_char('t'))):
+                                                                if (False if ((char_is__q(c, make_char('t'))) is False) else True):
                                                                     return List(symbol_replace, make_char('\t'), List(symbol_goto, symbol_string_state))
                                                                 else:
-                                                                    if true_q(char_is__q(c, make_char('r'))):
+                                                                    if (False if ((char_is__q(c, make_char('r'))) is False) else True):
                                                                         return List(symbol_replace, make_char('\r'), List(symbol_goto, symbol_string_state))
                                                                     else:
                                                                         return symbol_error
                                         else:
-                                            if true_q((state) is (symbol_identifier_state)):
-                                                if true_q(char_subsequent_q(c)):
+                                            if (False if (((state) is (symbol_identifier_state)) is False) else True):
+                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                 else:
-                                                    if true_q(char_delimiter_q(c)):
+                                                    if (False if ((char_delimiter_q(c)) is False) else True):
                                                         return List(symbol_emit, symbol_identifier)
                                                     else:
                                                         return symbol_error
                                             else:
-                                                if true_q((state) is (symbol_signed_state)):
-                                                    if true_q(char_numeric_q(c)):
+                                                if (False if (((state) is (symbol_signed_state)) is False) else True):
+                                                    if (False if ((char_numeric_q(c)) is False) else True):
                                                         return List(symbol_shift, List(symbol_goto, symbol_whole_number_state))
                                                     else:
-                                                        if true_q(char_is__q(c, make_char('.'))):
+                                                        if (False if ((char_is__q(c, make_char('.'))) is False) else True):
                                                             return List(symbol_shift, List(symbol_goto, symbol_signed_decimal_point_state))
                                                         else:
-                                                            if true_q(char_delimiter_q(c)):
+                                                            if (False if ((char_delimiter_q(c)) is False) else True):
                                                                 return List(symbol_emit, symbol_identifier)
                                                             else:
-                                                                if true_q(char_subsequent_q(c)):
+                                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                 else:
                                                                     return symbol_error
                                                 else:
-                                                    if true_q((state) is (symbol_decimal_point_state)):
-                                                        if true_q(char_numeric_q(c)):
+                                                    if (False if (((state) is (symbol_decimal_point_state)) is False) else True):
+                                                        if (False if ((char_numeric_q(c)) is False) else True):
                                                             return List(symbol_shift, List(symbol_goto, symbol_fractional_number_state))
                                                         else:
-                                                            if true_q(char_delimiter_q(c)):
+                                                            if (False if ((char_delimiter_q(c)) is False) else True):
                                                                 return List(symbol_emit, symbol_dot)
                                                             else:
-                                                                if true_q(char_subsequent_q(c)):
+                                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                 else:
                                                                     return symbol_error
                                                     else:
-                                                        if true_q((state) is (symbol_signed_decimal_point_state)):
-                                                            if true_q(char_numeric_q(c)):
+                                                        if (False if (((state) is (symbol_signed_decimal_point_state)) is False) else True):
+                                                            if (False if ((char_numeric_q(c)) is False) else True):
                                                                 return List(symbol_shift, List(symbol_goto, symbol_fractional_number_state))
                                                             else:
-                                                                if true_q(char_delimiter_q(c)):
+                                                                if (False if ((char_delimiter_q(c)) is False) else True):
                                                                     return List(symbol_emit, symbol_identifier)
                                                                 else:
-                                                                    if true_q(char_subsequent_q(c)):
+                                                                    if (False if ((char_subsequent_q(c)) is False) else True):
                                                                         return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                     else:
                                                                         return symbol_error
                                                         else:
-                                                            if true_q((state) is (symbol_whole_number_state)):
-                                                                if true_q(char_numeric_q(c)):
+                                                            if (False if (((state) is (symbol_whole_number_state)) is False) else True):
+                                                                if (False if ((char_numeric_q(c)) is False) else True):
                                                                     return List(symbol_shift, List(symbol_goto, symbol_whole_number_state))
                                                                 else:
-                                                                    if true_q(char_is__q(c, make_char('.'))):
+                                                                    if (False if ((char_is__q(c, make_char('.'))) is False) else True):
                                                                         return List(symbol_shift, List(symbol_goto, symbol_fractional_number_state))
                                                                     else:
-                                                                        if true_q(char_is__q(c, make_char('/'))):
+                                                                        if (False if ((char_is__q(c, make_char('/'))) is False) else True):
                                                                             return List(symbol_shift, List(symbol_goto, symbol_rational_number_state))
                                                                         else:
-                                                                            if true_q((char_is__q(c, make_char('e'))) or (char_is__q(c, make_char('E')))):
+                                                                            if (False if (((char_is__q(c, make_char('e'))) or (char_is__q(c, make_char('E')))) is False) else True):
                                                                                 return List(symbol_shift, List(symbol_goto, symbol_suffix_state))
                                                                             else:
-                                                                                if true_q(char_delimiter_q(c)):
+                                                                                if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                     return List(symbol_emit, symbol_integer)
                                                                                 else:
-                                                                                    if true_q(char_subsequent_q(c)):
+                                                                                    if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                         return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                     else:
                                                                                         return symbol_error
                                                             else:
-                                                                if true_q((state) is (symbol_fractional_number_state)):
-                                                                    if true_q(char_numeric_q(c)):
+                                                                if (False if (((state) is (symbol_fractional_number_state)) is False) else True):
+                                                                    if (False if ((char_numeric_q(c)) is False) else True):
                                                                         return List(symbol_shift, List(symbol_goto, symbol_fractional_number_state))
                                                                     else:
-                                                                        if true_q((char_is__q(c, make_char('e'))) or (char_is__q(c, make_char('E')))):
+                                                                        if (False if (((char_is__q(c, make_char('e'))) or (char_is__q(c, make_char('E')))) is False) else True):
                                                                             return List(symbol_shift, List(symbol_goto, symbol_suffix_state))
                                                                         else:
-                                                                            if true_q(char_delimiter_q(c)):
+                                                                            if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                 return List(symbol_emit, symbol_decimal)
                                                                             else:
-                                                                                if true_q(char_subsequent_q(c)):
+                                                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                 else:
                                                                                     return symbol_error
                                                                 else:
-                                                                    if true_q((state) is (symbol_rational_number_state)):
-                                                                        if true_q(char_numeric_q(c)):
+                                                                    if (False if (((state) is (symbol_rational_number_state)) is False) else True):
+                                                                        if (False if ((char_numeric_q(c)) is False) else True):
                                                                             return List(symbol_shift, List(symbol_goto, symbol_rational_number_state_star))
                                                                         else:
-                                                                            if true_q(char_delimiter_q(c)):
+                                                                            if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                 return List(symbol_emit, symbol_identifier)
                                                                             else:
-                                                                                if true_q(char_subsequent_q(c)):
+                                                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                 else:
                                                                                     return symbol_error
                                                                     else:
-                                                                        if true_q((state) is (symbol_rational_number_state_star)):
-                                                                            if true_q(char_numeric_q(c)):
+                                                                        if (False if (((state) is (symbol_rational_number_state_star)) is False) else True):
+                                                                            if (False if ((char_numeric_q(c)) is False) else True):
                                                                                 return List(symbol_shift, List(symbol_goto, symbol_rational_number_state_star))
                                                                             else:
-                                                                                if true_q(char_delimiter_q(c)):
+                                                                                if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                     return List(symbol_emit, symbol_rational)
                                                                                 else:
-                                                                                    if true_q(char_subsequent_q(c)):
+                                                                                    if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                         return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                     else:
                                                                                         return symbol_error
                                                                         else:
-                                                                            if true_q((state) is (symbol_suffix_state)):
-                                                                                if true_q(char_sign_q(c)):
+                                                                            if (False if (((state) is (symbol_suffix_state)) is False) else True):
+                                                                                if (False if ((char_sign_q(c)) is False) else True):
                                                                                     return List(symbol_shift, List(symbol_goto, symbol_signed_exponent_state))
                                                                                 else:
-                                                                                    if true_q(char_numeric_q(c)):
+                                                                                    if (False if ((char_numeric_q(c)) is False) else True):
                                                                                         return List(symbol_shift, List(symbol_goto, symbol_exponent_state))
                                                                                     else:
-                                                                                        if true_q(char_delimiter_q(c)):
+                                                                                        if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                             return List(symbol_emit, symbol_identifier)
                                                                                         else:
-                                                                                            if true_q(char_subsequent_q(c)):
+                                                                                            if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                                 return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                             else:
                                                                                                 return symbol_error
                                                                             else:
-                                                                                if true_q((state) is (symbol_signed_exponent_state)):
-                                                                                    if true_q(char_numeric_q(c)):
+                                                                                if (False if (((state) is (symbol_signed_exponent_state)) is False) else True):
+                                                                                    if (False if ((char_numeric_q(c)) is False) else True):
                                                                                         return List(symbol_shift, List(symbol_goto, symbol_exponent_state))
                                                                                     else:
-                                                                                        if true_q(char_delimiter_q(c)):
+                                                                                        if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                             return List(symbol_emit, symbol_identifier)
                                                                                         else:
-                                                                                            if true_q(char_subsequent_q(c)):
+                                                                                            if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                                 return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                             else:
                                                                                                 return symbol_error
                                                                                 else:
-                                                                                    if true_q((state) is (symbol_exponent_state)):
-                                                                                        if true_q(char_numeric_q(c)):
+                                                                                    if (False if (((state) is (symbol_exponent_state)) is False) else True):
+                                                                                        if (False if ((char_numeric_q(c)) is False) else True):
                                                                                             return List(symbol_shift, List(symbol_goto, symbol_exponent_state))
                                                                                         else:
-                                                                                            if true_q(char_delimiter_q(c)):
+                                                                                            if (False if ((char_delimiter_q(c)) is False) else True):
                                                                                                 return List(symbol_emit, symbol_decimal)
                                                                                             else:
-                                                                                                if true_q(char_subsequent_q(c)):
+                                                                                                if (False if ((char_subsequent_q(c)) is False) else True):
                                                                                                     return List(symbol_shift, List(symbol_goto, symbol_identifier_state))
                                                                                                 else:
                                                                                                     return symbol_error
@@ -6282,7 +6288,7 @@ def pair_q_hat(asexp):
     return ((asexp).car) is (pair_tag)
 
 def null_q_hat(asexp):
-    return (atom_q_hat(asexp)) and (null_q(untag_atom_hat(asexp)))
+    return (atom_q_hat(asexp)) and (((untag_atom_hat(asexp)) is symbol_emptylist))
 
 def symbol_q_hat(asexp):
     return (atom_q_hat(asexp)) and (symbol_q(untag_atom_hat(asexp)))
@@ -6342,13 +6348,13 @@ def list_q_hat(asexp):
     return (null_q_hat(asexp)) or ((pair_q_hat(asexp)) and (list_q_hat((asexp).cdr.cdr.car)))
 
 def at_hat(alist):
-    if true_q(null_q_hat(alist)):
+    if (False if ((null_q_hat(alist)) is False) else True):
         return symbol_emptylist
     else:
         return cons(car_hat(alist), at_hat(cdr_hat(alist)))
 
 def length_hat(asexp):
-    if true_q(null_q_hat(asexp)):
+    if (False if ((null_q_hat(asexp)) is False) else True):
         return 0
     else:
         return (1) + (length_hat(cdr_hat(asexp)))
@@ -6357,7 +6363,7 @@ def cons_hat(a, b, info):
     return List(pair_tag, a, b, info)
 
 def map_hat(f_hat, asexp):
-    if true_q(null_q_hat(asexp)):
+    if (False if ((null_q_hat(asexp)) is False) else True):
         return make_null_hat()
     else:
         return cons_hat(f_hat(car_hat(asexp)), map_hat(f_hat, cdr_hat(asexp)), symbol_none)
@@ -6369,15 +6375,15 @@ def list_hat(x):
     return cons_hat(x, make_null_hat(), symbol_none)
 
 def annotate_cps():
-    if true_q(not(_starreader_generates_annotated_sexps_q_star)):
+    if (False if ((not(_starreader_generates_annotated_sexps_q_star)) is False) else True):
         GLOBALS['value_reg'] = x_reg
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(annotated_q(x_reg)):
+        if (False if ((annotated_q(x_reg)) is False) else True):
             GLOBALS['value_reg'] = x_reg
             GLOBALS['pc'] = apply_cont
         else:
-            if true_q(pair_q(x_reg)):
+            if (False if ((pair_q(x_reg)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_3_d, x_reg, info_reg, k_reg)
                 GLOBALS['info_reg'] = symbol_none
                 GLOBALS['x_reg'] = (x_reg).car
@@ -6387,21 +6393,21 @@ def annotate_cps():
                 GLOBALS['pc'] = apply_cont
 
 def unannotate_cps():
-    if true_q(aatom_q(x_reg)):
+    if (False if ((aatom_q(x_reg)) is False) else True):
         GLOBALS['x_reg'] = (x_reg).cdr.car
         GLOBALS['pc'] = unannotate_cps
     else:
-        if true_q(apair_q(x_reg)):
+        if (False if ((apair_q(x_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont(b_cont_7_d, x_reg, k_reg)
             GLOBALS['x_reg'] = (x_reg).cdr.car
             GLOBALS['pc'] = unannotate_cps
         else:
-            if true_q(pair_q(x_reg)):
+            if (False if ((pair_q(x_reg)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_5_d, x_reg, k_reg)
                 GLOBALS['x_reg'] = (x_reg).car
                 GLOBALS['pc'] = unannotate_cps
             else:
-                if true_q(vector_q(x_reg)):
+                if (False if ((vector_q(x_reg)) is False) else True):
                     GLOBALS['k_reg'] = make_cont(b_cont_6_d, k_reg)
                     GLOBALS['x_reg'] = vector_to_list(x_reg)
                     GLOBALS['pc'] = unannotate_cps
@@ -6410,7 +6416,7 @@ def unannotate_cps():
                     GLOBALS['pc'] = apply_cont
 
 def filename_cache(filename):
-    if true_q(hasitem_native(_starfilename_dict_star, filename)):
+    if (False if ((hasitem_native(_starfilename_dict_star, filename)) is False) else True):
         return getitem_native(_starfilename_dict_star, filename)
     else:
         index = symbol_undefined
@@ -6426,49 +6432,49 @@ def make_info(src, start, end):
     return cons(filename_cache(src), append(start, end))
 
 def replace_info(asexp, new_info):
-    if true_q(atom_q_hat(asexp)):
+    if (False if ((atom_q_hat(asexp)) is False) else True):
         return List(atom_tag, (asexp).cdr.car, new_info)
     else:
         return List(pair_tag, (asexp).cdr.car, (asexp).cdr.cdr.car, new_info)
 
 def get_srcfile(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return get_filename_from_index((info).car)
 
 def get_start_line(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return (info).cdr.car
 
 def get_start_char(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return (info).cdr.cdr.car
 
 def get_start_pos(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return (info).cdr.cdr.cdr.car
 
 def get_end_line(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return ((info).cdr.cdr.cdr.cdr).car
 
 def get_end_char(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return ((info).cdr.cdr.cdr.cdr).cdr.car
 
 def get_end_pos(info):
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return ((info).cdr.cdr.cdr.cdr).cdr.cdr.car
@@ -6497,7 +6503,7 @@ def rest_of(x):
 def unexpected_token_error():
     token = symbol_undefined
     token = first(tokens_reg)
-    if true_q(token_type_q(token, symbol_end_marker)):
+    if (False if ((token_type_q(token, symbol_end_marker)) is False) else True):
         GLOBALS['msg_reg'] = "unexpected end of input"
         GLOBALS['pc'] = read_error
     else:
@@ -6517,7 +6523,7 @@ def read_sexp():
     start = get_token_start(first(tokens_reg))
     temp_1 = symbol_undefined
     temp_1 = first(tokens_reg)
-    if true_q(((temp_1).car) is (symbol_integer)):
+    if (False if ((((temp_1).car) is (symbol_integer)) is False) else True):
         str = symbol_undefined
         str = list_ref(temp_1, 1)
         GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6525,7 +6531,7 @@ def read_sexp():
         GLOBALS['x_reg'] = string_to_integer(str)
         GLOBALS['pc'] = annotate_cps
     else:
-        if true_q(((temp_1).car) is (symbol_decimal)):
+        if (False if ((((temp_1).car) is (symbol_decimal)) is False) else True):
             str = symbol_undefined
             str = list_ref(temp_1, 1)
             GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6533,12 +6539,12 @@ def read_sexp():
             GLOBALS['x_reg'] = string_to_decimal(str)
             GLOBALS['pc'] = annotate_cps
         else:
-            if true_q(((temp_1).car) is (symbol_rational)):
+            if (False if ((((temp_1).car) is (symbol_rational)) is False) else True):
                 str = symbol_undefined
                 str = list_ref(temp_1, 1)
                 num = symbol_undefined
                 num = string_to_rational(str)
-                if true_q(true_q(num)):
+                if (False if ((true_q(num)) is False) else True):
                     GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
                     GLOBALS['info_reg'] = make_info(src_reg, start, end)
                     GLOBALS['x_reg'] = num
@@ -6547,7 +6553,7 @@ def read_sexp():
                     GLOBALS['msg_reg'] = format("cannot represent ~a", str)
                     GLOBALS['pc'] = read_error
             else:
-                if true_q(((temp_1).car) is (symbol_boolean)):
+                if (False if ((((temp_1).car) is (symbol_boolean)) is False) else True):
                     bool = symbol_undefined
                     bool = list_ref(temp_1, 1)
                     GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6555,7 +6561,7 @@ def read_sexp():
                     GLOBALS['x_reg'] = bool
                     GLOBALS['pc'] = annotate_cps
                 else:
-                    if true_q(((temp_1).car) is (symbol_character)):
+                    if (False if ((((temp_1).car) is (symbol_character)) is False) else True):
                         char = symbol_undefined
                         char = list_ref(temp_1, 1)
                         GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6563,7 +6569,7 @@ def read_sexp():
                         GLOBALS['x_reg'] = char
                         GLOBALS['pc'] = annotate_cps
                     else:
-                        if true_q(((temp_1).car) is (symbol_string)):
+                        if (False if ((((temp_1).car) is (symbol_string)) is False) else True):
                             str = symbol_undefined
                             str = list_ref(temp_1, 1)
                             GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6571,7 +6577,7 @@ def read_sexp():
                             GLOBALS['x_reg'] = str
                             GLOBALS['pc'] = annotate_cps
                         else:
-                            if true_q(((temp_1).car) is (symbol_identifier)):
+                            if (False if ((((temp_1).car) is (symbol_identifier)) is False) else True):
                                 id = symbol_undefined
                                 id = list_ref(temp_1, 1)
                                 GLOBALS['k_reg'] = make_cont(b_cont_9_d, end, tokens_reg, fail_reg, k_reg)
@@ -6579,23 +6585,23 @@ def read_sexp():
                                 GLOBALS['x_reg'] = id
                                 GLOBALS['pc'] = annotate_cps
                             else:
-                                if true_q(((temp_1).car) is (symbol_apostrophe)):
+                                if (False if ((((temp_1).car) is (symbol_apostrophe)) is False) else True):
                                     GLOBALS['keyword_reg'] = symbol_quote
                                     GLOBALS['pc'] = read_abbreviation
                                 else:
-                                    if true_q(((temp_1).car) is (symbol_backquote)):
+                                    if (False if ((((temp_1).car) is (symbol_backquote)) is False) else True):
                                         GLOBALS['keyword_reg'] = symbol_quasiquote
                                         GLOBALS['pc'] = read_abbreviation
                                     else:
-                                        if true_q(((temp_1).car) is (symbol_comma)):
+                                        if (False if ((((temp_1).car) is (symbol_comma)) is False) else True):
                                             GLOBALS['keyword_reg'] = symbol_unquote
                                             GLOBALS['pc'] = read_abbreviation
                                         else:
-                                            if true_q(((temp_1).car) is (symbol_comma_at)):
+                                            if (False if ((((temp_1).car) is (symbol_comma_at)) is False) else True):
                                                 GLOBALS['keyword_reg'] = symbol_unquote_splicing
                                                 GLOBALS['pc'] = read_abbreviation
                                             else:
-                                                if true_q(((temp_1).car) is (symbol_lparen)):
+                                                if (False if ((((temp_1).car) is (symbol_lparen)) is False) else True):
                                                     tokens = symbol_undefined
                                                     tokens = rest_of(tokens_reg)
                                                     GLOBALS['k_reg'] = make_cont4(b_cont4_1_d, src_reg, start, k_reg)
@@ -6603,7 +6609,7 @@ def read_sexp():
                                                     GLOBALS['tokens_reg'] = tokens
                                                     GLOBALS['pc'] = read_sexp_sequence
                                                 else:
-                                                    if true_q(((temp_1).car) is (symbol_lbracket)):
+                                                    if (False if ((((temp_1).car) is (symbol_lbracket)) is False) else True):
                                                         tokens = symbol_undefined
                                                         tokens = rest_of(tokens_reg)
                                                         GLOBALS['k_reg'] = make_cont4(b_cont4_1_d, src_reg, start, k_reg)
@@ -6611,7 +6617,7 @@ def read_sexp():
                                                         GLOBALS['tokens_reg'] = tokens
                                                         GLOBALS['pc'] = read_sexp_sequence
                                                     else:
-                                                        if true_q(((temp_1).car) is (symbol_lvector)):
+                                                        if (False if ((((temp_1).car) is (symbol_lvector)) is False) else True):
                                                             GLOBALS['k_reg'] = make_cont4(b_cont4_2_d, src_reg, start, k_reg)
                                                             GLOBALS['tokens_reg'] = rest_of(tokens_reg)
                                                             GLOBALS['pc'] = read_vector_sequence
@@ -6631,12 +6637,12 @@ def read_abbreviation():
 def read_vector_sequence():
     temp_1 = symbol_undefined
     temp_1 = first(tokens_reg)
-    if true_q(((temp_1).car) is (symbol_rparen)):
+    if (False if ((((temp_1).car) is (symbol_rparen)) is False) else True):
         GLOBALS['expected_terminator_reg'] = symbol_rparen
         GLOBALS['sexps_reg'] = symbol_emptylist
         GLOBALS['pc'] = close_sexp_sequence
     else:
-        if true_q(((temp_1).car) is (symbol_dot)):
+        if (False if ((((temp_1).car) is (symbol_dot)) is False) else True):
             GLOBALS['msg_reg'] = "unexpected dot (.)"
             GLOBALS['pc'] = read_error
         else:
@@ -6646,11 +6652,11 @@ def read_vector_sequence():
 def read_sexp_sequence():
     temp_1 = symbol_undefined
     temp_1 = first(tokens_reg)
-    if true_q(memq((temp_1).car, List(symbol_rparen, symbol_rbracket))):
+    if (False if ((memq((temp_1).car, List(symbol_rparen, symbol_rbracket))) is False) else True):
         GLOBALS['sexps_reg'] = symbol_emptylist
         GLOBALS['pc'] = close_sexp_sequence
     else:
-        if true_q(((temp_1).car) is (symbol_dot)):
+        if (False if ((((temp_1).car) is (symbol_dot)) is False) else True):
             GLOBALS['msg_reg'] = "unexpected dot (.)"
             GLOBALS['pc'] = read_error
         else:
@@ -6662,19 +6668,19 @@ def close_sexp_sequence():
     end = get_token_end(first(tokens_reg))
     temp_1 = symbol_undefined
     temp_1 = first(tokens_reg)
-    if true_q(memq((temp_1).car, List(symbol_rparen, symbol_rbracket))):
-        if true_q(token_type_q(first(tokens_reg), expected_terminator_reg)):
+    if (False if ((memq((temp_1).car, List(symbol_rparen, symbol_rbracket))) is False) else True):
+        if (False if ((token_type_q(first(tokens_reg), expected_terminator_reg)) is False) else True):
             GLOBALS['value4_reg'] = fail_reg
             GLOBALS['value3_reg'] = rest_of(tokens_reg)
             GLOBALS['value2_reg'] = end
             GLOBALS['value1_reg'] = sexps_reg
             GLOBALS['pc'] = apply_cont4
         else:
-            if true_q((expected_terminator_reg) is (symbol_rparen)):
+            if (False if (((expected_terminator_reg) is (symbol_rparen)) is False) else True):
                 GLOBALS['msg_reg'] = "parenthesized list terminated by bracket"
                 GLOBALS['pc'] = read_error
             else:
-                if true_q((expected_terminator_reg) is (symbol_rbracket)):
+                if (False if (((expected_terminator_reg) is (symbol_rbracket)) is False) else True):
                     GLOBALS['msg_reg'] = "bracketed list terminated by parenthesis"
                     GLOBALS['pc'] = read_error
     else:
@@ -6699,7 +6705,7 @@ def make_frame(variables, values, docstrings):
     return List(list_to_vector(Map(make_binding, values, docstrings)), variables)
 
 def empty_frame_q(frame):
-    return null_q((frame).cdr.car)
+    return (((frame).cdr.car) is symbol_emptylist)
 
 def frame_bindings(frame):
     return (frame).car
@@ -6742,12 +6748,12 @@ def search_env(env, variable):
     return search_frames((env).cdr, variable)
 
 def search_frames(frames, variable):
-    if true_q(null_q(frames)):
+    if (False if ((((frames) is symbol_emptylist)) is False) else True):
         return False
     else:
         binding = symbol_undefined
         binding = search_frame((frames).car, variable)
-        if true_q(binding):
+        if (False if ((binding) is False) else True):
             return binding
         else:
             return search_frames((frames).cdr, variable)
@@ -6781,7 +6787,7 @@ def lookup_value():
 def lookup_variable():
     binding = symbol_undefined
     binding = search_env(env_reg, var_reg)
-    if true_q(binding):
+    if (False if ((binding) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = binding
         GLOBALS['k_reg'] = sk_reg
@@ -6789,20 +6795,20 @@ def lookup_variable():
     else:
         components = symbol_undefined
         components = split_variable(var_reg)
-        if true_q((null_q((components).cdr)) and (dlr_env_contains((components).car))):
+        if (False if ((((((components).cdr) is symbol_emptylist)) and (dlr_env_contains((components).car))) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = (components).car
             GLOBALS['k_reg'] = gk_reg
             GLOBALS['pc'] = apply_cont2
         else:
-            if true_q((not(null_q((components).cdr))) and (dlr_env_contains((components).car)) and (dlr_object_contains(dlr_env_lookup((components).car), components))):
+            if (False if (((not((((components).cdr) is symbol_emptylist))) and (dlr_env_contains((components).car)) and (dlr_object_contains(dlr_env_lookup((components).car), components))) is False) else True):
                 GLOBALS['value3_reg'] = fail_reg
                 GLOBALS['value2_reg'] = components
                 GLOBALS['value1_reg'] = dlr_env_lookup((components).car)
                 GLOBALS['k_reg'] = dk_reg
                 GLOBALS['pc'] = apply_cont3
             else:
-                if true_q(null_q((components).cdr)):
+                if (False if (((((components).cdr) is symbol_emptylist)) is False) else True):
                     GLOBALS['info_reg'] = var_info_reg
                     GLOBALS['msg_reg'] = format("unbound variable '~a'", var_reg)
                     GLOBALS['pc'] = runtime_error
@@ -6817,8 +6823,8 @@ def lookup_variable_components():
     binding = symbol_undefined
     var = (components_reg).car
     binding = search_env(module_reg, var)
-    if true_q(binding):
-        if true_q(null_q((components_reg).cdr)):
+    if (False if ((binding) is False) else True):
+        if (False if (((((components_reg).cdr) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = binding
             GLOBALS['k_reg'] = sk_reg
@@ -6828,13 +6834,13 @@ def lookup_variable_components():
             new_path = symbol_undefined
             new_path = (format("~a", var) if string_is__q(path_reg, "") else format("~a.~a", path_reg, var))
             value = binding_value(binding)
-            if true_q(environment_q(value)):
+            if (False if ((environment_q(value)) is False) else True):
                 GLOBALS['module_reg'] = value
                 GLOBALS['path_reg'] = new_path
                 GLOBALS['components_reg'] = (components_reg).cdr
                 GLOBALS['pc'] = lookup_variable_components
             else:
-                if true_q(dlr_object_contains(value, components_reg)):
+                if (False if ((dlr_object_contains(value, components_reg)) is False) else True):
                     GLOBALS['value3_reg'] = fail_reg
                     GLOBALS['value2_reg'] = components_reg
                     GLOBALS['value1_reg'] = value
@@ -6845,7 +6851,7 @@ def lookup_variable_components():
                     GLOBALS['msg_reg'] = format("'~a' is not a module", new_path)
                     GLOBALS['pc'] = runtime_error
     else:
-        if true_q(string_is__q(path_reg, "")):
+        if (False if ((string_is__q(path_reg, "")) is False) else True):
             GLOBALS['info_reg'] = var_info_reg
             GLOBALS['msg_reg'] = format("undefined item in '~a'", var)
             GLOBALS['pc'] = runtime_error
@@ -6859,7 +6865,7 @@ def lookup_binding_in_first_frame():
     frame = first_frame(env_reg)
     binding = symbol_undefined
     binding = search_frame(frame, var_reg)
-    if true_q(binding):
+    if (False if ((binding) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = binding
         GLOBALS['pc'] = apply_cont2
@@ -6876,7 +6882,7 @@ def lookup_binding_in_first_frame():
 def split_variable(var):
     strings = symbol_undefined
     strings = string_split(symbol_to_string(var), make_char('.'))
-    if true_q(member("", strings)):
+    if (False if ((member("", strings)) is False) else True):
         return symbol_emptylist
     else:
         return Map(string_to_symbol, strings)
@@ -6885,25 +6891,25 @@ def id_q(exp):
     return (symbol_q(exp)) or (association_q(exp))
 
 def head(formals):
-    if true_q(symbol_q(formals)):
+    if (False if ((symbol_q(formals)) is False) else True):
         return symbol_emptylist
     else:
-        if true_q(association_q(formals)):
+        if (False if ((association_q(formals)) is False) else True):
             return symbol_emptylist
         else:
-            if true_q(pair_q((formals).cdr)):
+            if (False if ((pair_q((formals).cdr)) is False) else True):
                 return cons((formals).car, head((formals).cdr))
             else:
                 return List((formals).car)
 
 def last(formals):
-    if true_q(symbol_q(formals)):
+    if (False if ((symbol_q(formals)) is False) else True):
         return formals
     else:
-        if true_q(association_q(formals)):
+        if (False if ((association_q(formals)) is False) else True):
             return formals
         else:
-            if true_q(pair_q((formals).cdr)):
+            if (False if ((pair_q((formals).cdr)) is False) else True):
                 return last((formals).cdr)
             else:
                 return (formals).cdr
@@ -6924,10 +6930,10 @@ def mit_style_define_q_hat(asexp):
     return (define_q_hat(asexp)) and (not(symbol_q_hat(cadr_hat(asexp))))
 
 def literal_q(datum):
-    return (number_q(datum)) or (boolean_q(datum)) or (null_q(datum)) or (char_q(datum)) or (string_q(datum))
+    return (number_q(datum)) or (boolean_q(datum)) or (((datum) is symbol_emptylist)) or (char_q(datum)) or (string_q(datum))
 
 def literal_q_hat(asexp):
-    return (((asexp).car) is (atom_tag)) and ((number_q(untag_atom_hat(asexp))) or (boolean_q(untag_atom_hat(asexp))) or (null_q(untag_atom_hat(asexp))) or (char_q(untag_atom_hat(asexp))) or (string_q(untag_atom_hat(asexp))))
+    return (((asexp).car) is (atom_tag)) and ((number_q(untag_atom_hat(asexp))) or (boolean_q(untag_atom_hat(asexp))) or (((untag_atom_hat(asexp)) is symbol_emptylist)) or (char_q(untag_atom_hat(asexp))) or (string_q(untag_atom_hat(asexp))))
 
 def syntactic_sugar_q_hat(asexp):
     return (pair_q_hat(asexp)) and (symbol_q_hat(car_hat(asexp))) and (in_first_frame_q(untag_atom_hat(car_hat(asexp)), macro_env))
@@ -6959,13 +6965,13 @@ def try_catch_finally_exps_hat(x):
 def aparse():
     info = symbol_undefined
     info = get_source_info(adatum_reg)
-    if true_q(literal_q_hat(adatum_reg)):
+    if (False if ((literal_q_hat(adatum_reg)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = lit_aexp(untag_atom_hat(adatum_reg), info)
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(symbol_q_hat(adatum_reg)):
-            if true_q(_staruse_lexical_address_star):
+        if (False if ((symbol_q_hat(adatum_reg)) is False) else True):
+            if (False if ((_staruse_lexical_address_star) is False) else True):
                 GLOBALS['info_reg'] = info
                 GLOBALS['depth_reg'] = 0
                 GLOBALS['id_reg'] = untag_atom_hat(adatum_reg)
@@ -6975,84 +6981,84 @@ def aparse():
                 GLOBALS['value1_reg'] = var_aexp(untag_atom_hat(adatum_reg), info)
                 GLOBALS['pc'] = apply_cont2
         else:
-            if true_q(vector_q_hat(adatum_reg)):
+            if (False if ((vector_q_hat(adatum_reg)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_19_d, info, fail_reg, k_reg)
                 GLOBALS['x_reg'] = adatum_reg
                 GLOBALS['pc'] = unannotate_cps
             else:
-                if true_q(quote_q_hat(adatum_reg)):
+                if (False if ((quote_q_hat(adatum_reg)) is False) else True):
                     GLOBALS['k_reg'] = make_cont(b_cont_20_d, info, fail_reg, k_reg)
                     GLOBALS['x_reg'] = adatum_reg
                     GLOBALS['pc'] = unannotate_cps
                 else:
-                    if true_q(quasiquote_q_hat(adatum_reg)):
+                    if (False if ((quasiquote_q_hat(adatum_reg)) is False) else True):
                         GLOBALS['k_reg'] = make_cont(b_cont_18_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
                         GLOBALS['depth_reg'] = 0
                         GLOBALS['ax_reg'] = cadr_hat(adatum_reg)
                         GLOBALS['pc'] = qq_expand_cps
                     else:
-                        if true_q(unquote_q_hat(adatum_reg)):
+                        if (False if ((unquote_q_hat(adatum_reg)) is False) else True):
                             GLOBALS['msg_reg'] = "misplaced"
                             GLOBALS['pc'] = aparse_error
                         else:
-                            if true_q(unquote_splicing_q_hat(adatum_reg)):
+                            if (False if ((unquote_splicing_q_hat(adatum_reg)) is False) else True):
                                 GLOBALS['msg_reg'] = "misplaced"
                                 GLOBALS['pc'] = aparse_error
                             else:
-                                if true_q(syntactic_sugar_q_hat(adatum_reg)):
+                                if (False if ((syntactic_sugar_q_hat(adatum_reg)) is False) else True):
                                     GLOBALS['k_reg'] = make_cont2(b_cont2_35_d, senv_reg, handler_reg, k_reg)
                                     GLOBALS['pc'] = expand_once_hat
                                 else:
-                                    if true_q(if_then_q_hat(adatum_reg)):
+                                    if (False if ((if_then_q_hat(adatum_reg)) is False) else True):
                                         GLOBALS['k_reg'] = make_cont2(b_cont2_31_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                         GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                         GLOBALS['pc'] = aparse
                                     else:
-                                        if true_q(if_else_q_hat(adatum_reg)):
+                                        if (False if ((if_else_q_hat(adatum_reg)) is False) else True):
                                             GLOBALS['k_reg'] = make_cont2(b_cont2_34_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                             GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                             GLOBALS['pc'] = aparse
                                         else:
-                                            if true_q(help_q_hat(adatum_reg)):
+                                            if (False if ((help_q_hat(adatum_reg)) is False) else True):
                                                 var_info = symbol_undefined
                                                 var_info = get_source_info(cadr_hat(adatum_reg))
                                                 GLOBALS['value2_reg'] = fail_reg
                                                 GLOBALS['value1_reg'] = help_aexp(untag_atom_hat(cadr_hat(adatum_reg)), var_info, info)
                                                 GLOBALS['pc'] = apply_cont2
                                             else:
-                                                if true_q(assignment_q_hat(adatum_reg)):
+                                                if (False if ((assignment_q_hat(adatum_reg)) is False) else True):
                                                     GLOBALS['k_reg'] = make_cont2(b_cont2_29_d, adatum_reg, info, k_reg)
                                                     GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                     GLOBALS['pc'] = aparse
                                                 else:
-                                                    if true_q(association_q_hat(adatum_reg)):
+                                                    if (False if ((association_q_hat(adatum_reg)) is False) else True):
                                                         GLOBALS['k_reg'] = make_cont2(b_cont2_27_d, adatum_reg, info, k_reg)
                                                         GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                         GLOBALS['pc'] = aparse
                                                     else:
-                                                        if true_q(func_q_hat(adatum_reg)):
+                                                        if (False if ((func_q_hat(adatum_reg)) is False) else True):
                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_28_d, info, k_reg)
                                                             GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                             GLOBALS['pc'] = aparse
                                                         else:
-                                                            if true_q(callback_q_hat(adatum_reg)):
+                                                            if (False if ((callback_q_hat(adatum_reg)) is False) else True):
                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_24_d, info, k_reg)
                                                                 GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                 GLOBALS['pc'] = aparse
                                                             else:
-                                                                if true_q(define_q_hat(adatum_reg)):
-                                                                    if true_q(mit_style_define_q_hat(adatum_reg)):
+                                                                if (False if ((define_q_hat(adatum_reg)) is False) else True):
+                                                                    if (False if ((mit_style_define_q_hat(adatum_reg)) is False) else True):
                                                                         GLOBALS['k_reg'] = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                         GLOBALS['datum_reg'] = adatum_reg
                                                                         GLOBALS['macro_reg'] = mit_define_transformer_hat
                                                                         GLOBALS['pc'] = apply_macro
                                                                     else:
-                                                                        if true_q(numeric_equal(length_hat(adatum_reg), 3)):
+                                                                        if (False if ((numeric_equal(length_hat(adatum_reg), 3)) is False) else True):
                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_26_d, adatum_reg, info, k_reg)
                                                                             GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                                             GLOBALS['pc'] = aparse
                                                                         else:
-                                                                            if true_q((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))):
+                                                                            if (False if (((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))) is False) else True):
                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_25_d, adatum_reg, info, k_reg)
                                                                                 GLOBALS['adatum_reg'] = cadddr_hat(adatum_reg)
                                                                                 GLOBALS['pc'] = aparse
@@ -7060,19 +7066,19 @@ def aparse():
                                                                                 GLOBALS['msg_reg'] = "bad concrete syntax:"
                                                                                 GLOBALS['pc'] = aparse_error
                                                                 else:
-                                                                    if true_q(define_b_q_hat(adatum_reg)):
-                                                                        if true_q(mit_style_define_q_hat(adatum_reg)):
+                                                                    if (False if ((define_b_q_hat(adatum_reg)) is False) else True):
+                                                                        if (False if ((mit_style_define_q_hat(adatum_reg)) is False) else True):
                                                                             GLOBALS['k_reg'] = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                             GLOBALS['datum_reg'] = adatum_reg
                                                                             GLOBALS['macro_reg'] = mit_define_transformer_hat
                                                                             GLOBALS['pc'] = apply_macro
                                                                         else:
-                                                                            if true_q(numeric_equal(length_hat(adatum_reg), 3)):
+                                                                            if (False if ((numeric_equal(length_hat(adatum_reg), 3)) is False) else True):
                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_22_d, adatum_reg, info, k_reg)
                                                                                 GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                                                 GLOBALS['pc'] = aparse
                                                                             else:
-                                                                                if true_q((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))):
+                                                                                if (False if (((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))) is False) else True):
                                                                                     GLOBALS['k_reg'] = make_cont2(b_cont2_21_d, adatum_reg, info, k_reg)
                                                                                     GLOBALS['adatum_reg'] = cadddr_hat(adatum_reg)
                                                                                     GLOBALS['pc'] = aparse
@@ -7080,10 +7086,10 @@ def aparse():
                                                                                     GLOBALS['msg_reg'] = "bad concrete syntax:"
                                                                                     GLOBALS['pc'] = aparse_error
                                                                     else:
-                                                                        if true_q(define_syntax_q_hat(adatum_reg)):
+                                                                        if (False if ((define_syntax_q_hat(adatum_reg)) is False) else True):
                                                                             name = symbol_undefined
                                                                             name = define_var_hat(adatum_reg)
-                                                                            if true_q(lambda_q_hat(caddr_hat(adatum_reg))):
+                                                                            if (False if ((lambda_q_hat(caddr_hat(adatum_reg))) is False) else True):
                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_23_d, name, info, k_reg)
                                                                                 GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                                                 GLOBALS['pc'] = aparse
@@ -7094,7 +7100,7 @@ def aparse():
                                                                                 GLOBALS['x_reg'] = aclauses
                                                                                 GLOBALS['pc'] = unannotate_cps
                                                                         else:
-                                                                            if true_q(define_tests_q_hat(adatum_reg)):
+                                                                            if (False if ((define_tests_q_hat(adatum_reg)) is False) else True):
                                                                                 name = symbol_undefined
                                                                                 aclauses = symbol_undefined
                                                                                 aclauses = cddr_hat(adatum_reg)
@@ -7103,15 +7109,15 @@ def aparse():
                                                                                 GLOBALS['adatum_list_reg'] = aclauses
                                                                                 GLOBALS['pc'] = aparse_all
                                                                             else:
-                                                                                if true_q(run_tests_q_hat(adatum_reg)):
+                                                                                if (False if ((run_tests_q_hat(adatum_reg)) is False) else True):
                                                                                     args = symbol_undefined
                                                                                     args = cdr_hat(adatum_reg)
-                                                                                    if true_q(null_q_hat(args)):
+                                                                                    if (False if ((null_q_hat(args)) is False) else True):
                                                                                         GLOBALS['value2_reg'] = fail_reg
                                                                                         GLOBALS['value1_reg'] = run_tests_aexp(symbol_emptylist)
                                                                                         GLOBALS['pc'] = apply_cont2
                                                                                     else:
-                                                                                        if true_q((symbol_q_hat(car_hat(args))) and (list_of_test_groups_q_hat(cdr_hat(args)))):
+                                                                                        if (False if (((symbol_q_hat(car_hat(args))) and (list_of_test_groups_q_hat(cdr_hat(args)))) is False) else True):
                                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_20_d, k_reg)
                                                                                             GLOBALS['args_reg'] = list_hat(args)
                                                                                             GLOBALS['pc'] = aparse_unit_tests
@@ -7120,12 +7126,12 @@ def aparse():
                                                                                             GLOBALS['args_reg'] = args
                                                                                             GLOBALS['pc'] = aparse_unit_tests
                                                                                 else:
-                                                                                    if true_q(begin_q_hat(adatum_reg)):
-                                                                                        if true_q(null_q_hat(cdr_hat(adatum_reg))):
+                                                                                    if (False if ((begin_q_hat(adatum_reg)) is False) else True):
+                                                                                        if (False if ((null_q_hat(cdr_hat(adatum_reg))) is False) else True):
                                                                                             GLOBALS['msg_reg'] = "bad concrete syntax:"
                                                                                             GLOBALS['pc'] = aparse_error
                                                                                         else:
-                                                                                            if true_q(null_q_hat(cddr_hat(adatum_reg))):
+                                                                                            if (False if ((null_q_hat(cddr_hat(adatum_reg))) is False) else True):
                                                                                                 GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                                                 GLOBALS['pc'] = aparse
                                                                                             else:
@@ -7133,32 +7139,32 @@ def aparse():
                                                                                                 GLOBALS['adatum_list_reg'] = cdr_hat(adatum_reg)
                                                                                                 GLOBALS['pc'] = aparse_all
                                                                                     else:
-                                                                                        if true_q(lambda_no_defines_q_hat(adatum_reg)):
+                                                                                        if (False if ((lambda_no_defines_q_hat(adatum_reg)) is False) else True):
                                                                                             GLOBALS['k_reg'] = make_cont(b_cont_13_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                                             GLOBALS['x_reg'] = cadr_hat(adatum_reg)
                                                                                             GLOBALS['pc'] = unannotate_cps
                                                                                         else:
-                                                                                            if true_q(trace_lambda_no_defines_q_hat(adatum_reg)):
+                                                                                            if (False if ((trace_lambda_no_defines_q_hat(adatum_reg)) is False) else True):
                                                                                                 GLOBALS['k_reg'] = make_cont(b_cont_12_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                                                 GLOBALS['x_reg'] = caddr_hat(adatum_reg)
                                                                                                 GLOBALS['pc'] = unannotate_cps
                                                                                             else:
-                                                                                                if true_q(try_q_hat(adatum_reg)):
-                                                                                                    if true_q(numeric_equal(length_hat(adatum_reg), 2)):
+                                                                                                if (False if ((try_q_hat(adatum_reg)) is False) else True):
+                                                                                                    if (False if ((numeric_equal(length_hat(adatum_reg), 2)) is False) else True):
                                                                                                         GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                         GLOBALS['pc'] = aparse
                                                                                                     else:
-                                                                                                        if true_q((numeric_equal(length_hat(adatum_reg), 3)) and (catch_q_hat(caddr_hat(adatum_reg)))):
+                                                                                                        if (False if (((numeric_equal(length_hat(adatum_reg), 3)) and (catch_q_hat(caddr_hat(adatum_reg)))) is False) else True):
                                                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_16_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                             GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                             GLOBALS['pc'] = aparse
                                                                                                         else:
-                                                                                                            if true_q((numeric_equal(length_hat(adatum_reg), 3)) and (finally_q_hat(caddr_hat(adatum_reg)))):
+                                                                                                            if (False if (((numeric_equal(length_hat(adatum_reg), 3)) and (finally_q_hat(caddr_hat(adatum_reg)))) is False) else True):
                                                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_11_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                                 GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                                 GLOBALS['pc'] = aparse
                                                                                                             else:
-                                                                                                                if true_q((numeric_equal(length_hat(adatum_reg), 4)) and (catch_q_hat(caddr_hat(adatum_reg))) and (finally_q_hat(cadddr_hat(adatum_reg)))):
+                                                                                                                if (False if (((numeric_equal(length_hat(adatum_reg), 4)) and (catch_q_hat(caddr_hat(adatum_reg))) and (finally_q_hat(cadddr_hat(adatum_reg)))) is False) else True):
                                                                                                                     GLOBALS['k_reg'] = make_cont2(b_cont2_14_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                                     GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                                     GLOBALS['pc'] = aparse
@@ -7166,17 +7172,17 @@ def aparse():
                                                                                                                     GLOBALS['msg_reg'] = "bad try syntax:"
                                                                                                                     GLOBALS['pc'] = aparse_error
                                                                                                 else:
-                                                                                                    if true_q(raise_q_hat(adatum_reg)):
+                                                                                                    if (False if ((raise_q_hat(adatum_reg)) is False) else True):
                                                                                                         GLOBALS['k_reg'] = make_cont2(b_cont2_7_d, info, k_reg)
                                                                                                         GLOBALS['adatum_reg'] = cadr_hat(adatum_reg)
                                                                                                         GLOBALS['pc'] = aparse
                                                                                                     else:
-                                                                                                        if true_q(choose_q_hat(adatum_reg)):
+                                                                                                        if (False if ((choose_q_hat(adatum_reg)) is False) else True):
                                                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_8_d, info, k_reg)
                                                                                                             GLOBALS['adatum_list_reg'] = cdr_hat(adatum_reg)
                                                                                                             GLOBALS['pc'] = aparse_all
                                                                                                         else:
-                                                                                                            if true_q(application_q_hat(adatum_reg)):
+                                                                                                            if (False if ((application_q_hat(adatum_reg)) is False) else True):
                                                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_6_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                                 GLOBALS['adatum_reg'] = car_hat(adatum_reg)
                                                                                                                 GLOBALS['pc'] = aparse
@@ -7185,17 +7191,17 @@ def aparse():
                                                                                                                 GLOBALS['pc'] = aparse_error
 
 def aparse_unit_tests():
-    if true_q(null_q_hat(args_reg)):
+    if (False if ((null_q_hat(args_reg)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(symbol_q_hat(car_hat(args_reg))):
+        if (False if ((symbol_q_hat(car_hat(args_reg))) is False) else True):
             GLOBALS['k_reg'] = make_cont2(b_cont2_37_d, args_reg, k_reg)
             GLOBALS['args_reg'] = cdr_hat(args_reg)
             GLOBALS['pc'] = aparse_unit_tests
         else:
-            if true_q((list_q_hat(car_hat(args_reg))) and (not(null_q_hat(car_hat(args_reg)))) and (symbol_q_hat(caar_hat(args_reg))) and (list_of_test_groups_q_hat(cdar_hat(args_reg)))):
+            if (False if (((list_q_hat(car_hat(args_reg))) and (not(null_q_hat(car_hat(args_reg)))) and (symbol_q_hat(caar_hat(args_reg))) and (list_of_test_groups_q_hat(cdar_hat(args_reg)))) is False) else True):
                 GLOBALS['k_reg'] = make_cont2(b_cont2_36_d, args_reg, k_reg)
                 GLOBALS['args_reg'] = cdr_hat(args_reg)
                 GLOBALS['pc'] = aparse_unit_tests
@@ -7205,7 +7211,7 @@ def aparse_unit_tests():
                 GLOBALS['pc'] = aparse_error
 
 def aparse_all():
-    if true_q(null_q_hat(adatum_list_reg)):
+    if (False if ((null_q_hat(adatum_list_reg)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
@@ -7222,7 +7228,7 @@ def aparse_error():
     GLOBALS['pc'] = unannotate_cps
 
 def aparse_sexps():
-    if true_q(token_type_q(first(tokens_reg), symbol_end_marker)):
+    if (False if ((token_type_q(first(tokens_reg), symbol_end_marker)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
@@ -7231,12 +7237,12 @@ def aparse_sexps():
         GLOBALS['pc'] = read_sexp
 
 def get_lexical_address():
-    if true_q(null_q(senv_reg)):
+    if (False if ((((senv_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = var_aexp(id_reg, info_reg)
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(memq(id_reg, (senv_reg).car)):
+        if (False if ((memq(id_reg, (senv_reg).car)) is False) else True):
             GLOBALS['offset_reg'] = 0
             GLOBALS['contours_reg'] = (senv_reg).car
             GLOBALS['pc'] = get_lexical_address_offset
@@ -7246,7 +7252,7 @@ def get_lexical_address():
             GLOBALS['pc'] = get_lexical_address
 
 def get_lexical_address_offset():
-    if true_q(((contours_reg).car) is (id_reg)):
+    if (False if ((((contours_reg).car) is (id_reg)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = lexical_address_aexp(depth_reg, offset_reg, id_reg, info_reg)
         GLOBALS['pc'] = apply_cont2
@@ -7256,25 +7262,25 @@ def get_lexical_address_offset():
         GLOBALS['pc'] = get_lexical_address_offset
 
 def get_internal_defines_hat(bodies, adatum, handler, fail, k):
-    if true_q(null_q_hat(bodies)):
+    if (False if ((null_q_hat(bodies)) is False) else True):
         GLOBALS['fail_reg'] = fail
         GLOBALS['handler_reg'] = handler
         GLOBALS['adatum_reg'] = adatum
         GLOBALS['msg_reg'] = "no body expressions found for"
         GLOBALS['pc'] = aparse_error
     else:
-        if true_q(define_q_hat(car_hat(bodies))):
+        if (False if ((define_q_hat(car_hat(bodies))) is False) else True):
             return get_internal_defines_hat(cdr_hat(bodies), adatum, handler, fail, make_cont2(b_cont2_44_d, bodies, k))
         else:
             return any_internal_defines_q_hat(cdr_hat(bodies), make_cont(b_cont_25_d, adatum, bodies, handler, fail, k))
 
 def any_internal_defines_q_hat(exps, k):
-    if true_q(null_q_hat(exps)):
+    if (False if ((null_q_hat(exps)) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(define_q_hat(car_hat(exps))):
+        if (False if ((define_q_hat(car_hat(exps))) is False) else True):
             GLOBALS['value_reg'] = True
             GLOBALS['k_reg'] = k
             GLOBALS['pc'] = apply_cont
@@ -7282,7 +7288,7 @@ def any_internal_defines_q_hat(exps, k):
             return any_internal_defines_q_hat(cdr_hat(exps), k)
 
 def create_letrec_bindings_hat(defines, handler, fail, k):
-    if true_q(null_q(defines)):
+    if (False if ((((defines) is symbol_emptylist)) is False) else True):
         GLOBALS['value_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
@@ -7290,7 +7296,7 @@ def create_letrec_bindings_hat(defines, handler, fail, k):
         return create_letrec_bindings_hat((defines).cdr, handler, fail, make_cont(b_cont_26_d, defines, handler, fail, k))
 
 def get_define_var_and_exp_hat(adatum, handler, fail, k):
-    if true_q(mit_style_define_q_hat(adatum)):
+    if (False if ((mit_style_define_q_hat(adatum)) is False) else True):
         name = symbol_undefined
         formals = symbol_undefined
         bodies = symbol_undefined
@@ -7302,7 +7308,7 @@ def get_define_var_and_exp_hat(adatum, handler, fail, k):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(numeric_equal(length_hat(adatum), 3)):
+        if (False if ((numeric_equal(length_hat(adatum), 3)) is False) else True):
             name = symbol_undefined
             exp = symbol_undefined
             exp = caddr_hat(adatum)
@@ -7312,7 +7318,7 @@ def get_define_var_and_exp_hat(adatum, handler, fail, k):
             GLOBALS['k_reg'] = k
             GLOBALS['pc'] = apply_cont2
         else:
-            if true_q((numeric_equal(length_hat(adatum), 4)) and (string_q_hat(caddr_hat(adatum)))):
+            if (False if (((numeric_equal(length_hat(adatum), 4)) and (string_q_hat(caddr_hat(adatum)))) is False) else True):
                 name = symbol_undefined
                 exp = symbol_undefined
                 exp = cadddr_hat(adatum)
@@ -7329,7 +7335,7 @@ def get_define_var_and_exp_hat(adatum, handler, fail, k):
                 GLOBALS['pc'] = aparse_error
 
 def create_letrec_assignments_hat():
-    if true_q(null_q_hat(vars_reg)):
+    if (False if ((null_q_hat(vars_reg)) is False) else True):
         GLOBALS['value2_reg'] = symbol_emptylist
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
@@ -7347,7 +7353,7 @@ def amacro_error():
     GLOBALS['pc'] = apply_handler2
 
 def nest_let_star_bindings_hat():
-    if true_q((null_q_hat(bindings_reg)) or (null_q_hat(cdr_hat(bindings_reg)))):
+    if (False if (((null_q_hat(bindings_reg)) or (null_q_hat(cdr_hat(bindings_reg)))) is False) else True):
         GLOBALS['value_reg'] = append(List(symbol_let), append(List(bindings_reg), at_hat(bodies_reg)))
         GLOBALS['pc'] = apply_cont
     else:
@@ -7356,7 +7362,7 @@ def nest_let_star_bindings_hat():
         GLOBALS['pc'] = nest_let_star_bindings_hat
 
 def case_clauses_to_simple_cond_clauses_hat():
-    if true_q(null_q_hat(clauses_reg)):
+    if (False if ((null_q_hat(clauses_reg)) is False) else True):
         GLOBALS['value_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont
     else:
@@ -7365,7 +7371,7 @@ def case_clauses_to_simple_cond_clauses_hat():
         GLOBALS['pc'] = case_clauses_to_simple_cond_clauses_hat
 
 def case_clauses_to_cond_clauses_hat():
-    if true_q(null_q_hat(clauses_reg)):
+    if (False if ((null_q_hat(clauses_reg)) is False) else True):
         GLOBALS['value2_reg'] = symbol_emptylist
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
@@ -7376,7 +7382,7 @@ def case_clauses_to_cond_clauses_hat():
         GLOBALS['pc'] = case_clauses_to_cond_clauses_hat
 
 def record_case_clauses_to_cond_clauses_hat():
-    if true_q(null_q_hat(clauses_reg)):
+    if (False if ((null_q_hat(clauses_reg)) is False) else True):
         GLOBALS['value2_reg'] = symbol_emptylist
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
@@ -7387,7 +7393,7 @@ def record_case_clauses_to_cond_clauses_hat():
         GLOBALS['pc'] = record_case_clauses_to_cond_clauses_hat
 
 def make_dd_variant_constructors_hat():
-    if true_q(null_q_hat(variants_reg)):
+    if (False if ((null_q_hat(variants_reg)) is False) else True):
         GLOBALS['value2_reg'] = symbol_emptylist
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
@@ -7409,7 +7415,7 @@ def make_dd_variant_constructor_hat():
     GLOBALS['pc'] = verify_dd_constructor_fields_hat
 
 def verify_dd_constructor_fields_hat():
-    if true_q(null_q_hat(fields_reg)):
+    if (False if ((null_q_hat(fields_reg)) is False) else True):
         GLOBALS['value_reg'] = append(List(symbol_cons), append(List(append(List(symbol_quote), List(name_reg))), List(symbol_args)))
         GLOBALS['pc'] = apply_cont
     else:
@@ -7450,7 +7456,7 @@ def expand_once_hat():
     macro_keyword = untag_atom_hat(car_hat(adatum_reg))
     macro = symbol_undefined
     macro = get_first_frame_value(macro_keyword, macro_env)
-    if true_q(pattern_macro_q(macro)):
+    if (False if ((pattern_macro_q(macro)) is False) else True):
         GLOBALS['k_reg'] = make_cont2(b_cont2_55_d, macro_keyword, k_reg)
         GLOBALS['aclauses_reg'] = macro_aclauses(macro)
         GLOBALS['clauses_reg'] = macro_clauses(macro)
@@ -7462,7 +7468,7 @@ def expand_once_hat():
         GLOBALS['pc'] = apply_macro
 
 def process_macro_clauses_hat():
-    if true_q(null_q(clauses_reg)):
+    if (False if ((((clauses_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['msg_reg'] = "no matching clause found for"
         GLOBALS['pc'] = aparse_error
     else:
@@ -7479,37 +7485,37 @@ def process_macro_clauses_hat():
         GLOBALS['pc'] = unannotate_cps
 
 def qq_expand_cps():
-    if true_q(quasiquote_q_hat(ax_reg)):
+    if (False if ((quasiquote_q_hat(ax_reg)) is False) else True):
         GLOBALS['k_reg'] = make_cont(b_cont_39_d, k_reg)
         GLOBALS['depth_reg'] = (depth_reg) + (1)
         GLOBALS['ax_reg'] = cdr_hat(ax_reg)
         GLOBALS['pc'] = qq_expand_cps
     else:
-        if true_q((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))):
-            if true_q(GreaterThan(depth_reg, 0)):
+        if (False if (((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))) is False) else True):
+            if (False if ((GreaterThan(depth_reg, 0)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_40_d, ax_reg, k_reg)
                 GLOBALS['depth_reg'] = (depth_reg) - (1)
                 GLOBALS['ax_reg'] = cdr_hat(ax_reg)
                 GLOBALS['pc'] = qq_expand_cps
             else:
-                if true_q((unquote_q_hat(ax_reg)) and (not(null_q_hat(cdr_hat(ax_reg)))) and (null_q_hat(cddr_hat(ax_reg)))):
+                if (False if (((unquote_q_hat(ax_reg)) and (not(null_q_hat(cdr_hat(ax_reg)))) and (null_q_hat(cddr_hat(ax_reg)))) is False) else True):
                     GLOBALS['value_reg'] = cadr_hat(ax_reg)
                     GLOBALS['pc'] = apply_cont
                 else:
                     GLOBALS['value_reg'] = append(List(symbol_quote), List(ax_reg))
                     GLOBALS['pc'] = apply_cont
         else:
-            if true_q(vector_q_hat(ax_reg)):
+            if (False if ((vector_q_hat(ax_reg)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_38_d, depth_reg, k_reg)
                 GLOBALS['info_reg'] = symbol_none
                 GLOBALS['x_reg'] = vector_to_list_hat(ax_reg)
                 GLOBALS['pc'] = annotate_cps
             else:
-                if true_q(not(pair_q_hat(ax_reg))):
+                if (False if ((not(pair_q_hat(ax_reg))) is False) else True):
                     GLOBALS['value_reg'] = append(List(symbol_quote), List(ax_reg))
                     GLOBALS['pc'] = apply_cont
                 else:
-                    if true_q(null_q_hat(cdr_hat(ax_reg))):
+                    if (False if ((null_q_hat(cdr_hat(ax_reg))) is False) else True):
                         GLOBALS['ax_reg'] = car_hat(ax_reg)
                         GLOBALS['pc'] = qq_expand_list_cps
                     else:
@@ -7518,39 +7524,39 @@ def qq_expand_cps():
                         GLOBALS['pc'] = qq_expand_list_cps
 
 def qq_expand_list_cps():
-    if true_q(quasiquote_q_hat(ax_reg)):
+    if (False if ((quasiquote_q_hat(ax_reg)) is False) else True):
         GLOBALS['k_reg'] = make_cont(b_cont_44_d, k_reg)
         GLOBALS['depth_reg'] = (depth_reg) + (1)
         GLOBALS['ax_reg'] = cdr_hat(ax_reg)
         GLOBALS['pc'] = qq_expand_cps
     else:
-        if true_q((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))):
-            if true_q(GreaterThan(depth_reg, 0)):
+        if (False if (((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg))) is False) else True):
+            if (False if ((GreaterThan(depth_reg, 0)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_45_d, ax_reg, k_reg)
                 GLOBALS['depth_reg'] = (depth_reg) - (1)
                 GLOBALS['ax_reg'] = cdr_hat(ax_reg)
                 GLOBALS['pc'] = qq_expand_cps
             else:
-                if true_q(unquote_q_hat(ax_reg)):
+                if (False if ((unquote_q_hat(ax_reg)) is False) else True):
                     GLOBALS['value_reg'] = append(List(symbol_List), cdr_hat(ax_reg))
                     GLOBALS['pc'] = apply_cont
                 else:
-                    if true_q(null_q_hat(cddr_hat(ax_reg))):
+                    if (False if ((null_q_hat(cddr_hat(ax_reg))) is False) else True):
                         GLOBALS['value_reg'] = cadr_hat(ax_reg)
                         GLOBALS['pc'] = apply_cont
                     else:
                         GLOBALS['value_reg'] = append(List(symbol_append), cdr_hat(ax_reg))
                         GLOBALS['pc'] = apply_cont
         else:
-            if true_q(vector_q_hat(ax_reg)):
+            if (False if ((vector_q_hat(ax_reg)) is False) else True):
                 GLOBALS['k_reg'] = make_cont(b_cont_41_d, k_reg)
                 GLOBALS['pc'] = qq_expand_cps
             else:
-                if true_q(not(pair_q_hat(ax_reg))):
+                if (False if ((not(pair_q_hat(ax_reg))) is False) else True):
                     GLOBALS['value_reg'] = append(List(symbol_quote), List(List(ax_reg)))
                     GLOBALS['pc'] = apply_cont
                 else:
-                    if true_q(null_q_hat(cdr_hat(ax_reg))):
+                    if (False if ((null_q_hat(cdr_hat(ax_reg))) is False) else True):
                         GLOBALS['k_reg'] = make_cont(b_cont_41_d, k_reg)
                         GLOBALS['ax_reg'] = car_hat(ax_reg)
                         GLOBALS['pc'] = qq_expand_list_cps
@@ -7560,28 +7566,28 @@ def qq_expand_list_cps():
                         GLOBALS['pc'] = qq_expand_list_cps
 
 def aunparse(aexp):
-    if true_q(((aexp).car) is (symbol_lit_aexp)):
+    if (False if ((((aexp).car) is (symbol_lit_aexp)) is False) else True):
         datum = symbol_undefined
         datum = list_ref(aexp, 1)
-        if true_q(literal_q(datum)):
+        if (False if ((literal_q(datum)) is False) else True):
             return datum
         else:
-            if true_q(vector_q(datum)):
+            if (False if ((vector_q(datum)) is False) else True):
                 return datum
             else:
                 return append(List(symbol_quote), List(datum))
     else:
-        if true_q(((aexp).car) is (symbol_var_aexp)):
+        if (False if ((((aexp).car) is (symbol_var_aexp)) is False) else True):
             id = symbol_undefined
             id = list_ref(aexp, 1)
             return id
         else:
-            if true_q(((aexp).car) is (symbol_lexical_address_aexp)):
+            if (False if ((((aexp).car) is (symbol_lexical_address_aexp)) is False) else True):
                 id = symbol_undefined
                 id = list_ref(aexp, 3)
                 return id
             else:
-                if true_q(((aexp).car) is (symbol_if_aexp)):
+                if (False if ((((aexp).car) is (symbol_if_aexp)) is False) else True):
                     test_aexp = symbol_undefined
                     then_aexp = symbol_undefined
                     else_aexp = symbol_undefined
@@ -7590,67 +7596,67 @@ def aunparse(aexp):
                     test_aexp = list_ref(aexp, 1)
                     return append(List(symbol_if), append(List(aunparse(test_aexp)), append(List(aunparse(then_aexp)), List(aunparse(else_aexp)))))
                 else:
-                    if true_q(((aexp).car) is (symbol_assign_aexp)):
+                    if (False if ((((aexp).car) is (symbol_assign_aexp)) is False) else True):
                         var = symbol_undefined
                         rhs_exp = symbol_undefined
                         rhs_exp = list_ref(aexp, 2)
                         var = list_ref(aexp, 1)
                         return append(List(symbol_set_b), append(List(var), List(aunparse(rhs_exp))))
                     else:
-                        if true_q(((aexp).car) is (symbol_func_aexp)):
+                        if (False if ((((aexp).car) is (symbol_func_aexp)) is False) else True):
                             exp = symbol_undefined
                             exp = list_ref(aexp, 1)
                             return append(List(symbol_func), List(aunparse(exp)))
                         else:
-                            if true_q(((aexp).car) is (symbol_callback_aexp)):
+                            if (False if ((((aexp).car) is (symbol_callback_aexp)) is False) else True):
                                 exp = symbol_undefined
                                 exp = list_ref(aexp, 1)
                                 return append(List(symbol_callback), List(aunparse(exp)))
                             else:
-                                if true_q(((aexp).car) is (symbol_define_aexp)):
+                                if (False if ((((aexp).car) is (symbol_define_aexp)) is False) else True):
                                     id = symbol_undefined
                                     docstring = symbol_undefined
                                     rhs_exp = symbol_undefined
                                     rhs_exp = list_ref(aexp, 3)
                                     docstring = list_ref(aexp, 2)
                                     id = list_ref(aexp, 1)
-                                    if true_q(string_is__q(docstring, "")):
+                                    if (False if ((string_is__q(docstring, "")) is False) else True):
                                         return append(List(symbol_define), append(List(id), List(aunparse(rhs_exp))))
                                     else:
                                         return append(List(symbol_define), append(List(id), append(List(docstring), List(aunparse(rhs_exp)))))
                                 else:
-                                    if true_q(((aexp).car) is (symbol_define_b_aexp)):
+                                    if (False if ((((aexp).car) is (symbol_define_b_aexp)) is False) else True):
                                         id = symbol_undefined
                                         docstring = symbol_undefined
                                         rhs_exp = symbol_undefined
                                         rhs_exp = list_ref(aexp, 3)
                                         docstring = list_ref(aexp, 2)
                                         id = list_ref(aexp, 1)
-                                        if true_q(string_is__q(docstring, "")):
+                                        if (False if ((string_is__q(docstring, "")) is False) else True):
                                             return append(List(symbol_define_b), append(List(id), List(aunparse(rhs_exp))))
                                         else:
                                             return append(List(symbol_define_b), append(List(id), append(List(docstring), List(aunparse(rhs_exp)))))
                                     else:
-                                        if true_q(((aexp).car) is (symbol_define_syntax_aexp)):
+                                        if (False if ((((aexp).car) is (symbol_define_syntax_aexp)) is False) else True):
                                             name = symbol_undefined
                                             clauses = symbol_undefined
                                             clauses = list_ref(aexp, 2)
                                             name = list_ref(aexp, 1)
                                             return append(List(symbol_define_syntax), append(List(name), clauses))
                                         else:
-                                            if true_q(((aexp).car) is (symbol_begin_aexp)):
+                                            if (False if ((((aexp).car) is (symbol_begin_aexp)) is False) else True):
                                                 exps = symbol_undefined
                                                 exps = list_ref(aexp, 1)
                                                 return append(List(symbol_begin), Map(aunparse, exps))
                                             else:
-                                                if true_q(((aexp).car) is (symbol_lambda_aexp)):
+                                                if (False if ((((aexp).car) is (symbol_lambda_aexp)) is False) else True):
                                                     formals = symbol_undefined
                                                     bodies = symbol_undefined
                                                     bodies = list_ref(aexp, 2)
                                                     formals = list_ref(aexp, 1)
                                                     return append(List(symbol_lambda), append(List(formals), Map(aunparse, bodies)))
                                                 else:
-                                                    if true_q(((aexp).car) is (symbol_mu_lambda_aexp)):
+                                                    if (False if ((((aexp).car) is (symbol_mu_lambda_aexp)) is False) else True):
                                                         formals = symbol_undefined
                                                         runt = symbol_undefined
                                                         bodies = symbol_undefined
@@ -7659,14 +7665,14 @@ def aunparse(aexp):
                                                         formals = list_ref(aexp, 1)
                                                         return append(List(symbol_lambda), append(List(append(formals, runt)), Map(aunparse, bodies)))
                                                     else:
-                                                        if true_q(((aexp).car) is (symbol_app_aexp)):
+                                                        if (False if ((((aexp).car) is (symbol_app_aexp)) is False) else True):
                                                             operator = symbol_undefined
                                                             operands = symbol_undefined
                                                             operands = list_ref(aexp, 2)
                                                             operator = list_ref(aexp, 1)
                                                             return append(List(aunparse(operator)), Map(aunparse, operands))
                                                         else:
-                                                            if true_q(((aexp).car) is (symbol_try_catch_aexp)):
+                                                            if (False if ((((aexp).car) is (symbol_try_catch_aexp)) is False) else True):
                                                                 body = symbol_undefined
                                                                 catch_var = symbol_undefined
                                                                 catch_exps = symbol_undefined
@@ -7675,14 +7681,14 @@ def aunparse(aexp):
                                                                 body = list_ref(aexp, 1)
                                                                 return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps))))))
                                                             else:
-                                                                if true_q(((aexp).car) is (symbol_try_finally_aexp)):
+                                                                if (False if ((((aexp).car) is (symbol_try_finally_aexp)) is False) else True):
                                                                     body = symbol_undefined
                                                                     finally_exps = symbol_undefined
                                                                     finally_exps = list_ref(aexp, 2)
                                                                     body = list_ref(aexp, 1)
                                                                     return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_finally), Map(aunparse, finally_exps)))))
                                                                 else:
-                                                                    if true_q(((aexp).car) is (symbol_try_catch_finally_aexp)):
+                                                                    if (False if ((((aexp).car) is (symbol_try_catch_finally_aexp)) is False) else True):
                                                                         body = symbol_undefined
                                                                         catch_var = symbol_undefined
                                                                         catch_exps = symbol_undefined
@@ -7693,12 +7699,12 @@ def aunparse(aexp):
                                                                         body = list_ref(aexp, 1)
                                                                         return append(List(symbol_try), append(List(aunparse(body)), append(List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps)))), List(append(List(symbol_finally), Map(aunparse, finally_exps))))))
                                                                     else:
-                                                                        if true_q(((aexp).car) is (symbol_raise_aexp)):
+                                                                        if (False if ((((aexp).car) is (symbol_raise_aexp)) is False) else True):
                                                                             exp = symbol_undefined
                                                                             exp = list_ref(aexp, 1)
                                                                             return append(List(symbol_raise), List(aunparse(exp)))
                                                                         else:
-                                                                            if true_q(((aexp).car) is (symbol_choose_aexp)):
+                                                                            if (False if ((((aexp).car) is (symbol_choose_aexp)) is False) else True):
                                                                                 exps = symbol_undefined
                                                                                 exps = list_ref(aexp, 1)
                                                                                 return append(List(symbol_choose), Map(aunparse, exps))
@@ -7712,14 +7718,14 @@ def make_test_callback(group_name, case_name, result, traceback, proc_exp, test_
     return void_value
 
 def path_join(path, filename):
-    if true_q(null_q(path)):
+    if (False if ((((path) is symbol_emptylist)) is False) else True):
         return filename
     else:
         return path_join((path).cdr, string_append((path).car, "/", filename))
 
 def use_lexical_address(*args):
     args = List(*args)
-    if true_q(null_q(args)):
+    if (False if ((((args) is symbol_emptylist)) is False) else True):
         return _staruse_lexical_address_star
     else:
         GLOBALS['_staruse_lexical_address_star'] = true_q((args).car)
@@ -7730,7 +7736,7 @@ def handle_exception(exc):
     return void_value
 
 def get_traceback_string(exc):
-    if true_q(list_q((exc).cdr.car)):
+    if (False if ((list_q((exc).cdr.car)) is False) else True):
         error_type = symbol_undefined
         message = symbol_undefined
         src_file = symbol_undefined
@@ -7746,10 +7752,10 @@ def get_traceback_string(exc):
         message = ((exc).cdr.car).cdr.car
         error_type = ((exc).cdr.car).car
         retval = string_append(retval, format("~%Traceback (most recent call last):~%"))
-        while not(null_q(stack)):
+        while not(((stack) is symbol_emptylist)):
             retval = string_append(retval, format_exception_line((stack).car))
             stack = (stack).cdr
-        if true_q(not((src_file) is (symbol_none))):
+        if (False if ((not((src_file) is (symbol_none))) is False) else True):
             retval = string_append(retval, format("  File \"~a\", line ~a, col ~a~%", src_file, src_line, src_col))
         return string_append(retval, format("~a: ~a~%", error_type, message))
     else:
@@ -7758,7 +7764,7 @@ def get_traceback_string(exc):
         return string_append(retval, format("Raised Exception: ~a~%", (exc).cdr.car))
 
 def get_exception_values(exc):
-    if true_q(list_q((exc).cdr.car)):
+    if (False if ((list_q((exc).cdr.car)) is False) else True):
         error_type = symbol_undefined
         message = symbol_undefined
         message = ((exc).cdr.car).cdr.car
@@ -7768,14 +7774,14 @@ def get_exception_values(exc):
         return list_to_vector(List("UnhandledException", (exc).cdr.car))
 
 def format_exception_line(line):
-    if true_q(list_q(line)):
+    if (False if ((list_q(line)) is False) else True):
         filename = symbol_undefined
         line_number = symbol_undefined
         column_number = symbol_undefined
         column_number = (line).cdr.cdr.car
         line_number = (line).cdr.car
         filename = (line).car
-        if true_q(numeric_equal(length(line), 3)):
+        if (False if ((numeric_equal(length(line), 3)) is False) else True):
             return format("  File \"~a\", line ~a, col ~a~%", filename, line_number, column_number)
         else:
             return format("  File \"~a\", line ~a, col ~a, in '~a'~%", filename, line_number, column_number, (line).cdr.cdr.cdr.car)
@@ -7794,11 +7800,11 @@ def read_eval_print_loop_rm():
     result = symbol_undefined
     result = execute_rm(input_, "stdin")
     while not(end_of_session_q(result)):
-        if true_q(exception_q(result)):
+        if (False if ((exception_q(result)) is False) else True):
             handle_exception(result)
         else:
-            if true_q(not(void_q(result))):
-                if true_q(_starneed_newline_star):
+            if (False if ((not(void_q(result))) is False) else True):
+                if (False if ((_starneed_newline_star) is False) else True):
                     newline()
                 safe_print(result)
         input_ = read_multiline("==> ")
@@ -7825,11 +7831,11 @@ def execute_rm(input_, src):
     GLOBALS['pc'] = scan_input
     result = symbol_undefined
     result = trampoline()
-    if true_q(exception_q(result)):
+    if (False if ((exception_q(result)) is False) else True):
         return result
     else:
         GLOBALS['_startokens_left_star'] = result
-        if true_q(token_type_q(first(_startokens_left_star), symbol_end_marker)):
+        if (False if ((token_type_q(first(_startokens_left_star), symbol_end_marker)) is False) else True):
             return void_value
         else:
             return execute_loop_rm(src)
@@ -7838,7 +7844,7 @@ def execute_loop_rm(src):
     execute_next_expression_rm(src)
     result = symbol_undefined
     result = trampoline()
-    if true_q((exception_q(result)) or (end_of_session_q(result)) or (token_type_q(first(_startokens_left_star), symbol_end_marker))):
+    if (False if (((exception_q(result)) or (end_of_session_q(result)) or (token_type_q(first(_startokens_left_star), symbol_end_marker))) is False) else True):
         return result
     else:
         return execute_loop_rm(src)
@@ -7896,15 +7902,15 @@ def push_stack_trace_b(exp):
     set_car_b(_starstack_trace_star, cons(exp, (_starstack_trace_star).car))
 
 def pop_stack_trace_b(exp):
-    if true_q(not(null_q((_starstack_trace_star).car))):
+    if (False if ((not((((_starstack_trace_star).car) is symbol_emptylist))) is False) else True):
         set_car_b(_starstack_trace_star, ((_starstack_trace_star).car).cdr)
 
 def m():
-    if true_q(_startracing_on_q_star):
+    if (False if ((_startracing_on_q_star) is False) else True):
         highlight_expression(exp_reg)
     k = symbol_undefined
     k = (make_debugging_k(exp_reg, k_reg) if _startracing_on_q_star else k_reg)
-    if true_q(((exp_reg).car) is (symbol_lit_aexp)):
+    if (False if ((((exp_reg).car) is (symbol_lit_aexp)) is False) else True):
         datum = symbol_undefined
         datum = list_ref(exp_reg, 1)
         GLOBALS['value2_reg'] = fail_reg
@@ -7912,7 +7918,7 @@ def m():
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(((exp_reg).car) is (symbol_var_aexp)):
+        if (False if ((((exp_reg).car) is (symbol_var_aexp)) is False) else True):
             id = symbol_undefined
             info = symbol_undefined
             info = list_ref(exp_reg, 2)
@@ -7922,7 +7928,7 @@ def m():
             GLOBALS['var_reg'] = id
             GLOBALS['pc'] = lookup_value
         else:
-            if true_q(((exp_reg).car) is (symbol_lexical_address_aexp)):
+            if (False if ((((exp_reg).car) is (symbol_lexical_address_aexp)) is False) else True):
                 depth = symbol_undefined
                 offset = symbol_undefined
                 offset = list_ref(exp_reg, 2)
@@ -7933,21 +7939,21 @@ def m():
                 GLOBALS['depth_reg'] = depth
                 GLOBALS['pc'] = lookup_value_by_lexical_address
             else:
-                if true_q(((exp_reg).car) is (symbol_func_aexp)):
+                if (False if ((((exp_reg).car) is (symbol_func_aexp)) is False) else True):
                     exp = symbol_undefined
                     exp = list_ref(exp_reg, 1)
                     GLOBALS['k_reg'] = make_cont2(b_cont2_83_d, k)
                     GLOBALS['exp_reg'] = exp
                     GLOBALS['pc'] = m
                 else:
-                    if true_q(((exp_reg).car) is (symbol_callback_aexp)):
+                    if (False if ((((exp_reg).car) is (symbol_callback_aexp)) is False) else True):
                         exp = symbol_undefined
                         exp = list_ref(exp_reg, 1)
                         GLOBALS['k_reg'] = make_cont2(b_cont2_81_d, k)
                         GLOBALS['exp_reg'] = exp
                         GLOBALS['pc'] = m
                     else:
-                        if true_q(((exp_reg).car) is (symbol_if_aexp)):
+                        if (False if ((((exp_reg).car) is (symbol_if_aexp)) is False) else True):
                             test_exp = symbol_undefined
                             then_exp = symbol_undefined
                             else_exp = symbol_undefined
@@ -7958,7 +7964,7 @@ def m():
                             GLOBALS['exp_reg'] = test_exp
                             GLOBALS['pc'] = m
                         else:
-                            if true_q(((exp_reg).car) is (symbol_help_aexp)):
+                            if (False if ((((exp_reg).car) is (symbol_help_aexp)) is False) else True):
                                 var = symbol_undefined
                                 var_info = symbol_undefined
                                 var_info = list_ref(exp_reg, 2)
@@ -7970,7 +7976,7 @@ def m():
                                 GLOBALS['var_reg'] = var
                                 GLOBALS['pc'] = lookup_variable
                             else:
-                                if true_q(((exp_reg).car) is (symbol_association_aexp)):
+                                if (False if ((((exp_reg).car) is (symbol_association_aexp)) is False) else True):
                                     var = symbol_undefined
                                     exp = symbol_undefined
                                     exp = list_ref(exp_reg, 2)
@@ -7979,7 +7985,7 @@ def m():
                                     GLOBALS['exp_reg'] = exp
                                     GLOBALS['pc'] = m
                                 else:
-                                    if true_q(((exp_reg).car) is (symbol_assign_aexp)):
+                                    if (False if ((((exp_reg).car) is (symbol_assign_aexp)) is False) else True):
                                         var = symbol_undefined
                                         rhs_exp = symbol_undefined
                                         var_info = symbol_undefined
@@ -7990,7 +7996,7 @@ def m():
                                         GLOBALS['exp_reg'] = rhs_exp
                                         GLOBALS['pc'] = m
                                     else:
-                                        if true_q(((exp_reg).car) is (symbol_define_aexp)):
+                                        if (False if ((((exp_reg).car) is (symbol_define_aexp)) is False) else True):
                                             var = symbol_undefined
                                             docstring = symbol_undefined
                                             rhs_exp = symbol_undefined
@@ -8001,7 +8007,7 @@ def m():
                                             GLOBALS['exp_reg'] = rhs_exp
                                             GLOBALS['pc'] = m
                                         else:
-                                            if true_q(((exp_reg).car) is (symbol_define_b_aexp)):
+                                            if (False if ((((exp_reg).car) is (symbol_define_b_aexp)) is False) else True):
                                                 var = symbol_undefined
                                                 docstring = symbol_undefined
                                                 rhs_exp = symbol_undefined
@@ -8012,7 +8018,7 @@ def m():
                                                 GLOBALS['exp_reg'] = rhs_exp
                                                 GLOBALS['pc'] = m
                                             else:
-                                                if true_q(((exp_reg).car) is (symbol_define_syntax_aexp)):
+                                                if (False if ((((exp_reg).car) is (symbol_define_syntax_aexp)) is False) else True):
                                                     name = symbol_undefined
                                                     clauses = symbol_undefined
                                                     aclauses = symbol_undefined
@@ -8024,7 +8030,7 @@ def m():
                                                     GLOBALS['var_reg'] = name
                                                     GLOBALS['pc'] = lookup_binding_in_first_frame
                                                 else:
-                                                    if true_q(((exp_reg).car) is (symbol_define_syntax_transformer_aexp)):
+                                                    if (False if ((((exp_reg).car) is (symbol_define_syntax_transformer_aexp)) is False) else True):
                                                         name = symbol_undefined
                                                         rhs_exp = symbol_undefined
                                                         info = symbol_undefined
@@ -8035,14 +8041,14 @@ def m():
                                                         GLOBALS['exp_reg'] = rhs_exp
                                                         GLOBALS['pc'] = m
                                                     else:
-                                                        if true_q(((exp_reg).car) is (symbol_define_tests_aexp)):
+                                                        if (False if ((((exp_reg).car) is (symbol_define_tests_aexp)) is False) else True):
                                                             name = symbol_undefined
                                                             aclauses = symbol_undefined
                                                             info = symbol_undefined
                                                             info = list_ref(exp_reg, 3)
                                                             aclauses = list_ref(exp_reg, 2)
                                                             name = list_ref(exp_reg, 1)
-                                                            if true_q(hasitem_native(unit_test_table, name)):
+                                                            if (False if ((hasitem_native(unit_test_table, name)) is False) else True):
                                                                 GLOBALS['info_reg'] = info
                                                                 GLOBALS['msg_reg'] = format("duplicate unit test group name '~a'; did you forget to (clear-unit-tests)?", name)
                                                                 GLOBALS['pc'] = runtime_error
@@ -8053,10 +8059,10 @@ def m():
                                                                 GLOBALS['k_reg'] = k
                                                                 GLOBALS['pc'] = apply_cont2
                                                         else:
-                                                            if true_q(((exp_reg).car) is (symbol_run_tests_aexp)):
+                                                            if (False if ((((exp_reg).car) is (symbol_run_tests_aexp)) is False) else True):
                                                                 tests = symbol_undefined
                                                                 tests = list_ref(exp_reg, 1)
-                                                                if true_q(null_q(tests)):
+                                                                if (False if ((((tests) is symbol_emptylist)) is False) else True):
                                                                     GLOBALS['k_reg'] = k
                                                                     GLOBALS['wrong_reg'] = 0
                                                                     GLOBALS['right_reg'] = 0
@@ -8071,14 +8077,14 @@ def m():
                                                                     GLOBALS['tests_reg'] = tests
                                                                     GLOBALS['pc'] = run_unit_tests
                                                             else:
-                                                                if true_q(((exp_reg).car) is (symbol_begin_aexp)):
+                                                                if (False if ((((exp_reg).car) is (symbol_begin_aexp)) is False) else True):
                                                                     exps = symbol_undefined
                                                                     exps = list_ref(exp_reg, 1)
                                                                     GLOBALS['k_reg'] = k
                                                                     GLOBALS['exps_reg'] = exps
                                                                     GLOBALS['pc'] = eval_sequence
                                                                 else:
-                                                                    if true_q(((exp_reg).car) is (symbol_lambda_aexp)):
+                                                                    if (False if ((((exp_reg).car) is (symbol_lambda_aexp)) is False) else True):
                                                                         formals = symbol_undefined
                                                                         bodies = symbol_undefined
                                                                         bodies = list_ref(exp_reg, 2)
@@ -8088,7 +8094,7 @@ def m():
                                                                         GLOBALS['k_reg'] = k
                                                                         GLOBALS['pc'] = apply_cont2
                                                                     else:
-                                                                        if true_q(((exp_reg).car) is (symbol_mu_lambda_aexp)):
+                                                                        if (False if ((((exp_reg).car) is (symbol_mu_lambda_aexp)) is False) else True):
                                                                             formals = symbol_undefined
                                                                             runt = symbol_undefined
                                                                             bodies = symbol_undefined
@@ -8100,7 +8106,7 @@ def m():
                                                                             GLOBALS['k_reg'] = k
                                                                             GLOBALS['pc'] = apply_cont2
                                                                         else:
-                                                                            if true_q(((exp_reg).car) is (symbol_trace_lambda_aexp)):
+                                                                            if (False if ((((exp_reg).car) is (symbol_trace_lambda_aexp)) is False) else True):
                                                                                 name = symbol_undefined
                                                                                 formals = symbol_undefined
                                                                                 bodies = symbol_undefined
@@ -8112,7 +8118,7 @@ def m():
                                                                                 GLOBALS['k_reg'] = k
                                                                                 GLOBALS['pc'] = apply_cont2
                                                                             else:
-                                                                                if true_q(((exp_reg).car) is (symbol_mu_trace_lambda_aexp)):
+                                                                                if (False if ((((exp_reg).car) is (symbol_mu_trace_lambda_aexp)) is False) else True):
                                                                                     name = symbol_undefined
                                                                                     formals = symbol_undefined
                                                                                     runt = symbol_undefined
@@ -8126,7 +8132,7 @@ def m():
                                                                                     GLOBALS['k_reg'] = k
                                                                                     GLOBALS['pc'] = apply_cont2
                                                                                 else:
-                                                                                    if true_q(((exp_reg).car) is (symbol_try_catch_aexp)):
+                                                                                    if (False if ((((exp_reg).car) is (symbol_try_catch_aexp)) is False) else True):
                                                                                         body = symbol_undefined
                                                                                         cvar = symbol_undefined
                                                                                         cexps = symbol_undefined
@@ -8140,7 +8146,7 @@ def m():
                                                                                         GLOBALS['exp_reg'] = body
                                                                                         GLOBALS['pc'] = m
                                                                                     else:
-                                                                                        if true_q(((exp_reg).car) is (symbol_try_finally_aexp)):
+                                                                                        if (False if ((((exp_reg).car) is (symbol_try_finally_aexp)) is False) else True):
                                                                                             body = symbol_undefined
                                                                                             fexps = symbol_undefined
                                                                                             fexps = list_ref(exp_reg, 2)
@@ -8152,7 +8158,7 @@ def m():
                                                                                             GLOBALS['exp_reg'] = body
                                                                                             GLOBALS['pc'] = m
                                                                                         else:
-                                                                                            if true_q(((exp_reg).car) is (symbol_try_catch_finally_aexp)):
+                                                                                            if (False if ((((exp_reg).car) is (symbol_try_catch_finally_aexp)) is False) else True):
                                                                                                 body = symbol_undefined
                                                                                                 cvar = symbol_undefined
                                                                                                 cexps = symbol_undefined
@@ -8168,21 +8174,21 @@ def m():
                                                                                                 GLOBALS['exp_reg'] = body
                                                                                                 GLOBALS['pc'] = m
                                                                                             else:
-                                                                                                if true_q(((exp_reg).car) is (symbol_raise_aexp)):
+                                                                                                if (False if ((((exp_reg).car) is (symbol_raise_aexp)) is False) else True):
                                                                                                     exp = symbol_undefined
                                                                                                     exp = list_ref(exp_reg, 1)
                                                                                                     GLOBALS['k_reg'] = make_cont2(b_cont2_67_d, handler_reg)
                                                                                                     GLOBALS['exp_reg'] = exp
                                                                                                     GLOBALS['pc'] = m
                                                                                                 else:
-                                                                                                    if true_q(((exp_reg).car) is (symbol_choose_aexp)):
+                                                                                                    if (False if ((((exp_reg).car) is (symbol_choose_aexp)) is False) else True):
                                                                                                         exps = symbol_undefined
                                                                                                         exps = list_ref(exp_reg, 1)
                                                                                                         GLOBALS['k_reg'] = k
                                                                                                         GLOBALS['exps_reg'] = exps
                                                                                                         GLOBALS['pc'] = eval_choices
                                                                                                     else:
-                                                                                                        if true_q(((exp_reg).car) is (symbol_app_aexp)):
+                                                                                                        if (False if ((((exp_reg).car) is (symbol_app_aexp)) is False) else True):
                                                                                                             operator = symbol_undefined
                                                                                                             operands = symbol_undefined
                                                                                                             info = symbol_undefined
@@ -8198,7 +8204,7 @@ def m():
                                                                                                             GLOBALS['pc'] = runtime_error
 
 def run_unit_tests():
-    if true_q(null_q(tests_reg)):
+    if (False if ((((tests_reg) is symbol_emptylist)) is False) else True):
         total = symbol_undefined
         total = Apply(plus, Map(length, Map(car, dict_to_values(unit_test_table))))
         printf("=================\n")
@@ -8223,7 +8229,7 @@ def run_unit_test():
     test_name = (test_reg).car
     nums = (test_reg).cdr
     entry = getitem_native(unit_test_table, test_name)
-    if true_q((entry) is (False)):
+    if (False if (((entry) is (False)) is False) else True):
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['msg_reg'] = format("test group '~a' not found", test_name)
         GLOBALS['pc'] = runtime_error
@@ -8233,7 +8239,7 @@ def run_unit_test():
         assertions = (entry).car
         env = (entry).cdr.car
         printf("Testing group '~a'...\n", test_name)
-        if true_q(null_q(nums)):
+        if (False if ((((nums) is symbol_emptylist)) is False) else True):
             GLOBALS['env_reg'] = env
             GLOBALS['verbose_reg'] = False
             GLOBALS['assertions_reg'] = assertions
@@ -8247,21 +8253,21 @@ def run_unit_test():
             GLOBALS['pc'] = filter_assertions
 
 def filter_assertions():
-    if true_q(null_q(nums_reg)):
+    if (False if ((((nums_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
         case_name = symbol_undefined
-        if true_q(number_q((nums_reg).car)):
+        if (False if ((number_q((nums_reg).car)) is False) else True):
             case_name = format("case ~a", (nums_reg).car)
         else:
             case_name = (nums_reg).car
         return lookup_assertions(test_name_reg, case_name, assertions_reg, symbol_emptylist, handler_reg, fail_reg, make_cont2(b_cont2_87_d, assertions_reg, nums_reg, test_name_reg, handler_reg, k_reg))
 
 def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k):
-    if true_q(null_q(assertions)):
-        if true_q(null_q(accum)):
+    if (False if ((((assertions) is symbol_emptylist)) is False) else True):
+        if (False if ((((accum) is symbol_emptylist)) is False) else True):
             GLOBALS['fail_reg'] = fail
             GLOBALS['handler_reg'] = handler
             GLOBALS['info_reg'] = symbol_none
@@ -8277,10 +8283,10 @@ def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k)
         app_aexp_args = symbol_undefined
         assertion = (assertions).car
         app_aexp_args = (assertion).cdr.cdr.car
-        if true_q(numeric_equal(length(app_aexp_args), 4)):
+        if (False if ((numeric_equal(length(app_aexp_args), 4)) is False) else True):
             lit_aexp_datum = symbol_undefined
             lit_aexp_datum = ((app_aexp_args).cdr.cdr.cdr.car).cdr.car
-            if true_q((string_q(lit_aexp_datum)) and (((string_startswith_q(case_name, "case ")) and (string_is__q(lit_aexp_datum, case_name))) or ((not(string_startswith_q(case_name, "case "))) and (string_startswith_q(lit_aexp_datum, case_name))))):
+            if (False if (((string_q(lit_aexp_datum)) and (((string_startswith_q(case_name, "case ")) and (string_is__q(lit_aexp_datum, case_name))) or ((not(string_startswith_q(case_name, "case "))) and (string_startswith_q(lit_aexp_datum, case_name))))) is False) else True):
                 return lookup_assertions(test_name, case_name, (assertions).cdr, cons(assertion, accum), handler, fail, k)
             else:
                 return lookup_assertions(test_name, case_name, (assertions).cdr, accum, handler, fail, k)
@@ -8289,7 +8295,7 @@ def internal_exception_q(exception):
     return (pair_q(exception)) and (string_q((exception).car)) and ((string_is__q((exception).car, "AssertionError")) or (string_is__q((exception).car, "UnhandledException")) or (string_is__q((exception).car, "RunTimeError")) or (string_is__q((exception).car, "ScanError")) or (string_is__q((exception).car, "ParseError")) or (string_is__q((exception).car, "ReadError")))
 
 def run_unit_test_cases():
-    if true_q(null_q(assertions_reg)):
+    if (False if ((((assertions_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = List(right_reg, wrong_reg)
         GLOBALS['pc'] = apply_cont2
@@ -8309,7 +8315,7 @@ def get_exception_info(exception):
     column = ((exception).cdr.cdr.cdr.cdr).car
     line = (exception).cdr.cdr.cdr.car
     source = (exception).cdr.cdr.car
-    if true_q((source) is (symbol_none)):
+    if (False if (((source) is (symbol_none)) is False) else True):
         return symbol_none
     else:
         return format("line ~a, column ~a of ~a", line, column, source)
@@ -8326,40 +8332,40 @@ def make_stack_trace():
     return reverse(Map(format_stack_trace, trace))
 
 def get_procedure_name(aexp):
-    if true_q(macro_derived_source_info_q(aexp)):
+    if (False if ((macro_derived_source_info_q(aexp)) is False) else True):
         return rac(get_source_info(aexp))
     else:
-        if true_q(((aexp).car) is (symbol_app_aexp)):
+        if (False if ((((aexp).car) is (symbol_app_aexp)) is False) else True):
             operator = symbol_undefined
             operator = list_ref(aexp, 1)
-            if true_q(((operator).car) is (symbol_lexical_address_aexp)):
+            if (False if ((((operator).car) is (symbol_lexical_address_aexp)) is False) else True):
                 id = symbol_undefined
                 id = list_ref(operator, 3)
                 return id
             else:
-                if true_q(((operator).car) is (symbol_var_aexp)):
+                if (False if ((((operator).car) is (symbol_var_aexp)) is False) else True):
                     id = symbol_undefined
                     id = list_ref(operator, 1)
                     return id
                 else:
-                    if true_q(((operator).car) is (symbol_lambda_aexp)):
+                    if (False if ((((operator).car) is (symbol_lambda_aexp)) is False) else True):
                         formals = symbol_undefined
                         formals = list_ref(operator, 1)
                         return append(List(symbol_lambda), append(List(formals), List(symbol_dotdotdot)))
                     else:
-                        if true_q(((operator).car) is (symbol_mu_lambda_aexp)):
+                        if (False if ((((operator).car) is (symbol_mu_lambda_aexp)) is False) else True):
                             formals = symbol_undefined
                             runt = symbol_undefined
                             runt = list_ref(operator, 2)
                             formals = list_ref(operator, 1)
                             return append(List(symbol_lambda), append(List(append(formals, runt)), List(symbol_dotdotdot)))
                         else:
-                            if true_q(((operator).car) is (symbol_trace_lambda_aexp)):
+                            if (False if ((((operator).car) is (symbol_trace_lambda_aexp)) is False) else True):
                                 name = symbol_undefined
                                 name = list_ref(operator, 1)
                                 return name
                             else:
-                                if true_q(((operator).car) is (symbol_mu_trace_lambda_aexp)):
+                                if (False if ((((operator).car) is (symbol_mu_trace_lambda_aexp)) is False) else True):
                                     name = symbol_undefined
                                     name = list_ref(operator, 1)
                                     return name
@@ -8371,13 +8377,13 @@ def get_procedure_name(aexp):
 def format_stack_trace(exp):
     info = symbol_undefined
     info = rac(exp)
-    if true_q((info) is (symbol_none)):
+    if (False if (((info) is (symbol_none)) is False) else True):
         return symbol_macro_generated_exp
     else:
         return List(get_srcfile(info), get_start_line(info), get_start_char(info), get_procedure_name(exp))
 
 def runtime_error():
-    if true_q((info_reg) is (symbol_none)):
+    if (False if (((info_reg) is (symbol_none)) is False) else True):
         GLOBALS['exception_reg'] = make_exception("RunTimeError", msg_reg, symbol_none, symbol_none, symbol_none)
         GLOBALS['pc'] = apply_handler2
     else:
@@ -8391,7 +8397,7 @@ def runtime_error():
         GLOBALS['pc'] = apply_handler2
 
 def assertion_error():
-    if true_q((info_reg) is (symbol_none)):
+    if (False if (((info_reg) is (symbol_none)) is False) else True):
         GLOBALS['exception_reg'] = make_exception("AssertionError", msg_reg, symbol_none, symbol_none, symbol_none)
         GLOBALS['pc'] = apply_handler2
     else:
@@ -8405,7 +8411,7 @@ def assertion_error():
         GLOBALS['pc'] = apply_handler2
 
 def m_star():
-    if true_q(null_q(exps_reg)):
+    if (False if ((((exps_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
@@ -8415,7 +8421,7 @@ def m_star():
         GLOBALS['pc'] = m
 
 def eval_sequence():
-    if true_q(null_q((exps_reg).cdr)):
+    if (False if (((((exps_reg).cdr) is symbol_emptylist)) is False) else True):
         GLOBALS['exp_reg'] = (exps_reg).car
         GLOBALS['pc'] = m
     else:
@@ -8433,7 +8439,7 @@ def try_catch_finally_handler(cvar, cexps, fexps, env, handler, k):
     return make_handler2(b_handler2_7_d, cexps, cvar, fexps, env, handler, k)
 
 def eval_choices():
-    if true_q(null_q(exps_reg)):
+    if (False if ((((exps_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['pc'] = apply_fail
     else:
         new_fail = symbol_undefined
@@ -8443,7 +8449,7 @@ def eval_choices():
         GLOBALS['pc'] = m
 
 def make_empty_docstrings(n):
-    if true_q(numeric_equal(n, 0)):
+    if (False if ((numeric_equal(n, 0)) is False) else True):
         return symbol_emptylist
     else:
         return cons("", make_empty_docstrings((n) - (1)))
@@ -8458,7 +8464,7 @@ def mu_closure(formals, runt, bodies, env):
     return make_proc(b_proc_2_d, bodies, formals, runt, env)
 
 def make_trace_depth_string(level):
-    if true_q(numeric_equal(level, 0)):
+    if (False if ((numeric_equal(level, 0)) is False) else True):
         return ""
     else:
         return string_append(" |", make_trace_depth_string((level) - (1)))
@@ -8477,7 +8483,7 @@ def mu_trace_closure(name, formals, runt, bodies, env):
     return make_proc(b_proc_4_d, bodies, name, trace_depth, formals, runt, env)
 
 def all_char_q(ls):
-    return (null_q(ls)) or ((char_q((ls).car)) and (all_char_q((ls).cdr)))
+    return (((ls) is symbol_emptylist)) or ((char_q((ls).car)) and (all_char_q((ls).cdr)))
 
 def void_q(x):
     return (x) is (void_value)
@@ -8486,13 +8492,13 @@ def end_of_session_q(x):
     return (x) is (end_of_session)
 
 def string_join():
-    if true_q(null_q(items_reg)):
+    if (False if ((((items_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = ""
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(null_q((items_reg).cdr)):
+        if (False if (((((items_reg).cdr) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = format("~a", (items_reg).car)
             GLOBALS['k_reg'] = k2_reg
@@ -8518,17 +8524,17 @@ def ends_with_newline_q(s):
     return (GreaterThan(len, 0)) and (equal_q(substring(s, (len) - (1), len), "\n"))
 
 def load_file():
-    if true_q(member(filename_reg, load_stack)):
+    if (False if ((member(filename_reg, load_stack)) is False) else True):
         printf("skipping recursive load of ~a~%", filename_reg)
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(not(string_q(filename_reg))):
+        if (False if ((not(string_q(filename_reg))) is False) else True):
             GLOBALS['msg_reg'] = format("filename '~a' is not a string", filename_reg)
             GLOBALS['pc'] = runtime_error
         else:
-            if true_q(not(file_exists_q(filename_reg))):
+            if (False if ((not(file_exists_q(filename_reg))) is False) else True):
                 GLOBALS['msg_reg'] = format("attempted to load nonexistent file '~a'", filename_reg)
                 GLOBALS['pc'] = runtime_error
             else:
@@ -8539,7 +8545,7 @@ def load_file():
                 GLOBALS['pc'] = scan_input
 
 def read_and_eval_asexps():
-    if true_q(token_type_q(first(tokens_reg), symbol_end_marker)):
+    if (False if ((token_type_q(first(tokens_reg), symbol_end_marker)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
@@ -8548,7 +8554,7 @@ def read_and_eval_asexps():
         GLOBALS['pc'] = read_sexp
 
 def load_files():
-    if true_q(null_q(filenames_reg)):
+    if (False if ((((filenames_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
@@ -8559,16 +8565,16 @@ def load_files():
         GLOBALS['pc'] = find_file_and_load
 
 def find_file_and_load():
-    if true_q(string_startswith_q(filename_reg, "/")):
+    if (False if ((string_startswith_q(filename_reg, "/")) is False) else True):
         GLOBALS['pc'] = load_file
     else:
-        if true_q(null_q(paths_reg)):
+        if (False if ((((paths_reg) is symbol_emptylist)) is False) else True):
             GLOBALS['msg_reg'] = format("attempted to load nonexistent file '~a'", filename_reg)
             GLOBALS['pc'] = runtime_error
         else:
             path = symbol_undefined
             path = path_join(List((paths_reg).car), filename_reg)
-            if true_q(file_exists_q(path)):
+            if (False if ((file_exists_q(path)) is False) else True):
                 GLOBALS['filename_reg'] = path
                 GLOBALS['pc'] = load_file
             else:
@@ -8576,13 +8582,13 @@ def find_file_and_load():
                 GLOBALS['pc'] = find_file_and_load
 
 def length_loop():
-    if true_q(null_q(x_reg)):
+    if (False if ((((x_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = sum_reg
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(not(pair_q(x_reg))):
+        if (False if ((not(pair_q(x_reg))) is False) else True):
             GLOBALS['msg_reg'] = format("length called on improper list ~s", ls_reg)
             GLOBALS['pc'] = runtime_error
         else:
@@ -8591,7 +8597,7 @@ def length_loop():
             GLOBALS['pc'] = length_loop
 
 def make_set():
-    if true_q(null_q(lst_reg)):
+    if (False if ((((lst_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = lst_reg
         GLOBALS['k_reg'] = k2_reg
@@ -8602,23 +8608,23 @@ def make_set():
         GLOBALS['pc'] = make_set
 
 def equal_objects_q():
-    if true_q(((null_q(x_reg)) and (null_q(y_reg))) or ((boolean_q(x_reg)) and (boolean_q(y_reg)) and (((x_reg) and (y_reg)) or ((not(x_reg)) and (not(y_reg))))) or ((symbol_q(x_reg)) and (symbol_q(y_reg)) and ((x_reg) is (y_reg))) or ((number_q(x_reg)) and (number_q(y_reg)) and (numeric_equal(x_reg, y_reg))) or ((char_q(x_reg)) and (char_q(y_reg)) and (char_is__q(x_reg, y_reg))) or (((x_reg) is (void_value)) and ((y_reg) is (void_value))) or ((string_q(x_reg)) and (string_q(y_reg)) and (string_is__q(x_reg, y_reg)))):
+    if (False if ((((((x_reg) is symbol_emptylist)) and (((y_reg) is symbol_emptylist))) or ((boolean_q(x_reg)) and (boolean_q(y_reg)) and (((x_reg) and (y_reg)) or ((not(x_reg)) and (not(y_reg))))) or ((symbol_q(x_reg)) and (symbol_q(y_reg)) and ((x_reg) is (y_reg))) or ((number_q(x_reg)) and (number_q(y_reg)) and (numeric_equal(x_reg, y_reg))) or ((char_q(x_reg)) and (char_q(y_reg)) and (char_is__q(x_reg, y_reg))) or (((x_reg) is (void_value)) and ((y_reg) is (void_value))) or ((string_q(x_reg)) and (string_q(y_reg)) and (string_is__q(x_reg, y_reg)))) is False) else True):
         GLOBALS['value_reg'] = True
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q((pair_q(x_reg)) and (pair_q(y_reg))):
+        if (False if (((pair_q(x_reg)) and (pair_q(y_reg))) is False) else True):
             GLOBALS['k_reg'] = make_cont(b_cont_51_d, x_reg, y_reg, k_reg)
             GLOBALS['y_reg'] = (y_reg).car
             GLOBALS['x_reg'] = (x_reg).car
             GLOBALS['pc'] = equal_objects_q
         else:
-            if true_q((vector_q(x_reg)) and (vector_q(y_reg)) and (numeric_equal(vector_length(x_reg), vector_length(y_reg)))):
+            if (False if (((vector_q(x_reg)) and (vector_q(y_reg)) and (numeric_equal(vector_length(x_reg), vector_length(y_reg)))) is False) else True):
                 GLOBALS['i_reg'] = (vector_length(x_reg)) - (1)
                 GLOBALS['v2_reg'] = y_reg
                 GLOBALS['v1_reg'] = x_reg
                 GLOBALS['pc'] = equal_vectors_q
             else:
-                if true_q((box_q(x_reg)) and (box_q(y_reg))):
+                if (False if (((box_q(x_reg)) and (box_q(y_reg))) is False) else True):
                     GLOBALS['y_reg'] = unbox(y_reg)
                     GLOBALS['x_reg'] = unbox(x_reg)
                     GLOBALS['pc'] = equal_objects_q
@@ -8627,7 +8633,7 @@ def equal_objects_q():
                     GLOBALS['pc'] = apply_cont
 
 def equal_vectors_q():
-    if true_q(LessThan(i_reg, 0)):
+    if (False if ((LessThan(i_reg, 0)) is False) else True):
         GLOBALS['value_reg'] = True
         GLOBALS['pc'] = apply_cont
     else:
@@ -8637,12 +8643,12 @@ def equal_vectors_q():
         GLOBALS['pc'] = equal_objects_q
 
 def member_loop():
-    if true_q(null_q(y_reg)):
+    if (False if ((((y_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = False
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(not(pair_q(y_reg))):
+        if (False if ((not(pair_q(y_reg))) is False) else True):
             GLOBALS['msg_reg'] = format("member called on improper list ~s", ls_reg)
             GLOBALS['pc'] = runtime_error
         else:
@@ -8659,7 +8665,7 @@ def get_primitive():
     GLOBALS['pc'] = lookup_value
 
 def append2():
-    if true_q(null_q(ls1_reg)):
+    if (False if ((((ls1_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = ls2_reg
         GLOBALS['k_reg'] = k2_reg
@@ -8670,19 +8676,19 @@ def append2():
         GLOBALS['pc'] = append2
 
 def append_all():
-    if true_q(null_q(lists_reg)):
+    if (False if ((((lists_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(null_q((lists_reg).cdr)):
+        if (False if (((((lists_reg).cdr) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = (lists_reg).car
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
         else:
-            if true_q(not(list_q((lists_reg).car))):
+            if (False if ((not(list_q((lists_reg).car))) is False) else True):
                 GLOBALS['msg_reg'] = format("append called on incorrect list structure ~s", (lists_reg).car)
                 GLOBALS['pc'] = runtime_error
             else:
@@ -8691,17 +8697,17 @@ def append_all():
                 GLOBALS['pc'] = append_all
 
 def get_completions(args, env):
-    if true_q(null_q(args)):
+    if (False if ((((args) is symbol_emptylist)) is False) else True):
         return append(get_variables_from_frames(frames(env)), get_variables_from_frames(frames(macro_env)))
     else:
-        if true_q(environment_q((args).car)):
+        if (False if ((environment_q((args).car)) is False) else True):
             return append(get_variables_from_frames(frames((args).car)), get_variables_from_frames(frames(macro_env)))
         else:
             return get_external_members((args).car)
 
 def directory(args, env):
-    if true_q((null_q(args)) or (environment_q((args).car))):
-        return sort(symbolLessThan_q, (get_variables_from_frames(frames(env)) if null_q(args) else get_variables_from_frames(frames((args).car))))
+    if (False if (((((args) is symbol_emptylist)) or (environment_q((args).car))) is False) else True):
+        return sort(symbolLessThan_q, (get_variables_from_frames(frames(env)) if ((args) is symbol_emptylist) else get_variables_from_frames(frames((args).car))))
     else:
         return get_external_members((args).car)
 
@@ -8719,16 +8725,16 @@ def symbolLessThan_q(a, b):
     return stringLessThan_q(a_string, b_string)
 
 def flatten(lists):
-    if true_q(null_q(lists)):
+    if (False if ((((lists) is symbol_emptylist)) is False) else True):
         return symbol_emptylist
     else:
-        if true_q(list_q((lists).car)):
+        if (False if ((list_q((lists).car)) is False) else True):
             return append(flatten((lists).car), flatten((lists).cdr))
         else:
             return cons((lists).car, flatten((lists).cdr))
 
 def map_primitive():
-    if true_q(iterator_q((args_reg).car)):
+    if (False if ((iterator_q((args_reg).car)) is False) else True):
         GLOBALS['generator_reg'] = (args_reg).car
         GLOBALS['pc'] = iterate_collect
     else:
@@ -8736,11 +8742,11 @@ def map_primitive():
         list_args = symbol_undefined
         list_args = listify(args_reg)
         len = length(args_reg)
-        if true_q(numeric_equal(len, 1)):
+        if (False if ((numeric_equal(len, 1)) is False) else True):
             GLOBALS['list1_reg'] = (list_args).car
             GLOBALS['pc'] = map1
         else:
-            if true_q(numeric_equal(len, 2)):
+            if (False if ((numeric_equal(len, 2)) is False) else True):
                 GLOBALS['list2_reg'] = (list_args).cdr.car
                 GLOBALS['list1_reg'] = (list_args).car
                 GLOBALS['pc'] = map2
@@ -8749,19 +8755,19 @@ def map_primitive():
                 GLOBALS['pc'] = mapN
 
 def listify(arg_list):
-    if true_q(null_q(arg_list)):
+    if (False if ((((arg_list) is symbol_emptylist)) is False) else True):
         return symbol_emptylist
     else:
-        if true_q(list_q((arg_list).car)):
+        if (False if ((list_q((arg_list).car)) is False) else True):
             return cons((arg_list).car, listify((arg_list).cdr))
         else:
-            if true_q(vector_q((arg_list).car)):
+            if (False if ((vector_q((arg_list).car)) is False) else True):
                 return cons(vector_to_list((arg_list).car), listify((arg_list).cdr))
             else:
-                if true_q(string_q((arg_list).car)):
+                if (False if ((string_q((arg_list).car)) is False) else True):
                     return cons(string_to_list((arg_list).car), listify((arg_list).cdr))
                 else:
-                    if true_q(iter_q((arg_list).car)):
+                    if (False if ((iter_q((arg_list).car)) is False) else True):
                         return cons(vector_to_list(list_native((arg_list).car)), listify((arg_list).cdr))
                     else:
                         raise Exception("symbol_Map: " + format("cannot use object type '~a' in map", *[get_type((arg_list).car)]))
@@ -8775,7 +8781,7 @@ def iterate():
 def iterate_continue():
     item = symbol_undefined
     item = next_item(iterator_reg)
-    if true_q(null_q(item)):
+    if (False if ((((item) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
@@ -8795,7 +8801,7 @@ def iterate_collect():
 def iterate_collect_continue():
     item = symbol_undefined
     item = next_item(iterator_reg)
-    if true_q(null_q(item)):
+    if (False if ((((item) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
@@ -8807,12 +8813,12 @@ def iterate_collect_continue():
         GLOBALS['pc'] = apply_proc
 
 def map1():
-    if true_q(null_q(list1_reg)):
+    if (False if ((((list1_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(dlr_proc_q(proc_reg)):
+        if (False if ((dlr_proc_q(proc_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont2(b_cont2_113_d, list1_reg, proc_reg, k_reg)
             GLOBALS['list1_reg'] = (list1_reg).cdr
             GLOBALS['pc'] = map1
@@ -8824,12 +8830,12 @@ def map1():
             GLOBALS['pc'] = apply_proc
 
 def map2():
-    if true_q(null_q(list1_reg)):
+    if (False if ((((list1_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(dlr_proc_q(proc_reg)):
+        if (False if ((dlr_proc_q(proc_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont2(b_cont2_115_d, list1_reg, list2_reg, proc_reg, k_reg)
             GLOBALS['list2_reg'] = (list2_reg).cdr
             GLOBALS['list1_reg'] = (list1_reg).cdr
@@ -8842,12 +8848,12 @@ def map2():
             GLOBALS['pc'] = apply_proc
 
 def mapN():
-    if true_q(null_q((lists_reg).car)):
+    if (False if (((((lists_reg).car) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(dlr_proc_q(proc_reg)):
+        if (False if ((dlr_proc_q(proc_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont2(b_cont2_117_d, lists_reg, proc_reg, k_reg)
             GLOBALS['lists_reg'] = Map(cdr, lists_reg)
             GLOBALS['pc'] = mapN
@@ -8859,18 +8865,18 @@ def mapN():
             GLOBALS['pc'] = apply_proc
 
 def for_each_primitive():
-    if true_q(iterator_q((lists_reg).car)):
+    if (False if ((iterator_q((lists_reg).car)) is False) else True):
         GLOBALS['generator_reg'] = (lists_reg).car
         GLOBALS['pc'] = iterate
     else:
         arg_list = symbol_undefined
         arg_list = listify(lists_reg)
-        if true_q(null_q((arg_list).car)):
+        if (False if (((((arg_list).car) is symbol_emptylist)) is False) else True):
             GLOBALS['value2_reg'] = fail_reg
             GLOBALS['value1_reg'] = void_value
             GLOBALS['pc'] = apply_cont2
         else:
-            if true_q(dlr_proc_q(proc_reg)):
+            if (False if ((dlr_proc_q(proc_reg)) is False) else True):
                 dlr_apply(proc_reg, Map(car, arg_list))
                 GLOBALS['lists_reg'] = Map(cdr, arg_list)
                 GLOBALS['pc'] = for_each_primitive
@@ -8882,19 +8888,19 @@ def for_each_primitive():
                 GLOBALS['pc'] = apply_proc
 
 def apply_native(proc, args):
-    if true_q(dlr_proc_q(proc)):
+    if (False if ((dlr_proc_q(proc)) is False) else True):
         return dlr_apply(proc, args)
     else:
         return Apply(proc, args)
 
 def make_dict():
-    if true_q(null_q(args_reg)):
+    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(association_q((args_reg).car)):
+        if (False if ((association_q((args_reg).car)) is False) else True):
             GLOBALS['k2_reg'] = make_cont2(b_cont2_121_d, args_reg, k2_reg)
             GLOBALS['args_reg'] = (args_reg).cdr
             GLOBALS['pc'] = make_dict
@@ -8925,8 +8931,8 @@ def process_args(args, params, info, handler, fail):
     return args
 
 def get_values_for_params(params, associations, used, info, handler, fail):
-    if true_q(null_q(params)):
-        if true_q((not(null_q(associations))) and (association_q((associations).car)) and (((associations).car.car) is (symbol_multiply))):
+    if (False if ((((params) is symbol_emptylist)) is False) else True):
+        if (False if (((not(((associations) is symbol_emptylist))) and (association_q((associations).car)) and (((associations).car.car) is (symbol_multiply))) is False) else True):
             return List(get_value((associations).car))
         else:
             return symbol_emptylist
@@ -8938,10 +8944,10 @@ def get_value_from_associations(param, associations, info, handler, fail):
     value = symbol_undefined
     symbol = get_symbol(param)
     value = assq(symbol, associations)
-    if true_q(value):
+    if (False if ((value) is False) else True):
         return get_value(value)
     else:
-        if true_q(association_q(param)):
+        if (False if ((association_q(param)) is False) else True):
             return get_value(param)
         else:
             GLOBALS['fail_reg'] = fail
@@ -8951,35 +8957,35 @@ def get_value_from_associations(param, associations, info, handler, fail):
             GLOBALS['pc'] = runtime_error
 
 def get_arg_associations(args, params, must_be_association, info, handler, fail):
-    if true_q(null_q(args)):
+    if (False if ((((args) is symbol_emptylist)) is False) else True):
         return symbol_emptylist
     else:
-        if true_q(association_q((args).car)):
+        if (False if ((association_q((args).car)) is False) else True):
             return cons((args).car, get_arg_associations((args).cdr, params, True, info, handler, fail))
         else:
-            if true_q(must_be_association):
+            if (False if ((must_be_association) is False) else True):
                 GLOBALS['fail_reg'] = fail
                 GLOBALS['handler_reg'] = handler
                 GLOBALS['info_reg'] = info
                 GLOBALS['msg_reg'] = format("non-keyword arg following keyword arg: ~a", (args).car)
                 GLOBALS['pc'] = runtime_error
             else:
-                if true_q(null_q(params)):
+                if (False if ((((params) is symbol_emptylist)) is False) else True):
                     return List(association(symbol_multiply, args))
                 else:
                     return cons(association(get_symbol((params).car), (args).car), get_arg_associations((args).cdr, (params).cdr, False, info, handler, fail))
 
 def get_symbol(item):
-    if true_q(association_q(item)):
+    if (False if ((association_q(item)) is False) else True):
         return (item).car
     else:
-        if true_q(symbol_q(item)):
+        if (False if ((symbol_q(item)) is False) else True):
             return item
         else:
             raise Exception("symbol_get_symbol: " + format("invalid symbol ~a", *[item]))
 
 def get_value(item):
-    if true_q(association_q(item)):
+    if (False if ((association_q(item)) is False) else True):
         return (item).cdr.cdr.car
     else:
         return item
@@ -8988,7 +8994,7 @@ def association_q(x):
     return (list_q(x)) and (numeric_equal(length(x), 3)) and (((x).cdr.car) is (symbol_colon))
 
 def make_associations(dict):
-    if true_q(null_q(dict)):
+    if (False if ((((dict) is symbol_emptylist)) is False) else True):
         return symbol_emptylist
     else:
         keyword = symbol_undefined
@@ -8998,7 +9004,7 @@ def make_associations(dict):
         return cons(association(keyword, value), make_associations((dict).cdr))
 
 def pattern_q(x):
-    return (null_q(x)) or (number_q(x)) or (boolean_q(x)) or (symbol_q(x)) or ((pair_q(x)) and (pattern_q((x).car)) and (pattern_q((x).cdr)))
+    return (((x) is symbol_emptylist)) or (number_q(x)) or (boolean_q(x)) or (symbol_q(x)) or ((pair_q(x)) and (pattern_q((x).car)) and (pattern_q((x).cdr)))
 
 def pattern_variable_q(x):
     return (symbol_q(x)) and (equal_q("?", substring(symbol_to_string(x), 0, 1)))
@@ -9007,11 +9013,11 @@ def constant_q(x):
     return (not(pattern_variable_q(x))) and (not(pair_q(x)))
 
 def occurs_q():
-    if true_q(constant_q(pattern_reg)):
+    if (False if ((constant_q(pattern_reg)) is False) else True):
         GLOBALS['value_reg'] = False
         GLOBALS['pc'] = apply_cont
     else:
-        if true_q(pattern_variable_q(pattern_reg)):
+        if (False if ((pattern_variable_q(pattern_reg)) is False) else True):
             GLOBALS['value_reg'] = equal_q(var_reg, pattern_reg)
             GLOBALS['pc'] = apply_cont
         else:
@@ -9020,8 +9026,8 @@ def occurs_q():
             GLOBALS['pc'] = occurs_q
 
 def unify_patterns_hat():
-    if true_q(pattern_variable_q(p1_reg)):
-        if true_q(pattern_variable_q(p2_reg)):
+    if (False if ((pattern_variable_q(p1_reg)) is False) else True):
+        if (False if ((pattern_variable_q(p2_reg)) is False) else True):
             GLOBALS['value_reg'] = make_sub(symbol_unit, p1_reg, p2_reg, ap2_reg)
             GLOBALS['pc'] = apply_cont
         else:
@@ -9030,7 +9036,7 @@ def unify_patterns_hat():
             GLOBALS['var_reg'] = p1_reg
             GLOBALS['pc'] = occurs_q
     else:
-        if true_q(pattern_variable_q(p2_reg)):
+        if (False if ((pattern_variable_q(p2_reg)) is False) else True):
             GLOBALS['temp_1'] = p2_reg
             GLOBALS['temp_2'] = p1_reg
             GLOBALS['temp_3'] = ap2_reg
@@ -9041,11 +9047,11 @@ def unify_patterns_hat():
             GLOBALS['ap2_reg'] = temp_4
             GLOBALS['pc'] = unify_patterns_hat
         else:
-            if true_q((constant_q(p1_reg)) and (constant_q(p2_reg)) and (equal_q(p1_reg, p2_reg))):
+            if (False if (((constant_q(p1_reg)) and (constant_q(p2_reg)) and (equal_q(p1_reg, p2_reg))) is False) else True):
                 GLOBALS['value_reg'] = make_sub(symbol_empty)
                 GLOBALS['pc'] = apply_cont
             else:
-                if true_q((pair_q(p1_reg)) and (pair_q(p2_reg))):
+                if (False if (((pair_q(p1_reg)) and (pair_q(p2_reg))) is False) else True):
                     GLOBALS['apair2_reg'] = ap2_reg
                     GLOBALS['apair1_reg'] = ap1_reg
                     GLOBALS['pair2_reg'] = p2_reg
@@ -9064,18 +9070,18 @@ def unify_pairs_hat():
     GLOBALS['pc'] = unify_patterns_hat
 
 def instantiate_hat():
-    if true_q(constant_q(pattern_reg)):
+    if (False if ((constant_q(pattern_reg)) is False) else True):
         GLOBALS['value2_reg'] = ap_reg
         GLOBALS['value1_reg'] = pattern_reg
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(pattern_variable_q(pattern_reg)):
+        if (False if ((pattern_variable_q(pattern_reg)) is False) else True):
             GLOBALS['avar_reg'] = ap_reg
             GLOBALS['var_reg'] = pattern_reg
             GLOBALS['pc'] = apply_sub_hat
         else:
-            if true_q(pair_q(pattern_reg)):
+            if (False if ((pair_q(pattern_reg)) is False) else True):
                 GLOBALS['k2_reg'] = make_cont2(b_cont2_125_d, ap_reg, pattern_reg, s_reg, k2_reg)
                 GLOBALS['ap_reg'] = car_hat(ap_reg)
                 GLOBALS['pattern_reg'] = (pattern_reg).car
@@ -9090,20 +9096,20 @@ def make_sub(*args):
 def apply_sub_hat():
     temp_1 = symbol_undefined
     temp_1 = (s_reg).cdr
-    if true_q(((temp_1).car) is (symbol_empty)):
+    if (False if ((((temp_1).car) is (symbol_empty)) is False) else True):
         GLOBALS['value2_reg'] = avar_reg
         GLOBALS['value1_reg'] = var_reg
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if true_q(((temp_1).car) is (symbol_unit)):
+        if (False if ((((temp_1).car) is (symbol_unit)) is False) else True):
             new_var = symbol_undefined
             new_pattern = symbol_undefined
             new_apattern = symbol_undefined
             new_apattern = list_ref(temp_1, 3)
             new_pattern = list_ref(temp_1, 2)
             new_var = list_ref(temp_1, 1)
-            if true_q(equal_q(var_reg, new_var)):
+            if (False if ((equal_q(var_reg, new_var)) is False) else True):
                 GLOBALS['value2_reg'] = new_apattern
                 GLOBALS['value1_reg'] = new_pattern
                 GLOBALS['k_reg'] = k2_reg
@@ -9114,7 +9120,7 @@ def apply_sub_hat():
                 GLOBALS['k_reg'] = k2_reg
                 GLOBALS['pc'] = apply_cont2
         else:
-            if true_q(((temp_1).car) is (symbol_composite)):
+            if (False if ((((temp_1).car) is (symbol_composite)) is False) else True):
                 s1 = symbol_undefined
                 s2 = symbol_undefined
                 s2 = list_ref(temp_1, 2)

@@ -6,39 +6,41 @@ class Translator(object):
         self.symbols = self.get_initial_symbols()
         self.options = {}
         self.convert_to_expression = {
-            "car": ".car",
-            "cdr": ".cdr",
+            "null?": lambda item: "((%s) is symbol_emptylist)" % (item,),
             ##
-            "caar": ".car.car",
-            "cadr": ".cdr.car",
-            "cdar": ".car.cdr",
-            "cddr": ".cdr.cdr",
+            "car": lambda item: "(%s).car" % (item,),
+            "cdr": lambda item: "(%s).cdr" % (item,),
             ##
-            "caaar": ".car.car.car",
-            "caadr": ".cdr.car.car",
-            "cadar": ".car.cdr.car",
-            "caddr": ".cdr.cdr.car",
-            "cdaar": ".car.car.cdr",
-            "cdadr": ".cdr.car.cdr",
-            "cddar": ".car.cdr.cdr",
-            "cdddr": ".cdr.cdr.cdr",
+            "caar": lambda item: "(%s).car.car" % (item,),
+            "cadr": lambda item: "(%s).cdr.car" % (item,),
+            "cdar": lambda item: "(%s).car.cdr" % (item,),
+            "cddr": lambda item: "(%s).cdr.cdr" % (item,),
             ##
-            "caaaar": ".car.car.car.car",
-            "caaadr": ".cdr.car.car.car",
-            "caadar": ".car.cdr.car.car",
-            "caaddr": ".cdr.cdr.car.car",
-            "cadaar": ".car.car.cdr.car",
-            "cadadr": ".cdr.car.cdr.car",
-            "caddar": ".car.cdr.cdr.car",
-            "cadddr": ".cdr.cdr.cdr.car",
-            "cdaaar": ".car.car.car.cdr",
-            "cdaadr": ".cdr.car.car.cdr",
-            "cdadar": ".car.cdr.car.cdr",
-            "cdaddr": ".cdr.cdr.car.cdr",
-            "cddaar": ".car.car.cdr.cdr",
-            "cddadr": ".cdr.car.cdr.cdr",
-            "cdddar": ".car.cdr.cdr.cdr",
-            "cddddr": ".cdr.cdr.cdr.cdr",
+            "caaar": lambda item: "(%s).car.car.car" % (item,),
+            "caadr": lambda item: "(%s).cdr.car.car" % (item,),
+            "cadar": lambda item: "(%s).car.cdr.car" % (item,),
+            "caddr": lambda item: "(%s).cdr.cdr.car" % (item,),
+            "cdaar": lambda item: "(%s).car.car.cdr" % (item,),
+            "cdadr": lambda item: "(%s).cdr.car.cdr" % (item,),
+            "cddar": lambda item: "(%s).car.cdr.cdr" % (item,),
+            "cdddr": lambda item: "(%s).cdr.cdr.cdr" % (item,),
+            ##
+            "caaaar": lambda item: "(%s).car.car.car.car" % (item,),
+            "caaadr": lambda item: "(%s).cdr.car.car.car" % (item,),
+            "caadar": lambda item: "(%s).car.cdr.car.car" % (item,),
+            "caaddr": lambda item: "(%s).cdr.cdr.car.car" % (item,),
+            "cadaar": lambda item: "(%s).car.car.cdr.car" % (item,),
+            "cadadr": lambda item: "(%s).cdr.car.cdr.car" % (item,),
+            "caddar": lambda item: "(%s).car.cdr.cdr.car" % (item,),
+            "cadddr": lambda item: "(%s).cdr.cdr.cdr.car" % (item,),
+            "cdaaar": lambda item: "(%s).car.car.car.cdr" % (item,),
+            "cdaadr": lambda item: "(%s).cdr.car.car.cdr" % (item,),
+            "cdadar": lambda item: "(%s).car.cdr.car.cdr" % (item,),
+            "cdaddr": lambda item: "(%s).cdr.cdr.car.cdr" % (item,),
+            "cddaar": lambda item: "(%s).car.car.cdr.cdr" % (item,),
+            "cddadr": lambda item: "(%s).cdr.car.cdr.cdr" % (item,),
+            "cdddar": lambda item: "(%s).car.cdr.cdr.cdr" % (item,),
+            "cddddr": lambda item: "(%s).cdr.cdr.cdr.cdr" % (item,),
             }
         ## --noprimitives
         if flags:
@@ -46,6 +48,10 @@ class Translator(object):
                 if flag.startswith("--"):
                     self.options[flag[2:]] = True
         self.initialize()
+
+    def true_q(self, item):
+        return "(False if ((%s) is False) else True)" % (item,),
+        #return "(true_q(%s))" % (item,),
 
     def initialize(self):
         pass
@@ -64,13 +70,13 @@ class Translator(object):
         return [
             "void-value", "restart-rm", "trampoline",
             "read-content", "read-multiline-test",
-            "string->integer", "string->decimal", "string->rational", 
-            "string-split", 
-            "get-current-time", "type?", 
+            "string->integer", "string->decimal", "string->rational",
+            "string-split",
+            "get-current-time", "type?",
             "read-eval-print-loop", "unparse", "unparse-exps", "qq-expand-cps_",
-            "qq-expand-list-cps_", 
+            "qq-expand-list-cps_",
             ## defined in Scheme.cs:
-            "true?", 
+            "true?",
             "init-cont", "init-cont2", "init-cont3", "init-cont4",
             "init-handler", "init-handler2", "init-fail",
             "make-cont", "make-cont2", "make-cont3", "make-cont4", "make-macro", "make-proc",
@@ -162,7 +168,7 @@ class Translator(object):
         """
         Lexer for Scheme code. Takes a string of Scheme code and breaks it
         up into a flat list of the important parts.
-    
+
         > lexer("(define x (lambda (x) (cond ((test? x) (func x)) (else return))))"))
         ['(', 'define', 'x', '(', 'lambda', '(', 'x', ')', '(', 'cond', '(', '(', 'test?',
          'x', ')', '(', 'func', 'x', ')', ')', '(', 'else', 'return', ')', ')', ')', ')']
@@ -265,9 +271,9 @@ class Translator(object):
         """
         Take a lexed list and parse it into a tree of s-expressions represented
         as lists. Side-effect: collects and replaces symbols.
-        
+
         > parser(lexer("(define x (lambda (x) (cond ((test? x) (func x)) (else return))))"))
-        [['define', 'x', ['lambda', ['x'], ['cond', [['test?', 'x'], 
+        [['define', 'x', ['lambda', ['x'], ['cond', [['test?', 'x'],
                                                      ['func', 'x']], ['else', 'return']]]]]
         """
         retval = []
@@ -333,7 +339,7 @@ class PythonTranslator(Translator):
                 args = ", ".join(map(self.fix_name, expr[2][1]))
             else:
                 args = "*%s" % self.fix_name(expr[2][1]) # var args
-                convert_args = "%s = List(*%s)" % (self.fix_name(expr[2][1]), 
+                convert_args = "%s = List(*%s)" % (self.fix_name(expr[2][1]),
                                                    self.fix_name(expr[2][1]))
         if ", dot, " in args:
             args = args.replace(", dot, ", ", *") # var args on end
@@ -372,8 +378,9 @@ class PythonTranslator(Translator):
                 else:
                     ## function call:
                     if expr[0] in self.convert_to_expression:
-                        return "(%s)%s" % (", ".join([self.process_app(e) for e in expr[1:]]),
-                                           self.convert_to_expression[expr[0]])
+                        return self.convert_to_expression[expr[0]](
+                            (", ".join([self.process_app(e) for e in expr[1:]]))
+                        )
                     else:
                         return "%s(%s)" % (self.fix_name(expr[0]),
                                            ", ".join([self.process_app(e) for e in expr[1:]]))
@@ -399,7 +406,7 @@ class PythonTranslator(Translator):
 
     def process_if(self, expr, locals, indent):
         ## (if 1 2 3)
-        self.Print(indent, "if true_q(%s):" % self.process_app(expr[1]))
+        self.Print(indent, "if %s:" % self.true_q(self.process_app(expr[1])))
         self.process_statement(expr[2], locals, indent + 4)
         if len(expr) > 3:
             self.Print(indent, "else:")
@@ -416,7 +423,7 @@ class PythonTranslator(Translator):
             return "GLOBALS['%s']" % self.fix_name(name)
 
     def process_assignment(self, expr, locals, indent):
-        self.Print(indent, "%s = %s" % (self.check_global(expr[1], locals), 
+        self.Print(indent, "%s = %s" % (self.check_global(expr[1], locals),
                            self.process_app(expr[2])))
 
     def process_return(self, expr, indent):
@@ -428,7 +435,7 @@ class PythonTranslator(Translator):
 
     def process_cond(self, expr, locals, indent):
         ## (cond (test result) ...)
-        self.Print(indent, "if true_q(%s):" % self.process_app(expr[1][0]))
+        self.Print(indent, "if %s:" % self.true_q(self.process_app(expr[1][0])))
         self.process_statement(expr[1][1], locals, indent + 4)
         for rest in expr[2:]:
             if rest[0] == "else":
@@ -469,7 +476,7 @@ class PythonTranslator(Translator):
 
     def to_ignore(self):
         return super(PythonTranslator, self).to_ignore() + ["highlight-expression"]
-                
+
     def translate(self, filename):
         with open('Scheme.py', 'rb') as fid:
             for line in fid:
@@ -542,7 +549,7 @@ public class PJScheme:Scheme
   public static Closure dlr_func(object schemeProc) {
     // Return a Csharp function that when invoked acts
     // like schemeProc by calling apply_proc on its args.
-    return delegate (object[] args) { 
+    return delegate (object[] args) {
       proc_reg = schemeProc;
       args_reg = PJScheme.array_to_list (args);
       handler_reg = REP_handler;
@@ -552,12 +559,12 @@ public class PJScheme:Scheme
     };
   }
 
-  public delegate object ParamsFunction (params object[] args); 
+  public delegate object ParamsFunction (params object[] args);
 
   public static ParamsFunction callback(object schemeProc) {
     // Return a Csharp function that when invoked acts
     // like schemeProc by calling apply_proc on its args.
-    return args => { 
+    return args => {
       proc_reg = schemeProc;
       args_reg = PJScheme.array_to_list (args);
       handler_reg = REP_handler;
@@ -671,7 +678,7 @@ public class PJScheme:Scheme
                 args = ", ".join(map(self.fix_name, expr[2][1]))
             else:
                 args = "params object [] t_%s" % self.fix_name(expr[2][1]) # var args
-                convert_args = "object %s = sList(t_%s);" % (self.fix_name(expr[2][1]), 
+                convert_args = "object %s = sList(t_%s);" % (self.fix_name(expr[2][1]),
                                                              self.fix_name(expr[2][1]))
         if ", dot, " in args:
             args = args.replace(", dot, ", ", params object [] t_") # var args on end
@@ -701,9 +708,9 @@ public class PJScheme:Scheme
         return retval
 
     def process_infix_op(self, expr, op):
-        retval = "true_q(%s)" % self.process_app(expr[1])
+        retval = self.true_q(self.process_app(expr[1]))
         for e in expr[2:]:
-            retval += " %s true_q(%s)" % (op, self.process_app(e))
+            retval += " %s %s" % self.true_q((op, self.process_app(e)))
         return "(%s)" % retval
 
     def process_app(self, expr):
@@ -724,7 +731,7 @@ public class PJScheme:Scheme
             else:
                 ## function call:
                 if expr[0] == "not":
-                    return "(! true_q(%s))" % ", ".join([self.process_app(e) for e in expr[1:]])
+                    return "(! %s)" % self.true_q(", ".join([self.process_app(e) for e in expr[1:]]))
                 elif expr[0] == "error":
                     exception_msg = "\"%s: \" + format(%s, %s)" % (
                         expr[1], expr[2], ", ".join([self.process_app(e) for e in expr[3:]]))
@@ -739,8 +746,9 @@ public class PJScheme:Scheme
                             return "%s(%s)" % (self.fix_name(expr[0]),
                                                ", ".join([self.process_app(e) for e in (['"%s"' % what, id] + expr[2:])]))
                     if expr[0] in self.convert_to_expression:
-                        return "(%s)%s" % (", ".join([self.process_app(e) for e in expr[1:]]),
-                                           self.convert_to_expression[expr[0]])
+                        return self.convert_to_expression[expr[0]](
+                            (", ".join([self.process_app(e) for e in expr[1:]]))
+                        )
                     else:
                         return "%s(%s)" % (self.fix_name(expr[0]),
                                            ", ".join([self.process_app(e) for e in expr[1:]]))
@@ -765,21 +773,21 @@ public class PJScheme:Scheme
         elif (name in ["=", ">=", "car", "cdr", "string-length", "+", "string-ref", "sqrt",
                        "/", "remainder", "quotient", "char->integer", "integer->char",
                        "cons", "cadr", "-", "*", "%", "<", ">", "<=", "abs", "memq",
-                       "range", "snoc", "rac", "rdc", "set-car!", "set-cdr!", "reverse", 
+                       "range", "snoc", "rac", "rdc", "set-car!", "set-cdr!", "reverse",
                        "string->number", "list->vector", "list->string", "format", "printf",
-                       "vector-native", "vector-ref", "make-vector", "list-ref", "setup", 
+                       "vector-native", "vector-ref", "make-vector", "list-ref", "setup",
                        "safe-print", "modulo", "vector_native", "car^", "cadr^", "string->symbol",
                        "make-binding", "aunparse", "format-stack-trace", "get-variables-from-frame",
-                       "vector->list", "char->string", "string->list", "symbol->string", 
+                       "vector->list", "char->string", "string->list", "symbol->string",
                        "float", "int", "globals", "assq", "dict", "property",
                        "reset-toplevel-env", "sort", "string-append", "string-split", "make-symbol",
                        "type", "use-lexical-address", "min", "max",
-                       "caar", "cadr", "cdar", "cddr" , 
+                       "caar", "cadr", "cdar", "cddr" ,
                        "caaar", "caadr", "cadar", "caddr" , "cdaar", "cdadr", "cddar", "cdddr",
                        "caaaar", "caaadr", "caadar", "caaddr" , "cadaar", "cadadr", "caddar", "cadddr",
                        "cdaaar", "cdaadr", "cdadar", "cdaddr" , "cddaar", "cddadr", "cdddar", "cddddr",
                        "contains-native", "getitem-native", "setitem-native"
-                   ] or 
+                   ] or
             "?" in name):
             return self.fix_name(name) + "_proc"
         else:
@@ -787,7 +795,7 @@ public class PJScheme:Scheme
 
     def process_while(self, expr, locals, indent):
         # (while test body...)
-        self.Print(indent, "while (true_q(%s)) {" % self.process_app(expr[1]))
+        self.Print(indent, "while %s {" % self.true_q(self.process_app(expr[1])))
         body = expr[2:]
         for statement in body:
             self.process_statement(statement, locals, indent + 4)
@@ -805,7 +813,7 @@ public class PJScheme:Scheme
 
     def process_if(self, expr, locals, indent):
         ## (if 1 2 3)
-        self.Print(indent, "if (true_q(%s)) {" % self.process_app(expr[1]))
+        self.Print(indent, "if %s {" % self.true_q(self.process_app(expr[1])))
         self.process_statement(expr[2], locals, indent + 4)
         if len(expr) > 3:
             self.Print(indent, "} else {")
@@ -822,7 +830,7 @@ public class PJScheme:Scheme
         return self.fix_name(name)
 
     def process_assignment(self, expr, locals, indent):
-        self.Print(indent, "%s = %s;" % (self.check_global(expr[1], locals), 
+        self.Print(indent, "%s = %s;" % (self.check_global(expr[1], locals),
                            self.process_app(expr[2])))
 
     def process_return(self, expr, indent):
@@ -841,20 +849,20 @@ public class PJScheme:Scheme
 
     def process_cond(self, expr, locals, indent):
         ## (cond (test result) ...)
-        self.Print(indent, "if (true_q(%s)) {" % self.process_app(expr[1][0]))
+        self.Print(indent, "if %s {" % self.true_q(self.process_app(expr[1][0])))
         self.process_statement(expr[1][1], locals, indent + 4)
         for rest in expr[2:]:
             if rest[0] == "else":
                 self.Print(indent, "} else {")
             else:
-                self.Print(indent, "} else if (true_q(%s)) {" % self.process_app(rest[0]))
+                self.Print(indent, "} else if %s {" % self.true_q(self.process_app(rest[0])))
             self.process_statement(rest[1], locals, indent + 4)
             self.Print(indent, "}")
 
     def process_statement(self, expr, locals, indent):
-        if (self.options.get("noprimitives", False) and 
-            isinstance(expr, list) and len(expr) > 1 and 
-            isinstance(expr[1], str) and 
+        if (self.options.get("noprimitives", False) and
+            isinstance(expr, list) and len(expr) > 1 and
+            isinstance(expr[1], str) and
             (expr[1].endswith("-prim") or expr[1] == "make-toplevel-env")):
             return
         if self.function_q(expr):
@@ -885,7 +893,7 @@ public class PJScheme:Scheme
             self.process_return(expr, indent)
         else: # must be a function call
             self.Print(indent, "%s;" % self.process_app(expr))
-                
+
     def translate(self, filename):
         indent = 0
         self.fp = open(filename, "w")
@@ -989,19 +997,19 @@ public class PJScheme:Scheme
             "cont": {
                 "tag": "continuation",
                 "count": 0,
-            }, 
+            },
             "cont2": {
                 "tag": "continuation2",
                 "count": 0,
-            }, 
+            },
             "cont3": {
                 "tag": "continuation3",
                 "count": 0,
-            }, 
+            },
             "cont4": {
                 "tag": "continuation4",
                 "count": 0,
-            }, 
+            },
             "macro": {
                 "tag": "macro-transformer",
                 "count": 0,
@@ -1009,15 +1017,15 @@ public class PJScheme:Scheme
             "fail": {
                 "tag": "fail-continuation",
                 "count": 0,
-            }, 
+            },
             "handler": {
                 "tag": "handler",
                 "count": 0,
-            }, 
+            },
             "handler2": {
                 "tag": "handler2",
                 "count": 0,
-            }, 
+            },
             "proc": {
                 "tag": "procedure",
                 "count": 0,
@@ -1025,7 +1033,7 @@ public class PJScheme:Scheme
         }
 
     def get_initial_symbols(self):
-        return ["()", "<extension>", "method", "field", "constructor", 
+        return ["()", "<extension>", "method", "field", "constructor",
                 "property", "done", "module"]
 
     def generate_extras(self, indent):
@@ -1037,7 +1045,7 @@ public class PJScheme:Scheme
             self.Print(indent + 4, "mi_%s = new MethodInfo[%s];" % (mi, int(self.methods[mi]["count"]) + 1))
         self.Print(indent + 4, "")
         for mi in self.methods:
-            self.Print(indent + 4,  "for (int i = 1; i < %s; i++) {" % int(self.methods[mi]["count"] + 1)) 
+            self.Print(indent + 4,  "for (int i = 1; i < %s; i++) {" % int(self.methods[mi]["count"] + 1))
             self.Print(indent + 8,  "mi_%s[i] = typeof(PJScheme).GetMethod(String.Format(\"b_%s_{0}_d\", i));" % (mi, mi))
             self.Print(indent + 8,  "if (mi_%s[i] == null) {" % mi)
             self.Print(indent + 12, "throw new Exception(String.Format(\"Undefined mi: mi_%s[{0}]\", i));" % mi)
@@ -1053,7 +1061,7 @@ public class PJScheme:Scheme
             self.Print(indent + 0,  "")
 
     def overrides(self):
-        return ["pc-halt-signal", "map^", "set-use-stack-trace", "run", 
+        return ["pc-halt-signal", "map^", "set-use-stack-trace", "run",
                 "handle-debug-info", "safe-print", "reset-toplevel-env",
                 "make-safe", "highlight-expression"]
 
