@@ -1,3 +1,9 @@
+## Release 1.4.1 (Aug 30, 2018)
+
+	* fixed `stdin to "stdin" differences
+	* speed up: car(item) -> item.car
+	* speed up: tagged functions, combine length and list?
+
 ## Release 1.4.0 (Aug 29, 2018)
 
 	* Moved implementation data structures to datastructures.ss

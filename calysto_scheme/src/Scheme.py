@@ -20,7 +20,7 @@ import io
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 #############################################################
 # Python implementation notes:
