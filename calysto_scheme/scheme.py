@@ -294,17 +294,6 @@ def for_each(f, lyst):
     if current != symbol_emptylist:
         raise Exception("not a proper list")
 
-def pivot (p, l):
-    if null_q(l):
-        return make_symbol("done")
-    elif null_q(l.cdr):
-        return make_symbol("done")
-    result = apply_comparison(p, l.car, l.cdr.car)
-    if result:
-        return pivot(p, l.cdr)
-    else:
-        return l.car
-
 def make_comparison_function(procedure):
     def compare(carl, cadrl):
         GLOBALS["save_k2_reg"] = k2_reg
@@ -329,31 +318,28 @@ def random(number):
     else:
         raise Exception("random function received invalid value: %s" % number)
 
-## usage: (partition 4 '(6 4 2 1 7) () ()) -> returns partitions
-def partition (p, piv, l, p1, p2):
-    if (null_q(l)):
-        return List(p1, p2)
-    result = apply_comparison(p, l.car, piv)
-    if (result):
-        return partition(p, piv, l.cdr, cons(l.car, p1), p2)
-    else:
-        return partition(p, piv, l.cdr, p1, cons(l.car, p2))
-
 def sort_native(args, env2, info, handler, fail):
     p = args.car
-    l = args.cdr.car
+    arg = args.cdr.car
+    return sort(p, arg)
+
+def sort(p, arg):
+    from functools import cmp_to_key
+    l = list_to_vector(arg)
     if procedure_q(p):
         f = make_comparison_function(p)
     else:
         f = p
-    return sort(f, l)
-
-def sort(f, l):
-    piv = pivot(f, l)
-    if (piv is make_symbol("done")): return l
-    parts = partition(f, piv, l, symbol_emptylist, symbol_emptylist)
-    return append(sort(f, parts.car),
-                  sort(f, parts.cdr.car))
+    def cmp_function(a, b):
+        result = f(a, b)
+        if result:
+            return -1
+        elif a == b:
+            return 0
+        else:
+            return 1
+    l.sort(key=cmp_to_key(cmp_function))
+    return vector_to_list(l)
 
 def append(*objs):
     retval = objs[-1]
