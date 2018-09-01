@@ -18,6 +18,14 @@ import sys
 import os
 import io
 
+try:
+    import yasi
+    yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
+    opts = yasi.parse_options([])
+    opts.dialect = "scheme"
+except:
+    yasi = None
+
 PY3 = sys.version_info[0] == 3
 
 __version__ = "1.4.3"
@@ -916,13 +924,19 @@ def unbox(item):
     return item.item
 
 def ready_to_eval(text):
-    if text:
+    if yasi:
+        data = yasi.indent_code(text + "\n(", opts) ## where does next expression go?
+        if data["indented_code"][-1] == "(":
+            return (True, "")
+        else:
+            return (False, "... " + data["indented_code"][-1][:-1])
+    elif text:
         lines = text.split("\n")
         if len(lines) > 0 and lines[-1].strip() == "":
             return True ## force it
         ## else, only if valid parse
         return try_parse(text)
-    return True
+    return (True, "")
 
 # native:
 def read_multiline(prompt):
@@ -935,13 +949,13 @@ def read_multiline(prompt):
                 retval.write(input(prompt)) ## Python 3
             else:
                 retval.write(raw_input(prompt)) ## Python 2
-            prompt = "... "
         except EOFError:
             return "(exit)"
         except:
             return ""
         s = retval.getvalue()
-        if ready_to_eval(s):
+        ready, prompt = ready_to_eval(s)
+        if ready:
             return s
         retval.write(" ")
 

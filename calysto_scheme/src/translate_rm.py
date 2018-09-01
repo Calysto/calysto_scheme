@@ -496,7 +496,7 @@ class PythonTranslator(Translator):
             self.process_statement(statement, [], 0)
         self.Print(0, "initialize_globals()")
         self.Print(0, "")
-        self.Print(0, "if __name__ == '__main__':")
+        self.Print(0, "def main():")
         self.Print(4, "print('Calysto Scheme, version %s')" % __version__)
         self.Print(4, "print('----------------------------')")
         self.Print(4, "print('Use (exit) to exit')")
@@ -508,6 +508,8 @@ class PythonTranslator(Translator):
         self.Print(4, "if '-i' in sys.argv[1:] or sys.argv[1:] == []:")
         self.Print(4, "    read_eval_print_loop_rm()")
         self.Print(4, "    print()")
+        self.Print(0, "if __name__ == '__main__':")
+        self.Print(4, "main()")
 
 class CSharpTranslator(Translator):
     def preamble(self):
