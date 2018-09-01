@@ -1,3 +1,14 @@
+## Release 1.4.2 (Aug 31, 2018)
+
+	* new (range) tests
+	* fixed (define 1 2)
+	* fixed range()
+	* speed up on Apply on zero args
+	* new (sort) tests
+	* fixed (sort)
+	* speedups: inline true_q, null_q; re-wrote length_at_least
+	* missing special forms in completion: run-tests, define-tests, assert
+
 ## Release 1.4.1 (Aug 30, 2018)
 
 	* fixed `stdin to "stdin" differences
