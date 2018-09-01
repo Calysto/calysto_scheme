@@ -3,6 +3,7 @@ from __future__ import division, print_function
 class Translator(object):
     def __init__(self, flags=None):
         self.program = []
+        self.initialize_let_vars = False
         self.symbols = self.get_initial_symbols()
         self.options = {}
         self.convert_to_expression = {
@@ -396,9 +397,10 @@ class PythonTranslator(Translator):
 
     def process_let(self, expr, locals, indent):
         # (let ((x 1)(y u)) ...)
-        for pair in expr[1]:
-            # locals:
-            self.Print(indent, "%s = %s" % (self.fix_name(pair[0]), self.process_app(pair[1])))
+        if self.initialize_let_vars:
+            for pair in expr[1]:
+                # locals:
+                self.Print(indent, "%s = %s" % (self.fix_name(pair[0]), self.process_app(pair[1])))
         locals.extend([pair[0] for pair in expr[1]])
         body = expr[2:]
         for statement in body:
@@ -805,9 +807,10 @@ public class PJScheme:Scheme
 
     def process_let(self, expr, locals, indent):
         # (let ((x 1)(y u)) ...)
-        for pair in expr[1]:
-            # locals:
-            self.Print(indent, "object %s = %s;" % (self.fix_name(pair[0]), self.process_app(pair[1])))
+        if self.initialize_let_vars:
+            for pair in expr[1]:
+                # locals:
+                self.Print(indent, "object %s = %s;" % (self.fix_name(pair[0]), self.process_app(pair[1])))
         locals.extend([pair[0] for pair in expr[1]])
         body = expr[2:]
         for statement in body:
