@@ -5,6 +5,7 @@
 	* yasi can be customized via ~/.yasirc.json
 		* see: https://github.com/nkmathew/yasi-sexp-indenter#customization
 	* new scripts: calysto-scheme, calysto-scheme-debug
+	* remove "var = undefined" useless statements
 
 ## Release 1.4.2 (Aug 31, 2018)
 
