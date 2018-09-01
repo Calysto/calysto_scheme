@@ -5,18 +5,26 @@ from calysto_scheme import scheme
 import os
 import sys
 import logging
+
 try:
     from IPython.core.latex_symbols import latex_symbols
     #from IPython.utils import io
 except:
     latex_symbols = []
 
+try:
+    import yasi
+    yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
+    opts = yasi.parse_options([])
+    opts.dialect = "scheme"
+except:
+    yasi = None
+
 PY3 = (sys.version_info[0] >= 3)
 if PY3:
     PY_STRINGS = (str,)
 else:
     PY_STRINGS = (str, unicode)
-
 
 class CalystoScheme(MetaKernel):
     implementation = 'scheme'
@@ -373,12 +381,20 @@ MAIN FEATURES
 
     def do_is_complete(self, code):
         # status: 'complete', 'incomplete', 'invalid', or 'unknown'
-        if code.startswith("%"):
-            ## force requirement to end with an empty line
-            if code.endswith("\n"):
+        ## First, remove magic lines:
+        contains_magic = False
+        while code.startswith("%"):
+            code = "\n".join(code.split("\n")[1:])
+            contains_magic = True
+        if code.strip() == "" and contains_magic:
+            return {'status' : 'incomplete'}
+        elif yasi is not None:
+            data = yasi.indent_code(code + "\n(", opts) ## where does next expression go?
+            if data["indented_code"][-1] == "(":
                 return {'status' : 'complete'}
             else:
-                return {'status' : 'incomplete'}
+                return {'status' : 'incomplete',
+                        'indent': data["indented_code"][-1][:-1]}
         elif scheme.ready_to_eval(code):
             return {'status' : 'complete'}
         else:
