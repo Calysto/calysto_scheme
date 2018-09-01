@@ -674,7 +674,7 @@
 			(proc-exp (aunparse (car (cdr^ assert-exp))))
 			(test-exp (aunparse (cadr (cdr^ assert-exp))))
 			(result-exp (caddr (cdr^ assert-exp)))
-			(traceback (get_traceback_string (list 'exception e))))
+			(traceback (get-traceback-string (list 'exception e))))
 		   (if (> (string-length msg) 0)
 		       (if (eq? where 'none)
 			   (printf "  Error: ~a \"~a\"\n" test-name msg)
@@ -1993,14 +1993,14 @@
   (lambda args
     (letrec
 	((range
-	  (lambda (n end step acc)
-	    (if (>= n end)
+	  (lambda (n end step acc) ;; count 10 1
+	    (if (= n end)
 	      (reverse acc)
 	      (range (+ n step) end step (cons n acc))))))
       (cond
-	((null? (cdr args)) (range 0 (car args) 1 '()))
-	((null? (cddr args)) (range (car args) (cadr args) 1 '()))
-	(else (range (car args) (cadr args) (caddr args) '()))))))
+	((null? (cdr args)) (range 0 (car args) 1 '())) ;; (range 10)
+	((null? (cddr args)) (range (car args) (cadr args) 1 '())) ;; (range 0 10)
+	(else (range (car args) (cadr args) (caddr args) '())))))) ;; (range 0 10 1)
 
 ;; set-car!
 (define set-car!-prim

@@ -294,12 +294,13 @@ def for_each(f, lyst):
     if current != symbol_emptylist:
         raise Exception("not a proper list")
 
-def make_comparison_function(procedure):
+def make_comparison_function(procedure, handler):
+    handler = handler if handler is not None else REP_handler
     def compare(carl, cadrl):
         GLOBALS["save_k2_reg"] = k2_reg
         GLOBALS["proc_reg"] = procedure
         GLOBALS["args_reg"] = List(carl, cadrl)
-        GLOBALS["handler_reg"] = REP_handler
+        GLOBALS["handler_reg"] = handler
         GLOBALS["k2_reg"] = REP_k
         GLOBALS["pc"] = apply_proc
         retval = trampoline()
@@ -321,20 +322,22 @@ def random(number):
 def sort_native(args, env2, info, handler, fail):
     p = args.car
     arg = args.cdr.car
-    return sort(p, arg)
+    return sort(p, arg, handler)
 
-def sort(p, arg):
+def sort(p, arg, handler=None):
     from functools import cmp_to_key
     l = list_to_vector(arg)
     if procedure_q(p):
-        f = make_comparison_function(p)
+        f = make_comparison_function(p, handler)
     else:
         f = p
     def cmp_function(a, b):
         result = f(a, b)
+        if exception_q(result):
+            raise Exception(cadadr(result)) ## FIXME: get_exception_message
         if result:
             return -1
-        elif a == b:
+        elif equal_q(a, b):
             return 0
         else:
             return 1
@@ -818,7 +821,10 @@ def substring(s, start, stop):
 ### Functions:
 
 def Apply(f, lyst):
-    return f(*list_to_vector(lyst))
+    if lyst is symbol_emptylist:
+        return f()
+    else:
+        return f(*list_to_vector(lyst))
 
 ### Annotated expression support:
 
@@ -6913,7 +6919,7 @@ def get_reserved_keywords():
     return List(symbol_quote, symbol_func, symbol_define_b, symbol_quasiquote, symbol_lambda, symbol_if, symbol_set_b, symbol_define, symbol_begin, symbol_cond, symbol_and, symbol_or, symbol_let, symbol_let_star, symbol_letrec, symbol_case, symbol_record_case, symbol_try, symbol_catch, symbol_finally, symbol_raise, symbol_define_syntax, symbol_choose, symbol_define_datatype, symbol_cases, symbol_trace_lambda)
 
 def mit_style_define_q_hat(asexp):
-    return (define_q_hat(asexp)) and (not(symbol_q_hat(cadr_hat(asexp))))
+    return (define_q_hat(asexp)) and (pair_q_hat(cadr_hat(asexp)))
 
 def literal_q(datum):
     return (number_q(datum)) or (boolean_q(datum)) or (((datum) is symbol_emptylist)) or (char_q(datum)) or (string_q(datum))
@@ -7039,12 +7045,12 @@ def aparse():
                                                                         GLOBALS['macro_reg'] = mit_define_transformer_hat
                                                                         GLOBALS['pc'] = apply_macro
                                                                     else:
-                                                                        if (False if ((numeric_equal(length_hat(adatum_reg), 3)) is False) else True):
+                                                                        if (False if (((numeric_equal(length_hat(adatum_reg), 3)) and (symbol_q_hat(cadr_hat(adatum_reg)))) is False) else True):
                                                                             GLOBALS['k_reg'] = make_cont2(b_cont2_26_d, adatum_reg, info, k_reg)
                                                                             GLOBALS['adatum_reg'] = caddr_hat(adatum_reg)
                                                                             GLOBALS['pc'] = aparse
                                                                         else:
-                                                                            if (False if (((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg)))) is False) else True):
+                                                                            if (False if (((numeric_equal(length_hat(adatum_reg), 4)) and (symbol_q_hat(cadr_hat(adatum_reg))) and (string_q_hat(caddr_hat(adatum_reg)))) is False) else True):
                                                                                 GLOBALS['k_reg'] = make_cont2(b_cont2_25_d, adatum_reg, info, k_reg)
                                                                                 GLOBALS['adatum_reg'] = cadddr_hat(adatum_reg)
                                                                                 GLOBALS['pc'] = aparse

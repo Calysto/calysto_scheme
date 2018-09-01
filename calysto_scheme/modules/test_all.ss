@@ -137,6 +137,61 @@
 	   (lambda-exp (bound-var body) (list bound-var body))
 	   (app-exp (rator rand) (list rator rand)))))
 
+(define-tests defines
+  (assert equal?
+	  (begin
+	    (define x 42)
+	    x)
+	  42
+	  "define")
+  (assert equal?
+	  (begin
+	    (define x "my help" 42)
+	    (help x))
+	  "my help"
+	  "define with docs")
+  (assert equal?
+	  (begin
+	    (define (x y) y)
+	    (x 38))
+	  38
+	  "define mit-style")
+  (assert equal?
+	  (try
+	   (parse '(define 1 1))
+	   (catch e e 88))
+	  88
+	  "bad define 1")
+  )
+
+(define-tests sort
+  (assert equal?
+	  (sort < (range 100))
+	  (range 100)
+	  "sort 1")
+  (assert equal?
+	  (sort < (range 99 -1 -1))
+	  (range 100)
+	  "sort 2")
+  (assert equal?
+	  (sort (lambda (a b) (> a b)) (range 100))
+	  (range 99 -1 -1)
+	  "sort 3")
+  (assert equal?
+	  (sort string<? '("z" "c" "a" "b"))
+	  '("a" "b" "c" "z")
+	  "sort 4")
+  (assert equal?
+	  (list-ref (sort < (range 9999 -1 -1)) 5)
+	  5
+	  "sort 5")
+;; FIXME: sort doesn't continue correctly on error
+;;  (assert equal?
+;;	  (try (sort (lambda (a b) (< a b)) '(1 2 "a" 3 4))
+;;	       (catch e e 88))
+;;	  88
+;;	  "sort 6")
+)
 
 (define-tests main
   (assert equal?

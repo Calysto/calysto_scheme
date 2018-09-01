@@ -286,12 +286,13 @@ def for_each(f, lyst):
     if current != symbol_emptylist:
         raise Exception("not a proper list")
 
-def make_comparison_function(procedure):
+def make_comparison_function(procedure, handler):
+    handler = handler if handler is not None else REP_handler
     def compare(carl, cadrl):
         GLOBALS["save_k2_reg"] = k2_reg
         GLOBALS["proc_reg"] = procedure
         GLOBALS["args_reg"] = List(carl, cadrl)
-        GLOBALS["handler_reg"] = REP_handler
+        GLOBALS["handler_reg"] = handler
         GLOBALS["k2_reg"] = REP_k
         GLOBALS["pc"] = apply_proc
         retval = trampoline()
@@ -313,20 +314,22 @@ def random(number):
 def sort_native(args, env2, info, handler, fail):
     p = args.car
     arg = args.cdr.car
-    return sort(p, arg)
+    return sort(p, arg, handler)
 
-def sort(p, arg):
+def sort(p, arg, handler=None):
     from functools import cmp_to_key
     l = list_to_vector(arg)
     if procedure_q(p):
-        f = make_comparison_function(p)
+        f = make_comparison_function(p, handler)
     else:
         f = p
     def cmp_function(a, b):
         result = f(a, b)
+        if exception_q(result):
+            raise Exception(cadadr(result)) ## FIXME: get_exception_message
         if result:
             return -1
-        elif a == b:
+        elif equal_q(a, b):
             return 0
         else:
             return 1
@@ -810,7 +813,10 @@ def substring(s, start, stop):
 ### Functions:
 
 def Apply(f, lyst):
-    return f(*list_to_vector(lyst))
+    if lyst is symbol_emptylist:
+        return f()
+    else:
+        return f(*list_to_vector(lyst))
 
 ### Annotated expression support:
 

@@ -228,7 +228,7 @@
 (define mit-style-define?^
   (lambda (asexp)
     (and (define?^ asexp)
-	 (not (symbol?^ (cadr^ asexp))))))
+	 (pair?^ (cadr^ asexp)))))
 
 ;; used in aunparse
 (define literal?
@@ -397,11 +397,14 @@
 		(annotate-cps v 'none
 		  (lambda-cont (expansion)
 		    (aparse (replace-info expansion info) senv handler fail k))))))
-	   ((= (length^ adatum) 3) ;; (define <var> <body>)
+	   ((and (= (length^ adatum) 3)
+		 (symbol?^ (cadr^ adatum))) ;; (define <var> <body>)
 	    (aparse (caddr^ adatum) senv handler fail
 	      (lambda-cont2 (body fail)
 		(k (define-aexp (define-var^ adatum) "" body info) fail))))
-	   ((and (= (length^ adatum) 4) (string?^ (caddr^ adatum))) ;; (define <var> <docstring> <body>)
+	   ((and (= (length^ adatum) 4)
+		 (symbol?^ (cadr^ adatum))
+		 (string?^ (caddr^ adatum))) ;; (define <var> <docstring> <body>)
 	    (aparse (cadddr^ adatum) senv handler fail
 	      (lambda-cont2 (body fail)
 		(k (define-aexp (define-var^ adatum) (define-docstring^ adatum) body info) fail))))
