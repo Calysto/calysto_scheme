@@ -4,6 +4,7 @@
 	* yasi also provides signal for do_is_complete without full-on parsing
 	* yasi can be customized via ~/.yasirc.json
 		* see: https://github.com/nkmathew/yasi-sexp-indenter#customization
+	* new scripts: calysto-scheme, calysto-scheme-debug
 
 ## Release 1.4.2 (Aug 31, 2018)
 

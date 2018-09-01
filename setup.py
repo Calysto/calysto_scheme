@@ -24,6 +24,7 @@ setup(name='calysto_scheme',
       packages=find_packages(include=["calysto_scheme", "calysto_scheme.*"]),
       package_data={'calysto_scheme': ["images/*.png", "modules/*.ss"]},
       platforms=["Any"],
+      scripts = ["scripts/calysto-scheme", "scripts/calysto-scheme-debug"],
       data_files=[
           ('share/jupyter/kernels/calysto_scheme',
            ['calysto_scheme/kernel.json'] + glob.glob('calysto_scheme/images/*.png')
