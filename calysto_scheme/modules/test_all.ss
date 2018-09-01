@@ -200,12 +200,16 @@
 	  (list-ref (sort < (range 9999 -1 -1)) 5)
 	  5
 	  "sort 5")
-;; FIXME: sort doesn't continue correctly on error
-;;  (assert equal?
-;;	  (try (sort (lambda (a b) (< a b)) '(1 2 "a" 3 4))
-;;	       (catch e e 88))
-;;	  88
-;;	  "sort 6")
+  (assert equal?
+	  (try (sort (lambda (a b) (< a b)) '(1 2 "a" 3 4))
+	       (catch e e 'ok))
+	  'ok
+	  "sort 6")
+  (assert equal?
+	  (try (sort (lambda (a b) (< a b)) '(1 2 8 3 4))
+	       (catch e e 'ok))
+	  '(1 2 3 4 8)
+	  "sort 7")
 )
 
 (define-tests main

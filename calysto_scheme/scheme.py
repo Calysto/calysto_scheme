@@ -302,13 +302,12 @@ def for_each(f, lyst):
     if current != symbol_emptylist:
         raise Exception("not a proper list")
 
-def make_comparison_function(procedure, handler):
-    handler = handler if handler is not None else REP_handler
+def make_comparison_function(procedure):
     def compare(carl, cadrl):
-        GLOBALS["save_k2_reg"] = k2_reg
+        save_k2_reg = k2_reg
         GLOBALS["proc_reg"] = procedure
         GLOBALS["args_reg"] = List(carl, cadrl)
-        GLOBALS["handler_reg"] = handler
+        GLOBALS["handler_reg"] = REP_handler
         GLOBALS["k2_reg"] = REP_k
         GLOBALS["pc"] = apply_proc
         retval = trampoline()
@@ -327,19 +326,29 @@ def random(number):
     else:
         raise Exception("random function received invalid value: %s" % number)
 
-def sort_native(args, env2, info, handler, fail):
+def sort_native(args, env2, info, handler, fail, k2):
+    ## just passing extra args to be compatible with chez scheme
     p = args.car
     arg = args.cdr.car
-    return sort(p, arg, handler)
+    try:
+        GLOBALS['value1_reg'] = sort(p, arg)
+        GLOBALS['value2_reg'] = fail
+        GLOBALS['k_reg'] = k2
+        GLOBALS['pc'] = apply_cont2
+    except Exception as exc:
+        GLOBALS['fail_reg'] = fail
+        GLOBALS['handler_reg'] = handler
+        GLOBALS['info_reg'] = info
+        GLOBALS['msg_reg'] = str(exc)
+        GLOBALS['pc'] = runtime_error
 
-def sort(p, arg, handler=None):
-    from functools import cmp_to_key
+def sort(p, arg):
     l = list_to_vector(arg)
     if procedure_q(p):
-        f = make_comparison_function(p, handler)
+        f = make_comparison_function(p)
     else:
         f = p
-    def cmp_function(a, b):
+    def cmp(a, b):
         result = f(a, b)
         if exception_q(result):
             raise Exception(cadadr(result)) ## FIXME: get_exception_message
@@ -349,7 +358,7 @@ def sort(p, arg, handler=None):
             return 0
         else:
             return 1
-    l.sort(key=cmp_to_key(cmp_function))
+    l.sort(key=functools.cmp_to_key(cmp))
     return vector_to_list(l)
 
 def append(*objs):
@@ -5350,10 +5359,7 @@ def b_proc_173_d():
         GLOBALS['msg_reg'] = "incorrect number of arguments to sort"
         GLOBALS['pc'] = runtime_error
     else:
-        GLOBALS['value2_reg'] = fail_reg
-        GLOBALS['value1_reg'] = sort_native(args_reg, env2_reg, info_reg, handler_reg, fail_reg)
-        GLOBALS['k_reg'] = k2_reg
-        GLOBALS['pc'] = apply_cont2
+        return sort_native(args_reg, env2_reg, info_reg, handler_reg, fail_reg, k2_reg)
 
 def b_proc_174_d():
     if (False if ((not(length_at_least_q(2, args_reg))) is False) else True):
