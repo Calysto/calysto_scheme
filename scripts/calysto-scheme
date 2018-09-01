@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+
+import jupyter_core.command
+import sys
+
+if "--debug" in sys.argv:
+    sys.argv.remove("--debug")
+    args = [sys.executable, "console", "--debug", "--kernel", "calysto_scheme"]
+else:
+    args = [sys.executable, "console", "--kernel", "calysto_scheme"]
+extra_args = sys.argv[1:]
+sys.argv[:] = args + extra_args
+jupyter_core.command.main()

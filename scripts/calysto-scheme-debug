@@ -1,0 +1,5 @@
+#!/usr/bin/env ipython3
+
+import calysto_scheme
+
+calysto_scheme.scheme.main()
