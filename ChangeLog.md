@@ -6,6 +6,15 @@
 		* see: https://github.com/nkmathew/yasi-sexp-indenter#customization
 	* new scripts: calysto-scheme, calysto-scheme-debug
 	* remove "var = undefined" useless statements
+	* Renamed setitem, hasitem, and getitem
+		* setitem -> set-item!
+		* hasitem -> has-item?
+		* getitem -> get-item
+	* Added:
+		* set-attr!
+		* has-attr?
+		* get-attr
+	* fixed bug in scheme-host's sort
 
 ## Release 1.4.2 (Aug 31, 2018)
 
