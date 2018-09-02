@@ -159,7 +159,7 @@
   (assert equal?
 	  (try
 	   (parse '(define 1 1))
-	   (catch e e 88))
+	   (catch e 88))
 	  88
 	  "bad define 1")
   )
@@ -203,13 +203,13 @@
   (assert equal?
 	  (if (equal? (host-environment) "python")
 	      (try (sort (lambda (a b) (< a b)) '(1 2 "a" 3 4))
-		   (catch e e 'ok))
+		   (catch e 'ok))
 	      'ok) ;; scheme host doesn't protect native functions from crashing
 	  'ok
 	  "sort 6")
   (assert equal?
 	  (try (sort (lambda (a b) (< a b)) '(1 2 8 3 4))
-	       (catch e e 'ok))
+	       (catch e 'ok))
 	  '(1 2 3 4 8)
 	  "sort 7")
 )
@@ -549,7 +549,7 @@
 	  #t
 	  "eqv?")
   (assert equal?
-	  (try (error 'a "message") (catch e e (cadr e)))
+	  (try (error 'a "message") (catch e (cadr e)))
 	  "Error in 'a': message"
 	  "error")
   (assert =
@@ -996,7 +996,7 @@
   (assert equal?
 	  "not enough arguments given"
 	  (try ((lambda (a b . z) (list a b z)) 1)
-	       (catch e e "not enough arguments given"))
+	       (catch e "not enough arguments given"))
 	  "case 17")
   )
 
