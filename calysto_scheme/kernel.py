@@ -382,13 +382,20 @@ MAIN FEATURES
     def do_is_complete(self, code):
         # status: 'complete', 'incomplete', 'invalid', or 'unknown'
         ## First, remove magic lines:
-        contains_magic = False
-        while code.startswith("%"):
-            code = "\n".join(code.split("\n")[1:])
-            contains_magic = True
-        if code.strip() == "" and contains_magic:
-            return {'status' : 'incomplete'}
-        elif yasi is not None:
+        ## need to distinguish between "%magic", and "%magic\n"
+        if code.startswith("%"):
+            lines = code.split("\n")
+            start_line = 0
+            for line in lines:
+                if not line.startswith("%"):
+                    break
+                start_line += 1
+            code = ("\n".join(lines[start_line:]))
+            if lines[-1] == '':
+                return {'status' : 'complete'}
+            elif code == '':
+                return {'status' : 'incomplete'}
+        if yasi is not None:
             data = yasi.indent_code(code + "\n(", opts) ## where does next expression go?
             if data["indented_code"][-1] == "(":
                 return {'status' : 'complete'}
