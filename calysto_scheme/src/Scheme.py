@@ -28,7 +28,7 @@ except:
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.3"
+__version__ = "1.4.4"
 
 #############################################################
 # Python implementation notes:
@@ -1228,23 +1228,40 @@ def load_native(filename):
         return False # continue?
     return True # continue?
 
-def getitem_native(dictionary, item):
-    if item in dictionary:
-        return dictionary[item]
-    elif string_q(item) and hasattr(dictionary, item):
-        return getattr(dictionary, item)
+## for dict or indexed-based objects:
+
+def getitem_native(thing, item):
+    ## FIXME:
+    ## if environment_q(thing):
+    if isinstance(thing, dict):
+        return thing[item]
     else:
-        return False
+        return thing.__getitem__(item)
 
-def setitem_native(dictionary, item, value):
-    try:
-        dictionary[item] = value
-    except:
-        setattr(dictionary, item, value)
-    return value
+def setitem_native(thing, item, value):
+    if isinstance(thing, dict):
+        thing[item] = value
+    else:
+        thing.__setitem__(item, value)
 
-def hasitem_native(dictionary, key):
-    return key in dictionary
+def hasitem_native(thing, item):
+    if isinstance(thing, dict):
+        return item in thing
+    else:
+        try:
+            thing.__getitem__(item)
+            return True
+        except:
+            return False
+
+def getattr_native(thing, item):
+    return getattr(thing, item)
+
+def setattr_native(thing, item, value):
+    setattr(thing, item, value)
+
+def hasattr_native(thing, item):
+    return hasattr(thing, item)
 
 def dict_to_keys(dictionary):
     return vector_to_list(list(dictionary.keys()))

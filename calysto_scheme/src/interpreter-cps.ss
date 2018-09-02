@@ -2041,22 +2041,6 @@
   (lambda-proc (args env2 info handler fail k)
     (k (car *stack-trace*) fail)))
 
-;; get
-(define get-prim
-  (lambda-proc (args env2 info handler fail k2)
-    (get-primitive args env2 info handler fail k2)))
-
-(define* get-primitive
-  (lambda (args env info handler fail k)
-    (let ((sym (car args)))
-      (lookup-value sym env 'none handler fail
-	(lambda-cont2 (v fail)
-	  (cond
-	    ((null? (cdr args)) (k v fail))
-	    ((not (environment? v))
-	     (runtime-error (format "invalid module '~a'" sym) info handler fail))
-	    (else (get-primitive (cdr args) v info handler fail k))))))))
-
 ;; call/cc
 (define call/cc-prim
   (lambda-proc (args env info handler fail k)
@@ -2597,6 +2581,18 @@
   (lambda-proc (args env2 info handler fail k2)
        (k2 (apply hasitem-native args) fail)))
 
+(define getattr-prim
+  (lambda-proc (args env2 info handler fail k2)
+       (k2 (apply getattr-native args) fail)))
+
+(define setattr-prim
+  (lambda-proc (args env2 info handler fail k2)
+       (k2 (apply setattr-native args) fail)))
+
+(define hasattr-prim
+  (lambda-proc (args env2 info handler fail k2)
+       (k2 (apply hasattr-native args) fail)))
+
 (define list?-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
@@ -2714,9 +2710,9 @@
 
 (define-native sort-native
   (lambda (args env2 info handler fail k2)
-    (let ((op-prim (car args)))
-      (k2 (sort (lambda (v1 v2) (op-prim (list v1 v2) env2 info handler fail k2))
-		(cadr args)) fail))))
+    (let* ((op-prim (car args))
+	  (op (lambda (v1 v2) (op-prim (list v1 v2) env2 info handler fail REP-k))))
+      (k2 (sort op (cadr args)) fail))))
 
 (define string-append-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -2800,6 +2796,7 @@
 	    (list 'append append-prim "(append ...): append lists together into a single list")
 	    (list 'apply apply-prim "(apply PROCEDURE '(args...)): apply the PROCEDURE to the args")
 	    (list 'assert assert-prim "(assert OPERATOR EXPRESSION ANSWER): assert that (OPERATOR EXPRESSION ANSWER) is #t")
+	    (list 'assq assq-prim "(assq ...): ")
 	    (list 'assv assv-prim "(assv KEY ((ITEM VALUE) ...)): look for KEY in ITEMs; return matching (ITEM VALUE) or #f if not found")
 	    (list 'atom? atom?-prim "(atom? ITEM): return #t if ITEM is a atom, #f otherwise")
 	    (list 'boolean? boolean?-prim "(boolean? ITEM): return #t if ITEM is a boolean value")
@@ -2851,6 +2848,7 @@
 	    (list 'current-environment current-environment-prim "(current-environment): returns the current environment")
 	    (list 'current-time current-time-prim "(current-time): returns the current time as number of seconds since 1970-1-1")
 	    (list 'cut cut-prim "(cut ARGS...): return to toplevel with ARGS")
+	    (list 'dict dict-prim "(dict ...): ")
 	    (list 'dir dir-prim "(dir [ITEM]): return items in environment, or, if ITEM is given, the items in module")
 	    (list 'display display-prim "(display ITEM): display the ITEM as output")
 	    (list 'div quotient-prim "(div arg0 arg1): quotient procedure for rationals/ints; divides arg0 by arg1 (aliases // and quotient)")
@@ -2863,16 +2861,21 @@
 	    (list 'even? even?-prim "(even? NUMBER): returns #t if NUMBER is odd, #f otherwise")
 	    (list 'exit exit-prim "(exit): Exit the interpreter")
 	    (list 'expt expt-prim "(expt BASE POWER): raise a base number to a power")
+	    (list 'float float-prim "(float NUMBER): return NUMBER as a floating point value")
 	    (list 'for-each for-each-prim "(for-each PROCEDURE LIST): apply PROCEDURE to each item in LIST, but don't return results")
 	    (list 'format format-prim "(format STRING ITEM ...): format the string with ITEMS as arguments")
-	    (list 'get get-prim "(get ...): ")
+	    (list 'get-attr getattr-prim "(get-attr THING ATTR): get the ATTRIBUTE from the THING")
 	    (list 'get-completions get-completions-prim "(get-completions ...): returns completions for TAB")
+	    (list 'get-item getitem-prim "(get-item THING ITEM): get the ITEM from the THING (dict or vector)")
 	    (list 'get-stack-trace get-stack-trace-prim "(get-stack-trace): return the current stack trace")
-	    (list 'hasitem hasitem-prim "(hasitem DICTIONARY KEY): does the DICTIONARY have this key?")
+	    (list 'globals globals-prim "(globals): get global environment")
+	    (list 'has-attr? hasattr-prim "(has-attr? THING ATTR): does the THING have this attribute?")
+	    (list 'has-item? hasitem-prim "(has-item? THING ITEM): does the THING (dict or vector) have this ITEM?")
 	    (list 'host-environment host-environment-prim "(host-environment): get the host environment (\"python\" or \"scheme\")")
 	    (list 'import import-prim "(import MODULE...): import host-system modules; MODULEs are strings")
 	    (list 'import-as import-as-prim "(import-as MODULE NAME): import a host-system module; MODULE is a string, and NAME is a symbol or string. Use * for NAME to import into toplevel environment")
 	    (list 'import-from import-from-prim "(import-from MODULE NAME...): import from host-system module; MODULE is a string, and NAME is a symbol or string")
+	    (list 'int int-prim "(int NUMBER): return NUMBER as an integer")
 	    (list 'integer->char integer->char-prim "(integer->char INTEGER): return the assocated character of INTEGER")
 	    (list 'iter? iter?-prim "(iter? ITEM): return #t if ITEM is a iterator, #f otherwise")
 	    (list 'length length-prim "(length LIST): returns the number of elements in top level of LIST")
@@ -2906,6 +2909,7 @@
 	    (list 'print print-prim "(print ITEM): ")
 	    (list 'printf printf-prim "(printf FORMAT ARGS...): ")
 	    (list 'procedure? procedure?-prim "(procedure? ITEM): return #t if ITEM is a procedure, #f otherwise")
+	    (list 'property property-prim "(property ...): ")
 	    (list 'python-eval python-eval-prim "(python-eval PYTHON-EXPRESSION [globals [locals]]): return the result of evaluating PYTHON-EXPRESSION string")
 	    (list 'python-exec python-exec-prim "(python-exec PYTHON-STATEMENTS [globals [locals]]): return the result of evaluating PYTHON-STATEMENTS string")
 	    (list 'quit exit-prim "(quit): Exit the interpreter")
@@ -2913,32 +2917,41 @@
 	    (list 'rac rac-prim "(rac LIST): return the last item of LIST")
 	    (list 'random random-prim "(random N): return a random number in the range [0, N)")
 	    (list 'range range-prim "(range END), (range START END), or (RANGE START END STEP): (all integers)")
+	    (list 'rational rational-prim "(rational NUMERATOR DENOMINTAOR): return a rational number")
 	    (list 'rdc rdc-prim "(rdc LIST): return everything but last item in LIST")
 	    (list 'read-string read-string-prim "(read-string ...): ")
 	    (list 'remainder remainder-prim "(remainder NUMBER1 NUMBER2): returns the remainder after dividing NUMBER1 by NUMBER2")
 	    (list 'require require-prim "(require ...): ")
+	    (list 'reset-toplevel-env reset-toplevel-env-prim "(reset-toplevel-env): reset the toplevel environment")
 	    (list 'reverse reverse-prim "(reverse LIST): ")
 	    (list 'round round-prim "(round NUMBER): round NUMBER to the nearest integer (may return float)")
+	    (list 'set-attr! setattr-prim "(setattr THING ATTR VALUE): sets THING.ITEM with VALUE")
 	    (list 'set-car! set-car!-prim "(set-car! LIST ITEM): set the car of LIST to be ITEM")
 	    (list 'set-cdr! set-cdr!-prim "(set-cdr! LIST ITEM): set the car of LIST to be ITEM (which is typically a list)")
+	    (list 'set-item! setitem-prim "(setitem THING ITEM VALUE): sets THING[ITEM] with VALUE")
 	    (list 'snoc snoc-prim "(snoc ITEM LIST): cons the ITEM onto the end of LIST")
+	    (list 'sort sort-prim "(sort PROCEDURE LIST): sort the list using PROCEDURE to compare items")
 	    (list 'sqrt sqrt-prim "(sqrt NUMBER): return the square root of NUMBER")
 	    (list 'string string-prim "(string ITEM): returns ITEM as a string")
 	    (list 'string->list string->list-prim "(string->list STRING): string STRING as a list of characters")
 	    (list 'string->number string->number-prim "(string->number STRING): return STRING as a number")
 	    (list 'string->symbol string->symbol-prim "(string->symbol STRING): return STRING as a symbol")
+	    (list 'string-append string-append-prim "(string-append STRING1 STRING2): append two strings together")
+	    (list 'string-join string-join-prim "(string-join \", \" '(1 2 3)): gives \"1, 2, 3\"")
 	    (list 'string-length string-length-prim "(string-length STRING): returns the length of a string")
 	    (list 'string-ref string-ref-prim "(string-ref STRING INDEX): return the character of STRING at position INDEX")
+	    (list 'string-split string-split-prim "(string-split STRING CHAR): return a list with substrings of STRING where split by CHAR")
 	    (list 'string<? string<?-prim "(string<? STRING1 STRING2): compare two strings to see if STRING1 is less than STRING2")
 	    (list 'string=? string=?-prim "(string=? STRING1 STRING2): return #t if STRING1 is the same as STRING2, #f otherwise")
 	    (list 'string? string?-prim "(string? ITEM): return #t if ITEM is a string, #f otherwise")
-	    (list 'string-join string-join-prim "(string-join \", \" '(1 2 3)): gives \"1, 2, 3\"")
 	    (list 'substring substring-prim "(substring STRING START [END]): return the substring of STRING starting with position START and ending before END. If END is not provided, it defaults to the length of the STRING")
 	    (list 'symbol->string symbol->string-prim "(symbol->string SYMBOL): return SYMBOL as a string")
 	    (list 'symbol? symbol?-prim "(symbol? ITEM): return #t if ITEM is a symbol, #f otherwise")
+	    (list 'typeof typeof-prim "(typeof ITEM): returns type of ITEM")
 	    (list 'unbox unbox-prim "(unbox BOX): return the contents of BOX")
 	    (list 'unparse unparse-prim "(unparse AST): ")
 	    (list 'unparse-procedure unparse-procedure-prim "(unparse-procedure ...): ")  ;; unparse should be in CPS
+	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-stack-trace use-stack-trace-prim "(use-stack-trace BOOLEAN): set stack-trace usage on/off")
 	    (list 'use-tracing use-tracing-prim "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given")
 	    (list 'vector vector-prim "(vector [ITEMS]...): return ITEMs as a vector")
@@ -2949,21 +2962,6 @@
 	    (list 'vector? vector?-prim "(vector? ITEM): return #t if ITEM is a vector, #f otherwise")
 	    (list 'void void-prim "(void): The null value symbol")
 	    (list 'zero? zero?-prim "(zero? NUMBER): return #t if NUMBER is equal to zero, #f otherwise")
- 	    (list 'assq assq-prim "(assq ...): ")
- 	    (list 'dict dict-prim "(dict ...): ")
- 	    (list 'float float-prim "(float NUMBER): return NUMBER as a floating point value")
- 	    (list 'getitem getitem-prim "(getitem DICTIONARY ITEM): returns the VALUE of DICTIONARY[ITEM]")
- 	    (list 'globals globals-prim "(globals): get global environment")
- 	    (list 'int int-prim "(int NUMBER): return NUMBER as an integer")
- 	    (list 'property property-prim "(property ...): ")
- 	    (list 'rational rational-prim "(rational NUMERATOR DENOMINTAOR): return a rational number")
- 	    (list 'reset-toplevel-env reset-toplevel-env-prim "(reset-toplevel-env): reset the toplevel environment")
- 	    (list 'setitem setitem-prim "(setitem DICTIONARY ITEM VALUE): sets and returns DICTIONARY[ITEM] with VALUE")
- 	    (list 'sort sort-prim "(sort PROCEDURE LIST): sort the list using PROCEDURE to compare items")
- 	    (list 'string-append string-append-prim "(string-append STRING1 STRING2): append two strings together")
- 	    (list 'string-split string-split-prim "(string-split STRING CHAR): return a list with substrings of STRING where split by CHAR")
- 	    (list 'typeof typeof-prim "(typeof ITEM): returns type of ITEM")
- 	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    )))
       (make-initial-env-extended (map car primitives) (map cadr primitives) (map caddr primitives)))))
 
