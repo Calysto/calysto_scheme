@@ -163,7 +163,8 @@
 (define get-traceback-string
   (lambda (exc)
     ;; (exception ("ReadError" "cannot represent 1/0" stdin 1 1 ()))
-    (if (list? (cadr exc))
+    (if (and (list? (cadr exc))
+	     (= (length (cadr exc)) 6))
 	(let ((error-type (car (cadr exc)))
 	      (message (cadr (cadr exc)))
 	      (src-file (caddr (cadr exc)))
@@ -185,7 +186,8 @@
 (define get-exception-values
   (lambda (exc)
     ;; (exception ("ReadError" "cannot represent 1/0" stdin 1 1 ()))
-    (if (list? (cadr exc))
+    (if (and (list? (cadr exc))
+	     (> (length (cadr exc)) 1))
 	(let ((error-type (car (cadr exc)))
 	      (message (cadr (cadr exc))))
 	  (list->vector (list error-type message)))

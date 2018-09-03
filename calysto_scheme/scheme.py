@@ -7539,7 +7539,7 @@ def handle_exception(exc):
     return void_value
 
 def get_traceback_string(exc):
-    if (False if ((list_q((exc).cdr.car)) is False) else True):
+    if (False if (((list_q((exc).cdr.car)) and (numeric_equal(length((exc).cdr.car), 6))) is False) else True):
         retval = ""
         stack = (((exc).cdr.car).cdr.cdr).cdr.cdr.cdr.car
         src_col = (((exc).cdr.car).cdr).cdr.cdr.cdr.car
@@ -7559,7 +7559,7 @@ def get_traceback_string(exc):
         return string_append(retval, format("Raised Exception: ~a~%", (exc).cdr.car))
 
 def get_exception_values(exc):
-    if (False if ((list_q((exc).cdr.car)) is False) else True):
+    if (False if (((list_q((exc).cdr.car)) and (GreaterThan(length((exc).cdr.car), 1))) is False) else True):
         message = ((exc).cdr.car).cdr.car
         error_type = ((exc).cdr.car).car
         return list_to_vector(List(error_type, message))
