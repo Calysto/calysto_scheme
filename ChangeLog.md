@@ -1,3 +1,10 @@
+## Release 1.4.6 (Sep 5, 2018)
+
+	* fixed typo in run-tests that prevented showing incorrect count
+	* better debugging
+	* show additional info in run-tests verbose mode
+	* more annotated info for some tracebacks
+
 ## Release 1.4.5 (Sep 5, 2018)
 
 	* raise now creates a real exception
