@@ -1,3 +1,11 @@
+## Release 1.4.4 (Sep 5, 2018)
+
+	* raise now creates a real exception
+	* New primitive (get-exception-message EXCEPTION) to get message from an exception
+	* use (raise "message") or (raise (list "Exception" "message"))
+		* Exception can be one of: "AssertionError", "Exception", "KeyboardInterrupt", "MacroError", "ParseError", "ReadError", "RunTimeError", "ScanError", or "UnhandledException"
+	* (raise ...) now has proper tracebacks
+
 ## Release 1.4.3 (Sep 1, 2018)
 
 	* added requirement yasi to do proper indentation in console
