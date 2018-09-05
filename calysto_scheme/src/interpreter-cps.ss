@@ -588,7 +588,7 @@
 		  (else (runtime-error (format "attempt to apply non-procedure '~a'" proc)
 				       info handler fail))))))))
       (else (runtime-error (format "unknown abstract syntax type: ~a" (car exp))
-			   'none handler fail))))))
+			   info handler fail))))))
 
 (define* run-unit-tests
   (lambda (tests start-time right wrong handler fail k)
@@ -702,7 +702,7 @@
 			       (printf "           : ~a\n" test-exp)
 			       (printf "           : ~a\n" result-val)))
 			 (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
-			 (run-unit-test-cases test-name (cdr assertions) verbose (+ right 1) wrong env handler fail k)))))))
+			 (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))))
 	  (initialize-stack-trace!)
           (m (car assertions) env test-case-handler fail
 	     (lambda-cont2 (v fail)
@@ -1039,13 +1039,13 @@
   (lambda-proc (args env2 info handler fail k2)
     (cond
       ((length-one? args)  ;; petite uses toplevel env
-       (annotate-cps (car args) 'none
+       (annotate-cps (car args) info
 	 (lambda-cont (adatum)
 	   (aparse adatum (initial-contours toplevel-env) handler fail
 	     (lambda-cont2 (exp fail)
 	       (m exp toplevel-env handler fail k2))))))
       ((length-two? args)
-       (annotate-cps (car args) 'none
+       (annotate-cps (car args) info
 	 (lambda-cont (adatum)
 	   (aparse adatum (initial-contours (cadr args)) handler fail
 	     (lambda-cont2 (exp fail)
@@ -1065,7 +1065,7 @@
 ;; parse
 (define parse-prim
   (lambda-proc (args env2 info handler fail k2)
-    (annotate-cps (car args) 'none
+    (annotate-cps (car args) info
       (lambda-cont (adatum)
         (aparse adatum (initial-contours toplevel-env) handler fail k2)))))  ;; was env2
 
@@ -2054,7 +2054,7 @@
 		(lambda-cont2 (binding fail)
 		  (let ((module (make-toplevel-env)))
 		    (set-binding-value! binding module)
-		    (find-file-and-load SCHEMEPATH filename module 'none handler fail k2)))))))))
+		    (find-file-and-load SCHEMEPATH filename module info handler fail k2)))))))))
 
 ;; get-stack-trace-prim
 (define get-stack-trace-prim

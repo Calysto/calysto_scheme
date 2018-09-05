@@ -2997,8 +2997,8 @@ def b_cont2_88_d(assertions, msg, proc_exp, right, test_exp, test_name, tracebac
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
-    GLOBALS['wrong_reg'] = wrong
-    GLOBALS['right_reg'] = (right) + (1)
+    GLOBALS['wrong_reg'] = (wrong) + (1)
+    GLOBALS['right_reg'] = right
     GLOBALS['verbose_reg'] = verbose
     GLOBALS['assertions_reg'] = (assertions).cdr
     GLOBALS['test_name_reg'] = test_name
@@ -3158,13 +3158,13 @@ def b_cont2_105_d(lst, k2):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
 
-def b_cont2_106_d(filename, handler, k2):
+def b_cont2_106_d(filename, info, handler, k2):
     module = make_toplevel_env()
     set_binding_value_b(value1_reg, module)
     GLOBALS['k_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
-    GLOBALS['info_reg'] = symbol_none
+    GLOBALS['info_reg'] = info
     GLOBALS['env2_reg'] = module
     GLOBALS['filename_reg'] = filename
     GLOBALS['paths_reg'] = SCHEMEPATH
@@ -3685,13 +3685,11 @@ def b_proc_12_d():
 def b_proc_13_d():
     if (False if ((length_one_q(args_reg)) is False) else True):
         GLOBALS['k_reg'] = make_cont(b_cont_47_d, handler_reg, fail_reg, k2_reg)
-        GLOBALS['info_reg'] = symbol_none
         GLOBALS['x_reg'] = (args_reg).car
         GLOBALS['pc'] = annotate_cps
     else:
         if (False if ((length_two_q(args_reg)) is False) else True):
             GLOBALS['k_reg'] = make_cont(b_cont_48_d, args_reg, handler_reg, fail_reg, k2_reg)
-            GLOBALS['info_reg'] = symbol_none
             GLOBALS['x_reg'] = (args_reg).car
             GLOBALS['pc'] = annotate_cps
         else:
@@ -3714,7 +3712,6 @@ def b_proc_14_d():
 
 def b_proc_15_d():
     GLOBALS['k_reg'] = make_cont(b_cont_49_d, handler_reg, fail_reg, k2_reg)
-    GLOBALS['info_reg'] = symbol_none
     GLOBALS['x_reg'] = (args_reg).car
     GLOBALS['pc'] = annotate_cps
 
@@ -4790,7 +4787,7 @@ def b_proc_112_d():
     else:
         module_name = (args_reg).cdr.car
         filename = (args_reg).car
-        GLOBALS['k_reg'] = make_cont2(b_cont2_106_d, filename, handler_reg, k2_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_106_d, filename, info_reg, handler_reg, k2_reg)
         GLOBALS['env_reg'] = env2_reg
         GLOBALS['var_reg'] = module_name
         GLOBALS['pc'] = lookup_binding_in_first_frame
@@ -7954,7 +7951,7 @@ def m():
                                                                                                             GLOBALS['exps_reg'] = operands
                                                                                                             GLOBALS['pc'] = m_star
                                                                                                         else:
-                                                                                                            GLOBALS['info_reg'] = symbol_none
+                                                                                                            GLOBALS['info_reg'] = info
                                                                                                             GLOBALS['msg_reg'] = format("unknown abstract syntax type: ~a", (exp_reg).car)
                                                                                                             GLOBALS['pc'] = runtime_error
 
