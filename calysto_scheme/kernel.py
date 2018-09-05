@@ -274,6 +274,8 @@ MAIN FEATURES
                     return "#<procedure>"
                 elif item.car.name == "environment":
                     return "#<environment>"
+                elif item.car.name == "exception-object":
+                    return "#<exception>"
             else: # a pair
                 retval = []
                 current = item
@@ -284,6 +286,8 @@ MAIN FEATURES
                              return "(%s)" % ((" ".join(retval)) + " . #<procedure>")
                         elif current.car.name == "environment":
                              return "(%s)" % ((" ".join(retval)) + " . #<environment>")
+                        elif current.car.name == "exception-object":
+                             return "(%s)" % ((" ".join(retval)) + " . #<exception>")
                     retval.append(self.repr(current.car))
                     current = current.cdr
                 retval = " ".join(retval)

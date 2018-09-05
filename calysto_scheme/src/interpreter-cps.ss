@@ -162,15 +162,15 @@
 
 (define get-traceback-string
   (lambda (exc)
-    ;; (exception ("ReadError" "cannot represent 1/0" stdin 1 1 ()))
+    ;; (exception (exception-object "ReadError" "cannot represent 1/0" "stdin" 1 1 ()))
     (if (and (list? (cadr exc))
-	     (= (length (cadr exc)) 6))
-	(let ((error-type (car (cadr exc)))
-	      (message (cadr (cadr exc)))
-	      (src-file (caddr (cadr exc)))
-	      (src-line (cadddr (cadr exc)))
-	      (src-col (cadddr (cdr (cadr exc))))
-	      (stack (cadddr (cddr (cadr exc))))
+	     (= (length (cadr exc)) 7))
+	(let ((error-type (list-ref (cadr exc) 1))
+	      (message (list-ref (cadr exc) 2))
+	      (src-file (list-ref (cadr exc) 3))
+	      (src-line (list-ref (cadr exc) 4))
+	      (src-col (list-ref (cadr exc) 5))
+	      (stack (list-ref (cadr exc) 6))
 	      (retval ""))
 	  (set! retval (string-append retval (format "~%Traceback (most recent call last):~%")))
 	  (while (not (null? stack))
@@ -185,11 +185,11 @@
 
 (define get-exception-values
   (lambda (exc)
-    ;; (exception ("ReadError" "cannot represent 1/0" stdin 1 1 ()))
+    ;; (exception (exception-object "ReadError" "cannot represent 1/0" "stdin" 1 1 ()))
     (if (and (list? (cadr exc))
-	     (> (length (cadr exc)) 1))
-	(let ((error-type (car (cadr exc)))
-	      (message (cadr (cadr exc))))
+	     (> (length (cadr exc)) 2))
+	(let ((error-type (list-ref (cadr exc) 1))
+	      (message (list-ref (cadr exc) 2)))
 	  (list->vector (list error-type message)))
 	(list->vector (list "UnhandledException" (cadr exc))))))
 
@@ -557,8 +557,8 @@
 		    (line (get-start-line info))
 		    (col (get-start-char info)))
 		(cond
-		 ((exception? e) (handler e fail))
-		 ((string? e) 
+		 ((exception-object? e) (handler e fail))
+		 ((string? e)
 		  (handler (make-exception "Exception" e src line col) fail))
 		 ((and (list? e)
 		       (valid-exception-type? (car e))
@@ -711,20 +711,21 @@
 
 (define get-exception-info
   (lambda (exception)
-    (let ((source (caddr exception))
-          (line (cadddr exception))
-          (column (car (cddddr exception))))
+    (let ((source (list-ref exception 3))
+          (line (list-ref exception 4))
+          (column (list-ref exception 5)))
       (if (eq? source 'none)
           'none
           (format "line ~a, column ~a of ~a" line column source)))))
 
 (define make-exception
   (lambda (exception-type message source line column)
-    (list exception-type message source line column (make-stack-trace))))
+    (list 'exception-object exception-type message source line column (make-stack-trace))))
 
 (define get-exception-message
   (lambda (exception)
-    (cadr exception)))
+    ;; '(exception-object "Exception" "message" ...)
+    (list-ref exception 2)))
 
 (define make-stack-trace
   (lambda ()
@@ -1229,8 +1230,9 @@
 (define exception-object?
   (lambda (x)
     (and (list? x)
-	 (= (length x) 6)
-	 (valid-exception-type? (car x))
+	 (= (length x) 7)
+	 (eq? (car x) 'exception-object)
+	 (valid-exception-type? (cadr x))
 	 (string? (cadr x)))))
 
 (define procedure-object?
@@ -2783,6 +2785,10 @@
   (lambda-proc (args env2 info handler fail k2)
       (k2 (host-environment-native) fail)))
 
+(define get-exception-message-prim
+  (lambda-proc (args env2 info handler fail k2)
+     (k2 (get-exception-message (car args)) fail)))
+
 ;; -----------------------------------------------------
 ;; To add a new primitive:
 ;; -----------------------------------------------------
@@ -2887,6 +2893,7 @@
 	    (list 'get-completions get-completions-prim "(get-completions ...): returns completions for TAB")
 	    (list 'get-item getitem-prim "(get-item THING ITEM): get the ITEM from the THING (dict or vector)")
 	    (list 'get-stack-trace get-stack-trace-prim "(get-stack-trace): return the current stack trace")
+	    (list 'get-exception-message get-exception-message-prim "(get-exception-message EXCEPTION): get the message from the exception")
 	    (list 'globals globals-prim "(globals): get global environment")
 	    (list 'has-attr? hasattr-prim "(has-attr? THING ATTR): does the THING have this attribute?")
 	    (list 'has-item? hasitem-prim "(has-item? THING ITEM): does the THING (dict or vector) have this ITEM?")

@@ -549,7 +549,7 @@
 	  #t
 	  "eqv?")
   (assert equal?
-	  (try (error 'a "message") (catch e (cadr e)))
+	  (try (error 'a "message") (catch e (get-exception-message e)))
 	  "Error in 'a': message"
 	  "error")
   (assert =
@@ -1041,20 +1041,20 @@
 	  (try 3 (finally 'yes 4))
 	  "case 24")
   (assert equal?
-	  'yes
-	  (try (raise 'yes) (catch e e))
+	  "yes"
+	  (try (raise "yes") (catch e (get-exception-message e)))
 	  "case 25")
   (assert equal?
-	  'yes
-	  (try (try (raise 'yes)) (catch e e))
+	  "yes"
+	  (try (try (raise "yes")) (catch e (get-exception-message e)))
 	  "case 26")
   (assert equal?
-	  'oops
-	  (try (try (begin 'one (raise 'oops) 'two)) (catch e e))
+	  "oops"
+	  (try (try (begin 'one (raise "oops") 'two)) (catch e (get-exception-message e)))
 	  "case 27")
   (assert equal?
 	  40
-	  (* 10 (try (begin 'one (raise 'oops) 'two)
+	  (* 10 (try (begin 'one (raise "oops") 'two)
 		     (catch ex 3 4)))
 	  "case 28")
   (assert equal?
@@ -1064,24 +1064,24 @@
 	  "case 29")
   (assert equal?
 	  40
-	  (* 10 (try (begin 'one (raise 'oops) 5)
+	  (* 10 (try (begin 'one (raise "oops") 5)
 		     (catch ex (list 'ex: ex) 4)))
 	  "case 30")
   (assert equal?
-	  'oops
-	  (try (* 10 (try (begin 'one (raise 'oops) 5)
-			  (catch ex (list 'ex: ex) (raise ex) 4))) (catch e e))
+	  "oops"
+	  (try (* 10 (try (begin 'one (raise "oops") 5)
+			  (catch ex (list 'ex: ex) (raise ex) 4))) (catch e (get-exception-message e)))
 	  "case 31")
   (assert equal?
-	  'oops
-	  (try (* 10 (try (begin 'one (raise 'oops) 5)
+	  "oops"
+	  (try (* 10 (try (begin 'one (raise "oops") 5)
 			  (catch ex (list 'ex: ex) (raise ex) 4)
-			  (finally 'two 7))) (catch e e))
+			  (finally 'two 7))) (catch e (get-exception-message e)))
 	  "case 32")
   (assert equal?
 	  77
-	  (try (* 10 (try (begin 'one (raise 'oops) 5)
-			  (catch ex (list 'ex: ex) (raise 'bar) 4)))
+	  (try (* 10 (try (begin 'one (raise "oops") 5)
+			  (catch ex (list 'ex: ex) (raise "bar") 4)))
 	       (catch x 'hello 77))
 	  "case 33")
   (assert equal?
@@ -1094,11 +1094,11 @@
 	  "case 35")
   (assert equal?
 	  "division by zero"
-	  (try (div 10 0) (catch e (cadr e)))
+	  (try (div 10 0) (catch e (get-exception-message e)))
 	  "case 36")
   (assert equal?
 	  "division by zero"
-	  (try (let ((x (try (div 10 0)))) x) (catch e (cadr e)))
+	  (try (let ((x (try (div 10 0)))) x) (catch e (get-exception-message e)))
 	  "case 37")
   (assert equal?
 	  5
@@ -1121,45 +1121,45 @@
 	  (let ((x (try (div 10 2) (finally 'closing-files 42))))  x)
 	  "case 42")
   (assert equal?
-	  'foo
-	  (try (let ((x (try (div 10 0) (catch e -1 (raise 'foo)) (finally 'closing-files 42))))  x) (catch e e))
+	  "foo"
+	  (try (let ((x (try (div 10 0) (catch e -1 (raise "foo")) (finally 'closing-files 42))))  x) (catch e (get-exception-message e)))
 	  "case 43")
   (assert equal?
-	  'ack
+	  "ack"
 	  (try (let ((x (try (div 10 0)
-			     (catch e -1 (raise 'foo))
-			     (finally 'closing-files (raise 'ack) 42))))
-		 x) (catch e e))
+			     (catch e -1 (raise "foo"))
+			     (finally 'closing-files (raise "ack") 42))))
+		 x) (catch e (get-exception-message e)))
 	  "case 44")
   (assert equal?
 	  99
 	  (try (let ((x (try (div 10 0)
-			     (catch e -1 (raise 'foo))
-			     (finally 'closing-files (raise 'ack) 42))))
+			     (catch e -1 (raise "foo"))
+			     (finally 'closing-files (raise "ack") 42))))
 		 x)
-	       (catch e (if (equal? e 'ack) 99 (raise 'doug)))
+	       (catch e (if (equal? (get-exception-message e) "ack") 99 (raise "doug")))
 	       (finally 'closing-outer-files))
 	  "case 45")
   (assert equal?
-	  'doug
+	  "doug"
 	  (try (try (let ((x (try (div 10 0)
-				  (catch e -1 (raise 'foo))
-				  (finally 'closing-files (raise 'ack) 42))))
+				  (catch e -1 (raise "foo"))
+				  (finally 'closing-files (raise "ack") 42))))
 		      x)
-		    (catch e (if (equal? e 'foo) 99 (raise 'doug)))
-		    (finally 'closing-outer-files)) (catch e e))
+		    (catch e (if (equal? e 'foo) 99 (raise "doug")))
+		    (finally 'closing-outer-files)) (catch e (get-exception-message e)))
 	  "case 46")
   )
 
 (define-tests loop
   (assert equal?
-	  'blastoff!
+	  "blastoff!"
 	  (try (let loop ((n 5))
 		 n
 		 (if (= n 0)
-		     (raise 'blastoff!))
+		     (raise "blastoff!"))
 		 (loop (- n 1)))
-	       (catch e e))
+	       (catch e (get-exception-message e)))
 	  "case 47")
   )
 
