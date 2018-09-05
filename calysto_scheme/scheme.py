@@ -36,7 +36,7 @@ except:
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.5"
+__version__ = "1.4.6"
 
 #############################################################
 # Python implementation notes:
@@ -2222,7 +2222,7 @@ def b_cont_46_d(proc, env, info, handler, fail, k2):
     GLOBALS['pc'] = apply_proc
 
 def b_cont_47_d(handler, fail, k2):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_95_d, handler, k2)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_96_d, handler, k2)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = initial_contours(toplevel_env)
@@ -2230,7 +2230,7 @@ def b_cont_47_d(handler, fail, k2):
     GLOBALS['pc'] = aparse
 
 def b_cont_48_d(args, handler, fail, k2):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_96_d, args, handler, k2)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_97_d, args, handler, k2)
     GLOBALS['fail_reg'] = fail
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = initial_contours((args).cdr.car)
@@ -2327,7 +2327,7 @@ def b_cont_57_d(apair1, apair2, pair1, pair2, k):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_122_d, apair2, pair2, value_reg, k)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_123_d, apair2, pair2, value_reg, k)
         GLOBALS['ap_reg'] = cdr_hat(apair1)
         GLOBALS['s_reg'] = value_reg
         GLOBALS['pattern_reg'] = (pair1).cdr
@@ -2986,13 +2986,14 @@ def b_cont2_87_d(assertions, nums, test_name, handler, k):
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = filter_assertions
 
-def b_cont2_88_d(assertions, msg, proc_exp, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
+def b_cont2_88_d(assertions, msg, proc_exp, result_val, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
     if (False if ((verbose) is False) else True):
         printf("~a\n", traceback)
-        printf("  Procedure: ~a\n", proc_exp)
-        printf("           : ~a\n", test_exp)
-        printf("           : ~a\n", value1_reg)
-    make_test_callback(test_name, msg, False, traceback, proc_exp, test_exp, value1_reg)
+        printf("  Procedure    : ~a\n", proc_exp)
+        printf("       src     : ~a\n", test_exp)
+        printf("       src eval: ~a\n", value1_reg)
+        printf("       result  : ~a\n", result_val)
+    make_test_callback(test_name, msg, False, traceback, proc_exp, test_exp, result_val)
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3004,7 +3005,15 @@ def b_cont2_88_d(assertions, msg, proc_exp, right, test_exp, test_name, tracebac
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
 
-def b_cont2_89_d(assertions, right, test_name, verbose, wrong, env, handler, k):
+def b_cont2_89_d(assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions, msg, proc_exp, value1_reg, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
+    GLOBALS['fail_reg'] = value2_reg
+    GLOBALS['handler_reg'] = handler
+    GLOBALS['env_reg'] = env
+    GLOBALS['exp_reg'] = test_aexp
+    GLOBALS['pc'] = m
+
+def b_cont2_90_d(assertions, right, test_name, verbose, wrong, env, handler, k):
     make_test_callback(test_name, "test", True, "", "", "", "")
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
@@ -3017,7 +3026,7 @@ def b_cont2_89_d(assertions, right, test_name, verbose, wrong, env, handler, k):
     GLOBALS['test_name_reg'] = test_name
     GLOBALS['pc'] = run_unit_test_cases
 
-def b_cont2_90_d(exps, env, handler, k):
+def b_cont2_91_d(exps, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_40_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3025,7 +3034,7 @@ def b_cont2_90_d(exps, env, handler, k):
     GLOBALS['exps_reg'] = (exps).cdr
     GLOBALS['pc'] = m_star
 
-def b_cont2_91_d(exps, env, handler, k):
+def b_cont2_92_d(exps, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3033,24 +3042,24 @@ def b_cont2_91_d(exps, env, handler, k):
     GLOBALS['exps_reg'] = (exps).cdr
     GLOBALS['pc'] = eval_sequence
 
-def b_cont2_92_d(e, handler):
+def b_cont2_93_d(e, handler):
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['exception_reg'] = e
     GLOBALS['handler_reg'] = handler
     GLOBALS['pc'] = apply_handler2
 
-def b_cont2_93_d(trace_depth, k2):
+def b_cont2_94_d(trace_depth, k2):
     GLOBALS['trace_depth'] = (trace_depth) - (1)
     printf("~areturn: ~s~%", make_trace_depth_string(trace_depth), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_94_d(items, sep, k2):
+def b_cont2_95_d(items, sep, k2):
     GLOBALS['value1_reg'] = string_append(format("~a", (items).car), sep, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_95_d(handler, k2):
+def b_cont2_96_d(handler, k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3058,7 +3067,7 @@ def b_cont2_95_d(handler, k2):
     GLOBALS['exp_reg'] = value1_reg
     GLOBALS['pc'] = m
 
-def b_cont2_96_d(args, handler, k2):
+def b_cont2_97_d(args, handler, k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3066,7 +3075,7 @@ def b_cont2_96_d(args, handler, k2):
     GLOBALS['exp_reg'] = value1_reg
     GLOBALS['pc'] = m
 
-def b_cont2_97_d(handler, k2):
+def b_cont2_98_d(handler, k2):
     GLOBALS['k_reg'] = make_cont4(b_cont4_11_d, handler, k2)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3074,7 +3083,7 @@ def b_cont2_97_d(handler, k2):
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = read_sexp
 
-def b_cont2_98_d(handler, k2):
+def b_cont2_99_d(handler, k2):
     GLOBALS['k_reg'] = make_cont4(b_cont4_12_d, handler, k2)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3082,7 +3091,7 @@ def b_cont2_98_d(handler, k2):
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = read_sexp
 
-def b_cont2_99_d(k):
+def b_cont2_100_d(k):
     if (False if ((((load_stack) is symbol_emptylist)) is False) else True):
         printf("WARNING: empty load-stack encountered!\n")
     else:
@@ -3091,8 +3100,8 @@ def b_cont2_99_d(k):
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_100_d(filename, env2, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_99_d, k)
+def b_cont2_101_d(filename, env2, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_100_d, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env2_reg'] = env2
@@ -3100,7 +3109,7 @@ def b_cont2_100_d(filename, env2, handler, k):
     GLOBALS['tokens_reg'] = value1_reg
     GLOBALS['pc'] = read_and_eval_asexps
 
-def b_cont2_101_d(src, tokens_left, env2, handler, k):
+def b_cont2_102_d(src, tokens_left, env2, handler, k):
     if (False if ((token_type_q(first(tokens_left), symbol_end_marker)) is False) else True):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont2
@@ -3113,15 +3122,15 @@ def b_cont2_101_d(src, tokens_left, env2, handler, k):
         GLOBALS['tokens_reg'] = tokens_left
         GLOBALS['pc'] = read_and_eval_asexps
 
-def b_cont2_102_d(src, tokens_left, env2, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_101_d, src, tokens_left, env2, handler, k)
+def b_cont2_103_d(src, tokens_left, env2, handler, k):
+    GLOBALS['k_reg'] = make_cont2(b_cont2_102_d, src, tokens_left, env2, handler, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env2
     GLOBALS['exp_reg'] = value1_reg
     GLOBALS['pc'] = m
 
-def b_cont2_103_d(filenames, env2, info, handler, k):
+def b_cont2_104_d(filenames, env2, info, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3130,7 +3139,7 @@ def b_cont2_103_d(filenames, env2, info, handler, k):
     GLOBALS['filenames_reg'] = (filenames).cdr
     GLOBALS['pc'] = load_files
 
-def b_cont2_104_d(args, info, handler, k2):
+def b_cont2_105_d(args, info, handler, k2):
     if (False if (((value1_reg) is (True)) is False) else True):
         GLOBALS['value1_reg'] = symbol_ok
         GLOBALS['k_reg'] = k2
@@ -3149,7 +3158,7 @@ def b_cont2_104_d(args, info, handler, k2):
             GLOBALS['msg_reg'] = (args).cdr.cdr.cdr.car
             GLOBALS['pc'] = assertion_error
 
-def b_cont2_105_d(lst, k2):
+def b_cont2_106_d(lst, k2):
     if (False if ((member((lst).car, value1_reg)) is False) else True):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
@@ -3158,7 +3167,7 @@ def b_cont2_105_d(lst, k2):
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
 
-def b_cont2_106_d(filename, info, handler, k2):
+def b_cont2_107_d(filename, info, handler, k2):
     module = make_toplevel_env()
     set_binding_value_b(value1_reg, module)
     GLOBALS['k_reg'] = k2
@@ -3170,19 +3179,19 @@ def b_cont2_106_d(filename, info, handler, k2):
     GLOBALS['paths_reg'] = SCHEMEPATH
     GLOBALS['pc'] = find_file_and_load
 
-def b_cont2_107_d(ls1, k2):
+def b_cont2_108_d(ls1, k2):
     GLOBALS['value1_reg'] = cons((ls1).car, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_108_d(lists, k2):
+def b_cont2_109_d(lists, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['ls2_reg'] = value1_reg
     GLOBALS['ls1_reg'] = (lists).car
     GLOBALS['pc'] = append2
 
-def b_cont2_109_d(iterator, proc, env, handler, k):
+def b_cont2_110_d(iterator, proc, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3191,7 +3200,7 @@ def b_cont2_109_d(iterator, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = iterate_continue
 
-def b_cont2_110_d(iterator, proc, env, handler, k):
+def b_cont2_111_d(iterator, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_40_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3200,7 +3209,7 @@ def b_cont2_110_d(iterator, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = iterate_collect_continue
 
-def b_cont2_111_d(list1, proc, env, handler, k):
+def b_cont2_112_d(list1, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_40_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3209,12 +3218,12 @@ def b_cont2_111_d(list1, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = map1
 
-def b_cont2_112_d(list1, proc, k):
+def b_cont2_113_d(list1, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, List((list1).car)), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_113_d(list1, list2, proc, env, handler, k):
+def b_cont2_114_d(list1, list2, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_40_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3224,12 +3233,12 @@ def b_cont2_113_d(list1, list2, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = map2
 
-def b_cont2_114_d(list1, list2, proc, k):
+def b_cont2_115_d(list1, list2, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, List((list1).car, (list2).car)), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_115_d(lists, proc, env, handler, k):
+def b_cont2_116_d(lists, proc, env, handler, k):
     GLOBALS['k_reg'] = make_cont2(b_cont2_40_d, value1_reg, k)
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3238,12 +3247,12 @@ def b_cont2_115_d(lists, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = mapN
 
-def b_cont2_116_d(lists, proc, k):
+def b_cont2_117_d(lists, proc, k):
     GLOBALS['value1_reg'] = cons(dlr_apply(proc, Map(car, lists)), value1_reg)
     GLOBALS['k_reg'] = k
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_117_d(arg_list, proc, env, handler, k):
+def b_cont2_118_d(arg_list, proc, env, handler, k):
     GLOBALS['k_reg'] = k
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3252,22 +3261,22 @@ def b_cont2_117_d(arg_list, proc, env, handler, k):
     GLOBALS['proc_reg'] = proc
     GLOBALS['pc'] = for_each_primitive
 
-def b_cont2_118_d(k2):
+def b_cont2_119_d(k2):
     GLOBALS['value1_reg'] = apply_native(dict, List(value1_reg))
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_119_d(args, k2):
+def b_cont2_120_d(args, k2):
     GLOBALS['value1_reg'] = cons((args).car, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_120_d(args, k2):
+def b_cont2_121_d(args, k2):
     GLOBALS['value1_reg'] = cons(List((args).car.car, (args).car.cdr.cdr.car), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_121_d(new_acdr1, new_cdr1, s_car, k):
+def b_cont2_122_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['k_reg'] = make_cont(b_cont_56_d, s_car, k)
     GLOBALS['ap2_reg'] = value2_reg
     GLOBALS['ap1_reg'] = new_acdr1
@@ -3275,27 +3284,27 @@ def b_cont2_121_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['p1_reg'] = new_cdr1
     GLOBALS['pc'] = unify_patterns_hat
 
-def b_cont2_122_d(apair2, pair2, s_car, k):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_121_d, value2_reg, value1_reg, s_car, k)
+def b_cont2_123_d(apair2, pair2, s_car, k):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_122_d, value2_reg, value1_reg, s_car, k)
     GLOBALS['ap_reg'] = cdr_hat(apair2)
     GLOBALS['s_reg'] = s_car
     GLOBALS['pattern_reg'] = (pair2).cdr
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_123_d(a, aa, ap, k2):
+def b_cont2_124_d(a, aa, ap, k2):
     GLOBALS['value2_reg'] = cons_hat(aa, value2_reg, get_source_info(ap))
     GLOBALS['value1_reg'] = cons(a, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_124_d(ap, pattern, s, k2):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_123_d, value1_reg, value2_reg, ap, k2)
+def b_cont2_125_d(ap, pattern, s, k2):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_124_d, value1_reg, value2_reg, ap, k2)
     GLOBALS['ap_reg'] = cdr_hat(ap)
     GLOBALS['s_reg'] = s
     GLOBALS['pattern_reg'] = (pattern).cdr
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_125_d(s2, k2):
+def b_cont2_126_d(s2, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['ap_reg'] = value2_reg
     GLOBALS['s_reg'] = s2
@@ -3456,7 +3465,7 @@ def b_cont4_12_d(handler, k2):
         GLOBALS['pc'] = read_error
 
 def b_cont4_13_d(src, env2, handler, k):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_102_d, src, value3_reg, env2, handler, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_103_d, src, value3_reg, env2, handler, k)
     GLOBALS['fail_reg'] = value4_reg
     GLOBALS['handler_reg'] = handler
     GLOBALS['senv_reg'] = initial_contours(env2)
@@ -3521,7 +3530,8 @@ def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k
     where = get_exception_info(exception_reg)
     assert_exp = (assertions).car
     proc_exp = aunparse((cdr_hat(assert_exp)).car)
-    test_exp = aunparse((cdr_hat(assert_exp)).cdr.car)
+    test_aexp = (cdr_hat(assert_exp)).cdr.car
+    test_exp = aunparse(test_aexp)
     result_exp = (cdr_hat(assert_exp)).cdr.cdr.car
     traceback = get_traceback_string(List(symbol_exception, exception_reg))
     if (False if ((GreaterThan(string_length(msg), 0)) is False) else True):
@@ -3535,7 +3545,7 @@ def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k
         else:
             printf("  Error: ~a at ~a\n", test_name, where)
     initialize_stack_trace_b()
-    GLOBALS['k_reg'] = make_cont2(b_cont2_88_d, assertions, msg, proc_exp, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_89_d, assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
     GLOBALS['exp_reg'] = result_exp
@@ -3550,7 +3560,7 @@ def b_handler2_5_d(cexps, cvar, env, handler, k):
     GLOBALS['pc'] = eval_sequence
 
 def b_handler2_6_d(fexps, env, handler):
-    GLOBALS['k_reg'] = make_cont2(b_cont2_92_d, exception_reg, handler)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_93_d, exception_reg, handler)
     GLOBALS['handler_reg'] = handler
     GLOBALS['env_reg'] = env
     GLOBALS['exps_reg'] = fexps
@@ -3601,7 +3611,7 @@ def b_proc_3_d(bodies, name, trace_depth, formals, env):
     if (False if ((numeric_equal(length(new_args), length(new_formals))) is False) else True):
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
         GLOBALS['trace_depth'] = (trace_depth) + (1)
-        GLOBALS['k_reg'] = make_cont2(b_cont2_93_d, trace_depth, k2_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_94_d, trace_depth, k2_reg)
         GLOBALS['env_reg'] = extend(env, new_formals, new_args, make_empty_docstrings(length(new_formals)))
         GLOBALS['exps_reg'] = bodies
         GLOBALS['pc'] = eval_sequence
@@ -3616,7 +3626,7 @@ def b_proc_4_d(bodies, name, trace_depth, formals, runt, env):
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
         GLOBALS['trace_depth'] = (trace_depth) + (1)
-        GLOBALS['k_reg'] = make_cont2(b_cont2_93_d, trace_depth, k2_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_94_d, trace_depth, k2_reg)
         GLOBALS['env_reg'] = new_env
         GLOBALS['exps_reg'] = bodies
         GLOBALS['pc'] = eval_sequence
@@ -3760,13 +3770,13 @@ def b_proc_19_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_20_d():
-    GLOBALS['k_reg'] = make_cont2(b_cont2_97_d, handler_reg, k2_reg)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_98_d, handler_reg, k2_reg)
     GLOBALS['src_reg'] = "stdin"
     GLOBALS['input_reg'] = (args_reg).car
     GLOBALS['pc'] = scan_input
 
 def b_proc_21_d():
-    GLOBALS['k_reg'] = make_cont2(b_cont2_98_d, handler_reg, k2_reg)
+    GLOBALS['k_reg'] = make_cont2(b_cont2_99_d, handler_reg, k2_reg)
     GLOBALS['src_reg'] = "stdin"
     GLOBALS['input_reg'] = (args_reg).car
     GLOBALS['pc'] = scan_input
@@ -4534,7 +4544,7 @@ def b_proc_86_d():
             expected_result = (args_reg).cdr.cdr.car
             expression_result = (args_reg).cdr.car
             proc = (args_reg).car
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_104_d, args_reg, info_reg, handler_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_105_d, args_reg, info_reg, handler_reg, k2_reg)
             GLOBALS['args_reg'] = List(expression_result, expected_result)
             GLOBALS['proc_reg'] = proc
             GLOBALS['pc'] = apply_proc
@@ -4787,7 +4797,7 @@ def b_proc_112_d():
     else:
         module_name = (args_reg).cdr.car
         filename = (args_reg).car
-        GLOBALS['k_reg'] = make_cont2(b_cont2_106_d, filename, info_reg, handler_reg, k2_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_107_d, filename, info_reg, handler_reg, k2_reg)
         GLOBALS['env_reg'] = env2_reg
         GLOBALS['var_reg'] = module_name
         GLOBALS['pc'] = lookup_binding_in_first_frame
@@ -5355,7 +5365,7 @@ def b_proc_171_d():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_118_d, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_119_d, k2_reg)
         GLOBALS['args_reg'] = (args_reg).car
         GLOBALS['pc'] = make_dict
 
@@ -8044,7 +8054,7 @@ def run_unit_test_cases():
     else:
         test_case_handler = make_handler2(b_handler2_4_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         initialize_stack_trace_b()
-        GLOBALS['k_reg'] = make_cont2(b_cont2_89_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_90_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         GLOBALS['handler_reg'] = test_case_handler
         GLOBALS['exp_reg'] = (assertions_reg).car
         GLOBALS['pc'] = m
@@ -8138,7 +8148,7 @@ def m_star():
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k_reg'] = make_cont2(b_cont2_90_d, exps_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_91_d, exps_reg, env_reg, handler_reg, k_reg)
         GLOBALS['exp_reg'] = (exps_reg).car
         GLOBALS['pc'] = m
 
@@ -8147,7 +8157,7 @@ def eval_sequence():
         GLOBALS['exp_reg'] = (exps_reg).car
         GLOBALS['pc'] = m
     else:
-        GLOBALS['k_reg'] = make_cont2(b_cont2_91_d, exps_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_92_d, exps_reg, env_reg, handler_reg, k_reg)
         GLOBALS['exp_reg'] = (exps_reg).car
         GLOBALS['pc'] = m
 
@@ -8223,7 +8233,7 @@ def string_join():
             GLOBALS['k_reg'] = k2_reg
             GLOBALS['pc'] = apply_cont2
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_94_d, items_reg, sep_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_95_d, items_reg, sep_reg, k2_reg)
             GLOBALS['items_reg'] = (items_reg).cdr
             GLOBALS['pc'] = string_join
 
@@ -8260,7 +8270,7 @@ def load_file():
                 GLOBALS['pc'] = runtime_error
             else:
                 GLOBALS['load_stack'] = cons(filename_reg, load_stack)
-                GLOBALS['k_reg'] = make_cont2(b_cont2_100_d, filename_reg, env2_reg, handler_reg, k_reg)
+                GLOBALS['k_reg'] = make_cont2(b_cont2_101_d, filename_reg, env2_reg, handler_reg, k_reg)
                 GLOBALS['src_reg'] = filename_reg
                 GLOBALS['input_reg'] = read_content(filename_reg)
                 GLOBALS['pc'] = scan_input
@@ -8280,7 +8290,7 @@ def load_files():
         GLOBALS['value1_reg'] = void_value
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k_reg'] = make_cont2(b_cont2_103_d, filenames_reg, env2_reg, info_reg, handler_reg, k_reg)
+        GLOBALS['k_reg'] = make_cont2(b_cont2_104_d, filenames_reg, env2_reg, info_reg, handler_reg, k_reg)
         GLOBALS['filename_reg'] = (filenames_reg).car
         GLOBALS['paths_reg'] = SCHEMEPATH
         GLOBALS['pc'] = find_file_and_load
@@ -8323,7 +8333,7 @@ def make_set():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_105_d, lst_reg, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_106_d, lst_reg, k2_reg)
         GLOBALS['lst_reg'] = (lst_reg).cdr
         GLOBALS['pc'] = make_set
 
@@ -8383,7 +8393,7 @@ def append2():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_107_d, ls1_reg, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_108_d, ls1_reg, k2_reg)
         GLOBALS['ls1_reg'] = (ls1_reg).cdr
         GLOBALS['pc'] = append2
 
@@ -8404,7 +8414,7 @@ def append_all():
                 GLOBALS['msg_reg'] = format("append called on incorrect list structure ~s", (lists_reg).car)
                 GLOBALS['pc'] = runtime_error
             else:
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_108_d, lists_reg, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_109_d, lists_reg, k2_reg)
                 GLOBALS['lists_reg'] = (lists_reg).cdr
                 GLOBALS['pc'] = append_all
 
@@ -8492,7 +8502,7 @@ def iterate_continue():
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_109_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_110_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['env2_reg'] = env_reg
         GLOBALS['args_reg'] = List(item)
@@ -8510,7 +8520,7 @@ def iterate_collect_continue():
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_110_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_111_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         GLOBALS['info_reg'] = symbol_none
         GLOBALS['env2_reg'] = env_reg
         GLOBALS['args_reg'] = List(item)
@@ -8523,11 +8533,11 @@ def map1():
         GLOBALS['pc'] = apply_cont2
     else:
         if (False if ((dlr_proc_q(proc_reg)) is False) else True):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_112_d, list1_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_113_d, list1_reg, proc_reg, k_reg)
             GLOBALS['list1_reg'] = (list1_reg).cdr
             GLOBALS['pc'] = map1
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_111_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_112_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = List((list1_reg).car)
@@ -8540,12 +8550,12 @@ def map2():
         GLOBALS['pc'] = apply_cont2
     else:
         if (False if ((dlr_proc_q(proc_reg)) is False) else True):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_114_d, list1_reg, list2_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_115_d, list1_reg, list2_reg, proc_reg, k_reg)
             GLOBALS['list2_reg'] = (list2_reg).cdr
             GLOBALS['list1_reg'] = (list1_reg).cdr
             GLOBALS['pc'] = map2
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_113_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_114_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = List((list1_reg).car, (list2_reg).car)
@@ -8558,11 +8568,11 @@ def mapN():
         GLOBALS['pc'] = apply_cont2
     else:
         if (False if ((dlr_proc_q(proc_reg)) is False) else True):
-            GLOBALS['k_reg'] = make_cont2(b_cont2_116_d, lists_reg, proc_reg, k_reg)
+            GLOBALS['k_reg'] = make_cont2(b_cont2_117_d, lists_reg, proc_reg, k_reg)
             GLOBALS['lists_reg'] = Map(cdr, lists_reg)
             GLOBALS['pc'] = mapN
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_115_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_116_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
             GLOBALS['info_reg'] = symbol_none
             GLOBALS['env2_reg'] = env_reg
             GLOBALS['args_reg'] = Map(car, lists_reg)
@@ -8584,7 +8594,7 @@ def for_each_primitive():
                 GLOBALS['lists_reg'] = Map(cdr, arg_list)
                 GLOBALS['pc'] = for_each_primitive
             else:
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_117_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_118_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
                 GLOBALS['info_reg'] = symbol_none
                 GLOBALS['env2_reg'] = env_reg
                 GLOBALS['args_reg'] = Map(car, arg_list)
@@ -8604,11 +8614,11 @@ def make_dict():
         GLOBALS['pc'] = apply_cont2
     else:
         if (False if ((association_q((args_reg).car)) is False) else True):
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, args_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_121_d, args_reg, k2_reg)
             GLOBALS['args_reg'] = (args_reg).cdr
             GLOBALS['pc'] = make_dict
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_119_d, args_reg, k2_reg)
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, args_reg, k2_reg)
             GLOBALS['args_reg'] = (args_reg).cdr
             GLOBALS['pc'] = make_dict
 
@@ -8780,7 +8790,7 @@ def instantiate_hat():
             GLOBALS['pc'] = apply_sub_hat
         else:
             if (False if ((pair_q(pattern_reg)) is False) else True):
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_124_d, ap_reg, pattern_reg, s_reg, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_125_d, ap_reg, pattern_reg, s_reg, k2_reg)
                 GLOBALS['ap_reg'] = car_hat(ap_reg)
                 GLOBALS['pattern_reg'] = (pattern_reg).car
                 GLOBALS['pc'] = instantiate_hat
@@ -8817,7 +8827,7 @@ def apply_sub_hat():
             if (False if ((((temp_1).car) is (symbol_composite)) is False) else True):
                 s2 = list_ref(temp_1, 2)
                 s1 = list_ref(temp_1, 1)
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_125_d, s2, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_126_d, s2, k2_reg)
                 GLOBALS['s_reg'] = s1
                 GLOBALS['pc'] = apply_sub_hat
             else:
@@ -9077,15 +9087,15 @@ def run(setup, *args):
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 1.4.5')
+    print('Calysto Scheme, version 1.4.6')
     print('----------------------------')
-    print('Use (exit) to exit')
     import sys
     for filename in sys.argv[1:]:
         if filename.startswith('-'): continue
         if load_native(filename): continue
         break
     if '-i' in sys.argv[1:] or sys.argv[1:] == []:
+        print('Use (exit) to exit')
         read_eval_print_loop_rm()
         print()
 if __name__ == '__main__':

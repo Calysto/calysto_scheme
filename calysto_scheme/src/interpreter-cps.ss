@@ -682,7 +682,8 @@
 			(where (get-exception-info e))
 			(assert-exp (car assertions)) ;; (app-exp assert op e1 e2 name)
 			(proc-exp (aunparse (car (cdr^ assert-exp))))
-			(test-exp (aunparse (cadr (cdr^ assert-exp))))
+			(test-aexp (cadr (cdr^ assert-exp)))
+			(test-exp (aunparse test-aexp))
 			(result-exp (caddr (cdr^ assert-exp)))
 			(traceback (get-traceback-string (list 'exception e))))
 		   (if (> (string-length msg) 0)
@@ -695,14 +696,17 @@
 		   (initialize-stack-trace!)
 		   (m result-exp env handler fail ;; FIXME: could have an error in result?
 		      (lambda-cont2 (result-val fail)
-			 (if verbose
-			     (begin
-			       (printf "~a\n" traceback)
-			       (printf "  Procedure: ~a\n" proc-exp)
-			       (printf "           : ~a\n" test-exp)
-			       (printf "           : ~a\n" result-val)))
-			 (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
-			 (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))))
+			(m test-aexp env handler fail ;; FIXME: could have an error in test
+			   (lambda-cont2 (test-val fail)
+			      (if verbose
+				  (begin
+				    (printf "~a\n" traceback)
+				    (printf "  Procedure    : ~a\n" proc-exp)
+				    (printf "       src     : ~a\n" test-exp)
+				    (printf "       src eval: ~a\n" test-val)
+				    (printf "       result  : ~a\n" result-val)))
+			      (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
+			      (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))))))
 	  (initialize-stack-trace!)
           (m (car assertions) env test-case-handler fail
 	     (lambda-cont2 (v fail)

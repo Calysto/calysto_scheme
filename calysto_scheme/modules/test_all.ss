@@ -714,17 +714,13 @@
 	  "choose")
 
   (assert equal?
-	  (parse '(let ((- +)(+ -)) (+ 1 2)))
-	  (if (use-lexical-address)
-	      '(app-aexp (lambda-aexp (- +) ((app-aexp (lexical-address-aexp 0 1 + none) ((lit-aexp 1 none) (lit-aexp 2 none)) none)) none) ((lexical-address-aexp 0 2 + none) (lexical-address-aexp 0 3 - none)) none)
-	      '(app-aexp (lambda-aexp (- +) ((app-aexp (var-aexp + none) ((lit-aexp 1 none) (lit-aexp 2 none)) none)) none) ((var-aexp + none) (var-aexp - none)) none))
+	  (car (parse '(let ((- +)(+ -)) (+ 1 2))))
+	  'app-aexp
 	  "parse")
 
   (assert equal?
-	  (parse-string "(let ((- +)) (- 7 8))")
-	  (if (use-lexical-address)
-	      '(app-aexp (lambda-aexp (-) ((app-aexp (lexical-address-aexp 0 0 - (0 1 15 15 1 15 15)) ((lit-aexp 7 (0 1 17 17 1 17 17)) (lit-aexp 8 (0 1 19 19 1 19 19))) (0 1 14 14 1 20 20))) none) ((lexical-address-aexp 0 2 + (0 1 10 10 1 10 10))) (0 1 1 1 1 21 21 let))
-	      '(app-aexp (lambda-aexp (-) ((app-aexp (var-aexp - (0 1 15 15 1 15 15)) ((lit-aexp 7 (0 1 17 17 1 17 17)) (lit-aexp 8 (0 1 19 19 1 19 19))) (0 1 14 14 1 20 20))) none) ((var-aexp + (0 1 10 10 1 10 10))) (0 1 1 1 1 21 21 let)))
+	  (length (parse-string "(let ((- +)) (- 7 8))"))
+	  4
 	  "parse-string")
 
   (assert eq?

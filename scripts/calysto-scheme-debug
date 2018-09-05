@@ -1,5 +1,11 @@
 #!/usr/bin/env ipython3
 
 import calysto_scheme
+import sys
+
+## Put this in, because ipython removes it if there:
+sys.argv.append("-i")
+
+calysto_scheme.scheme.ENVIRONMENT["DEBUG"] = True
 
 calysto_scheme.scheme.main()
