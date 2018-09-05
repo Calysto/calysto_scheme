@@ -36,7 +36,7 @@ except:
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.4"
+__version__ = "1.4.5"
 
 #############################################################
 # Python implementation notes:
@@ -9080,7 +9080,7 @@ def run(setup, *args):
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 1.4.4')
+    print('Calysto Scheme, version 1.4.5')
     print('----------------------------')
     print('Use (exit) to exit')
     import sys
