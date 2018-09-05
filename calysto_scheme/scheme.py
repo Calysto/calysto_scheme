@@ -1479,6 +1479,7 @@ symbol_macro_generated_exp = make_symbol("macro-generated-exp")
 symbol_colon = make_symbol(":")
 symbol_b_procedure_d = make_symbol("<procedure>")
 symbol_b_environment_d = make_symbol("<environment>")
+symbol_b_exception_d = make_symbol("<exception>")
 symbol_Map = make_symbol("map")
 symbol_p = make_symbol("%")
 symbol_multiply = make_symbol("*")
@@ -1664,6 +1665,7 @@ symbol_exiting = make_symbol("exiting")
 symbol_the = make_symbol("the")
 symbol_interpreter = make_symbol("interpreter")
 symbol_b_typecolonenvironment_d = make_symbol("<type:environment>")
+symbol_b_typecolonexception_d = make_symbol("<type:exception>")
 symbol_b_typecolonprocedure_d = make_symbol("<type:procedure>")
 symbol_b_typecolonnumber_d = make_symbol("<type:number>")
 symbol_b_typecolonsymbol_d = make_symbol("<type:symbol>")
@@ -2795,11 +2797,33 @@ def b_cont2_66_d(fexps, env, handler, k):
     GLOBALS['exps_reg'] = fexps
     GLOBALS['pc'] = eval_sequence
 
-def b_cont2_67_d(handler):
-    GLOBALS['fail_reg'] = value2_reg
-    GLOBALS['exception_reg'] = value1_reg
-    GLOBALS['handler_reg'] = handler
-    GLOBALS['pc'] = apply_handler2
+def b_cont2_67_d(info, handler):
+    col = get_start_char(info)
+    line = get_start_line(info)
+    src = get_srcfile(info)
+    if (False if ((exception_q(value1_reg)) is False) else True):
+        GLOBALS['fail_reg'] = value2_reg
+        GLOBALS['exception_reg'] = value1_reg
+        GLOBALS['handler_reg'] = handler
+        GLOBALS['pc'] = apply_handler2
+    else:
+        if (False if ((string_q(value1_reg)) is False) else True):
+            GLOBALS['fail_reg'] = value2_reg
+            GLOBALS['exception_reg'] = make_exception("Exception", value1_reg, src, line, col)
+            GLOBALS['handler_reg'] = handler
+            GLOBALS['pc'] = apply_handler2
+        else:
+            if (False if (((list_q(value1_reg)) and (valid_exception_type_q((value1_reg).car)) and (string_q((value1_reg).cdr.car))) is False) else True):
+                GLOBALS['fail_reg'] = value2_reg
+                GLOBALS['exception_reg'] = make_exception((value1_reg).car, (value1_reg).cdr.car, src, line, col)
+                GLOBALS['handler_reg'] = handler
+                GLOBALS['pc'] = apply_handler2
+            else:
+                GLOBALS['fail_reg'] = value2_reg
+                GLOBALS['handler_reg'] = handler
+                GLOBALS['info_reg'] = info
+                GLOBALS['msg_reg'] = "bad exception type"
+                GLOBALS['pc'] = runtime_error
 
 def b_cont2_68_d(k2):
     GLOBALS['value_reg'] = value1_reg
@@ -7902,8 +7926,9 @@ def m():
                                                                                                 GLOBALS['pc'] = m
                                                                                             else:
                                                                                                 if (False if ((((exp_reg).car) is (symbol_raise_aexp)) is False) else True):
+                                                                                                    info = list_ref(exp_reg, 2)
                                                                                                     exp = list_ref(exp_reg, 1)
-                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_67_d, handler_reg)
+                                                                                                    GLOBALS['k_reg'] = make_cont2(b_cont2_67_d, info, handler_reg)
                                                                                                     GLOBALS['exp_reg'] = exp
                                                                                                     GLOBALS['pc'] = m
                                                                                                 else:
@@ -8003,8 +8028,8 @@ def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k)
             else:
                 return lookup_assertions(test_name, case_name, (assertions).cdr, accum, handler, fail, k)
 
-def internal_exception_q(exception):
-    return (pair_q(exception)) and (string_q((exception).car)) and ((string_is__q((exception).car, "AssertionError")) or (string_is__q((exception).car, "UnhandledException")) or (string_is__q((exception).car, "RunTimeError")) or (string_is__q((exception).car, "ScanError")) or (string_is__q((exception).car, "ParseError")) or (string_is__q((exception).car, "ReadError")))
+def valid_exception_type_q(exception_type):
+    return (string_q(exception_type)) and ((string_is__q(exception_type, "AssertionError")) or (string_is__q(exception_type, "Exception")) or (string_is__q(exception_type, "KeyboardInterrupt")) or (string_is__q(exception_type, "MacroError")) or (string_is__q(exception_type, "ParseError")) or (string_is__q(exception_type, "ReadError")) or (string_is__q(exception_type, "RunTimeError")) or (string_is__q(exception_type, "ScanError")) or (string_is__q(exception_type, "UnhandledException")))
 
 def run_unit_test_cases():
     if (False if ((((assertions_reg) is symbol_emptylist)) is False) else True):
@@ -8200,6 +8225,9 @@ def string_join():
 def safe_print(arg):
     GLOBALS['_starneed_newline_star'] = False
     pretty_print(make_safe(arg))
+
+def exception_object_q(x):
+    return (list_q(x)) and (numeric_equal(length(x), 6)) and (valid_exception_type_q((x).car)) and (string_q((x).cdr.car))
 
 def procedure_object_q(x):
     return (procedure_q(x)) or ((pair_q(x)) and (((x).car) is (symbol_procedure)))

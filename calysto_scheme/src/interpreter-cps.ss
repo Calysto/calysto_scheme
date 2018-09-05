@@ -550,9 +550,21 @@
 	       (eval-sequence fexps env handler fail
 		 (lambda-cont2 (v2 fail) (k v fail)))))))
       (raise-aexp (exp info)
-	(m exp env handler fail
-	  ;; TODO: pass in more info to handler (k, env) to support resume, etc.
-	  (lambda-cont2 (e fail) (handler e fail))))
+	 (m exp env handler fail
+	    ;; TODO: pass in more info to handler (k, env) to support resume, etc.
+	    (lambda-cont2 (e fail)
+	      (let ((src (get-srcfile info))
+		    (line (get-start-line info))
+		    (col (get-start-char info)))
+		(cond
+		 ((exception? e) (handler e fail))
+		 ((string? e) 
+		  (handler (make-exception "Exception" e src line col) fail))
+		 ((and (list? e)
+		       (valid-exception-type? (car e))
+		       (string? (cadr e)))
+		  (handler (make-exception (car e) (cadr e) src line col) fail))
+		 (else (runtime-error "bad exception type" info handler fail)))))))
       (choose-aexp (exps info)
 	(eval-choices exps env handler fail k))
       (app-aexp (operator operands info)
@@ -647,22 +659,18 @@
 		  (lookup-assertions test-name case-name (cdr assertions) (cons assertion accum) handler fail k)
 		  (lookup-assertions test-name case-name (cdr assertions) accum handler fail k))))))))
 
-(define internal-exception?
-  (lambda (exception)
-    (and (pair? exception)
-	 (string? (car exception))
-	 (or (string=? (car exception)
-		       "AssertionError")
-	     (string=? (car exception)
-		       "UnhandledException")
-	     (string=? (car exception)
-		       "RunTimeError")
-	     (string=? (car exception)
-		       "ScanError")
-	     (string=? (car exception)
-		       "ParseError")
-	     (string=? (car exception)
-		       "ReadError")))))
+(define valid-exception-type?
+  (lambda (exception-type)
+    (and (string? exception-type)
+	 (or (string=? exception-type "AssertionError")
+	     (string=? exception-type "Exception")
+	     (string=? exception-type "KeyboardInterrupt")
+	     (string=? exception-type "MacroError")
+	     (string=? exception-type "ParseError")
+	     (string=? exception-type "ReadError")
+	     (string=? exception-type "RunTimeError")
+	     (string=? exception-type "ScanError")
+	     (string=? exception-type "UnhandledException")))))
 
 (define* run-unit-test-cases
   (lambda (test-name assertions verbose right wrong env handler fail k)
@@ -1213,9 +1221,17 @@
     (cond
       ((procedure-object? x) '<procedure>)
       ((environment-object? x) '<environment>)
+      ((exception-object? x) '<exception>)
       ((pair? x) (cons (make-safe (car x)) (make-safe (cdr x))))
       ((vector? x) (list->vector (make-safe (vector->list x))))
       (else x))))
+
+(define exception-object?
+  (lambda (x)
+    (and (list? x)
+	 (= (length x) 6)
+	 (valid-exception-type? (car x))
+	 (string? (cadr x)))))
 
 (define procedure-object?
   (lambda (x)
@@ -2742,6 +2758,7 @@
   (lambda (x)
     (cond
       ((environment? x) '<type:environment>)
+      ((exception-object? x) '<type:exception>)
       ((procedure? x) '<type:procedure>)
       ((number? x) '<type:number>)
       ((symbol? x) '<type:symbol>)
