@@ -42,7 +42,7 @@ ipcluster nbextension enable
 ipcluster start --n=10 --ip=192.168.1.108
 ```
 
-4. Initialize the code to use the 10 nodes, inside the notebook, type:
+4. Initialize the code to use the 10 nodes, inside the notebook from a host kernel (can be any metakernel kernel), type:
 
 ```
 %parallel calysto_scheme CalystoScheme
@@ -63,9 +63,16 @@ Or execute the entire cell, in parallel:
 (* cluster_rank cluster_rank)
 ```
 
+Results come back in a Scheme vector, in cluster_rank order. Therefore, the above would produce the result:
+
+```scheme
+#10(0 1 4 9 16 25 36 49 64 81)
+```
+You can get the results back in the host Scheme by accessing the variable `_` (single underscore).
+
 Notice that you can use the variable `cluster_rank` to partition parts of a problem so that each node is working on something different.
 
-In the examples above, use `-e` to evaluate the code on the host machine as well. Note that `cluster_rank` is not defined on the host machine.
+In the examples above, use `-e` to evaluate the code in the host Scheme as well. Note that `cluster_rank` is not defined on the host machine, and that this assumes the host kernel is the same as the parallel machines.
 
 ## Install
 
