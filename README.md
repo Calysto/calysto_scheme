@@ -20,6 +20,60 @@ Calysto Scheme is written in Scheme, and then translated into Python (and other 
 * [CS245: Programming Languages - 2016, Fall](https://jupyter.brynmawr.edu/services/public/dblank/CS245%20Programming%20Languages/2016-Fall/Syllabus.ipynb)
 * Videos: https://www.youtube.com/watch?v=2w-iO701g_w
 
+## Parallel Processing
+
+To use Calysto Scheme in parallel, do the following:
+
+1. Make sure that the Python module `ipyparallel` is installed. In the shell, type:
+
+```
+pip install ipyparallel
+```
+
+2. To enable the extension in the notebook, in the shell, type:
+
+```
+ipcluster nbextension enable
+```
+
+3. To start up a cluster, with 10 nodes, on a local IP address, in the shell, type:
+
+```
+ipcluster start --n=10 --ip=192.168.1.108
+```
+
+4. Initialize the code to use the 10 nodes, inside the notebook from a host kernel (can be any metakernel kernel), type:
+
+```
+%parallel calysto_scheme CalystoScheme
+```
+
+5. Run code in parallel, inside the notebook, type:
+
+Execute a single line, in parallel:
+
+```
+%px (+ 1 1)
+```
+
+Or execute the entire cell, in parallel:
+
+```
+%%px
+(* cluster_rank cluster_rank)
+```
+
+Results come back in a Scheme vector, in cluster_rank order. Therefore, the above would produce the result:
+
+```scheme
+#10(0 1 4 9 16 25 36 49 64 81)
+```
+You can get the results back in the host Scheme by accessing the variable `_` (single underscore).
+
+Notice that you can use the variable `cluster_rank` to partition parts of a problem so that each node is working on something different.
+
+In the examples above, use `-e` to evaluate the code in the host Scheme as well. Note that `cluster_rank` is not defined on the host machine, and that this assumes the host kernel is the same as the parallel machines.
+
 ## Install
 
 You can install Calysto Scheme with Python3:
