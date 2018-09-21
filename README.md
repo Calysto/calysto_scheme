@@ -74,6 +74,8 @@ Notice that you can use the variable `cluster_rank` to partition parts of a prob
 
 In the examples above, use `-e` to evaluate the code in the host Scheme as well. Note that `cluster_rank` is not defined on the host machine, and that this assumes the host kernel is the same as the parallel machines.
 
+A full notebook example can be found here: [Mandelbrot.ipynb](https://github.com/Calysto/metakernel/blob/master/examples/Mandelbrot.ipynb)
+
 ## Install
 
 You can install Calysto Scheme with Python3:
