@@ -942,9 +942,9 @@ def ready_to_eval(text):
     elif text:
         lines = text.split("\n")
         if len(lines) > 0 and lines[-1].strip() == "":
-            return True ## force it
+            return (True, "") ## force it
         ## else, only if valid parse
-        return try_parse(text)
+        return (try_parse(text), "... ")
     return (True, "")
 
 # native:
