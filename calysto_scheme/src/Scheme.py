@@ -28,7 +28,7 @@ except:
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.6"
+__version__ = "1.4.7"
 
 #############################################################
 # Python implementation notes:

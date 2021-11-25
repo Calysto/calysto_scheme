@@ -36,7 +36,7 @@ except:
 
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.6"
+__version__ = "1.4.7"
 
 #############################################################
 # Python implementation notes:
@@ -9087,7 +9087,7 @@ def run(setup, *args):
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 1.4.6')
+    print('Calysto Scheme, version 1.4.7')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
