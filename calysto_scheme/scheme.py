@@ -13,7 +13,7 @@
 
 from __future__ import division, print_function
 
-from collections import Iterable
+from collections.abc import Iterable
 import inspect
 import fractions
 import functools
