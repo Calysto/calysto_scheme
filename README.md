@@ -76,6 +76,8 @@ A full notebook example can be found here: [Mandelbrot.ipynb](https://github.com
 
 ## Install
 
+Ensure that your system has `jupyter` installed, and `pyQt` and `qtconsole` if you want to use the `qtconsole` option. 
+
 You can install Calysto Scheme with Python3:
 
 ```
