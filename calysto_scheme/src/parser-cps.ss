@@ -487,10 +487,11 @@
 			     (k (mu-trace-lambda-aexp name (head formals) (last formals) bodies info) fail))))))))
 	((try?^ adatum)
 	 (cond
-	  ;; (try <body>)
-	   ((= (length^ adatum) 2)
-	    (aparse (try-body^ adatum) senv handler fail k))
-	   ;; (try <body> (catch <var> <exp> ...))
+	   ;; (try <body>) - removed because redefining try gave silent error
+	   ;; see: https://github.com/Calysto/calysto_scheme/issues/35
+	   ;; ((= (length^ adatum) 2)
+	   ;;  (aparse (try-body^ adatum) senv handler fail k))
+	   ;;  (try <body> (catch <var> <exp> ...))
 	   ((and (= (length^ adatum) 3) (catch?^ (caddr^ adatum)))
 	    (aparse (try-body^ adatum) senv handler fail
 	      (lambda-cont2 (body fail)
