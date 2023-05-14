@@ -1234,18 +1234,24 @@ def getitem_native(thing, item):
     ## FIXME:
     ## if environment_q(thing):
     if isinstance(thing, dict):
+        if symbol_q(item):
+            item = symbol_to_string(item)
         return thing[item]
     else:
         return thing.__getitem__(item)
 
 def setitem_native(thing, item, value):
     if isinstance(thing, dict):
+        if symbol_q(item):
+            item = symbol_to_string(item)
         thing[item] = value
     else:
         thing.__setitem__(item, value)
 
 def hasitem_native(thing, item):
     if isinstance(thing, dict):
+        if symbol_q(item):
+            item = symbol_to_string(item)
         return item in thing
     else:
         try:

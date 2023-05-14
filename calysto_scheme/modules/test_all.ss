@@ -1030,7 +1030,7 @@
 (define-tests try
   (assert equal?
 	  3
-	  (try 3)
+	  (try 3 (catch e e))
 	  "case 23")
   (assert equal?
 	  3
@@ -1041,12 +1041,8 @@
 	  (try (raise "yes") (catch e (get-exception-message e)))
 	  "case 25")
   (assert equal?
-	  "yes"
-	  (try (try (raise "yes")) (catch e (get-exception-message e)))
-	  "case 26")
-  (assert equal?
 	  "oops"
-	  (try (try (begin 'one (raise "oops") 'two)) (catch e (get-exception-message e)))
+	  (try (begin 'one (raise "oops") 'two) (catch e (get-exception-message e)))
 	  "case 27")
   (assert equal?
 	  40
@@ -1066,13 +1062,15 @@
   (assert equal?
 	  "oops"
 	  (try (* 10 (try (begin 'one (raise "oops") 5)
-			  (catch ex (list 'ex: ex) (raise ex) 4))) (catch e (get-exception-message e)))
+			  (catch ex (list 'ex: ex) (raise ex) 4)))
+	       (catch e (get-exception-message e)))
 	  "case 31")
   (assert equal?
 	  "oops"
 	  (try (* 10 (try (begin 'one (raise "oops") 5)
 			  (catch ex (list 'ex: ex) (raise ex) 4)
-			  (finally 'two 7))) (catch e (get-exception-message e)))
+			  (finally 'two 7)))
+	       (catch e (get-exception-message e)))
 	  "case 32")
   (assert equal?
 	  77
@@ -1094,7 +1092,10 @@
 	  "case 36")
   (assert equal?
 	  "division by zero"
-	  (try (let ((x (try (div 10 0)))) x) (catch e (get-exception-message e)))
+	  (try (let ((x (try (div 10 0)
+			     (catch e (get-exception-message e)))))
+		 x)
+	       (catch e (get-exception-message e)))
 	  "case 37")
   (assert equal?
 	  5
