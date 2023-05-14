@@ -879,10 +879,10 @@
 	      (if (symbol?^ (car^ clause))
 		(let ((name (car^ clause)))
 		  (k2 (cons `(,name (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		      (cons `((eq? ,var ',(car^ clause)) (,name)) new-clauses)))
+		      (cons `((eq? ,var ',(car^ clause)) (apply ,name '())) new-clauses)))
 		(let ((name (caar^ clause)))
 		  (k2 (cons `(,name (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		      (cons `((memq ,var ',(car^ clause)) (,name)) new-clauses)))))))))))
+		      (cons `((memq ,var ',(car^ clause)) (apply ,name '())) new-clauses)))))))))))
 
 ;; avoids variable capture
 (define record-case-transformer^
@@ -1320,6 +1320,7 @@
     (cases aexpression aexp
       (lit-aexp (datum info)
 	(cond
+	  ((null? datum) '(quote ()))
 	  ((literal? datum) datum)
 	  ((vector? datum) datum)
 	  (else `(quote ,datum))))
