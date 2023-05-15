@@ -119,7 +119,7 @@
 
 (define facts (scons 1 (combine facts * (scdr nats))))
 
-(define ! (lambda (n) (nth n facts)))
+(define fact (lambda (n) (nth n facts)))
 
 (define my-odd? 'undefined)
 (define my-even? 'undefined)
@@ -951,7 +951,7 @@
 	  "case 8")
   (assert equal?
 	  120
-	  (! 5)
+	  (fact 5)
 	  "case 9")
   (assert equal?
 	  3628800
