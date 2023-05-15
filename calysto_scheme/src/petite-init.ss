@@ -49,4 +49,3 @@
 
 (load "define-datatype.ss")
 
-(printf "Loaded EOPL init file~%")
