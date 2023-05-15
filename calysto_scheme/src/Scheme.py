@@ -318,19 +318,27 @@ def random(number):
     else:
         raise Exception("random function received invalid value: %s" % number)
 
-def sort_native(args, env2, info, handler, fail, k2):
-    ## just passing extra args to be compatible with chez scheme
-    p = args.car
-    arg = args.cdr.car
+def sort_native():
+    state = {
+        'args_reg': GLOBALS['args_reg'],
+        'env2_reg': GLOBALS['env2_reg'],
+        'info_reg': GLOBALS['info_reg'],
+        'handler_reg': GLOBALS['handler_reg'],
+        'fail_reg': GLOBALS['fail_reg'],
+        'k2_reg': GLOBALS['k2_reg'],
+    }
+    pred = GLOBALS['args_reg'].car
+    elements = GLOBALS['args_reg'].cdr.car
     try:
-        GLOBALS['value1_reg'] = sort(p, arg)
-        GLOBALS['value2_reg'] = fail
-        GLOBALS['k_reg'] = k2
+        python_pred = dlr_func(pred)
+        result = sort(python_pred, elements)
+        GLOBALS.update(state)
+        GLOBALS['value1_reg'] = result
+        GLOBALS['value2_reg'] = GLOBALS['fail_reg']
+        GLOBALS['k_reg'] = GLOBALS['k2_reg']
         GLOBALS['pc'] = apply_cont2
     except Exception as exc:
-        GLOBALS['fail_reg'] = fail
-        GLOBALS['handler_reg'] = handler
-        GLOBALS['info_reg'] = info
+        GLOBALS.update(state)
         GLOBALS['msg_reg'] = str(exc)
         GLOBALS['pc'] = runtime_error
 

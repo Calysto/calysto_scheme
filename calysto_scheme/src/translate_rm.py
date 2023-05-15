@@ -76,12 +76,13 @@ class Translator(object):
             "get-current-time", "type?",
             "read-eval-print-loop", "unparse", "unparse-exps", "qq-expand-cps_",
             "qq-expand-list-cps_",
-            ## defined in Scheme.cs:
+            ## defined in Scheme.py:
             "true?",
             "init-cont", "init-cont2", "init-cont3", "init-cont4",
             "init-handler", "init-handler2", "init-fail",
             "make-cont", "make-cont2", "make-cont3", "make-cont4", "make-macro", "make-proc",
             "make-fail", "make-handler", "make-handler2",
+            "sort-native", "sort-elements", "insert-elements",
         ] + self.overrides()
 
     def overrides(self):

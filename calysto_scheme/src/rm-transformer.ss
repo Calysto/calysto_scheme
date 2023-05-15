@@ -179,7 +179,9 @@
 	 (print-code
 	   (lambda (output-port)
 	     (if *include-define*-in-registerized-code?*
-		 (fprintf output-port "(load \"transformer-macros.ss\")~%~%"))
+		 (begin
+		   (fprintf output-port "(load \"transformer-macros.ss\")~%~%")
+		   (fprintf output-port "(load \"datastructures.ss\")~%~%")))
 	     ;; did we see a define-datatype or cases form?
 	     (if need-eopl-support?
 	       (begin
@@ -237,6 +239,22 @@
 	     (newline output-port)
 	     (pretty-print
 	       '(define run (lambda (setup . args) (apply setup args) (return* (trampoline))))
+	       output-port)
+	     (newline output-port)
+	     (pretty-print
+	       '(define start
+		  (lambda ()
+		    (set! toplevel-env (make-toplevel-env))
+		    (set! macro-env (make-macro-env^))
+		    (set! unit-test-table (dict))
+		    (return* (read-eval-print-loop-rm))))
+	       output-port)
+	     (newline output-port)
+	     (pretty-print
+	       '(define restart
+		  (lambda ()
+		    (printf "Restarting...\n")
+		    (return* (read-eval-print-loop-rm))))
 	       output-port)
 	     (newline output-port))))
 	(call-with-input-file source-file

@@ -1,5 +1,4 @@
-(delete-file "scheme-ds.ss")
-
 (load "ds-transformer.ss")
-(ds-transform-file "scheme-cps.ss" "scheme-ds.ss")
+(delete-file "source-ds.ss")
+(ds-transform-file "source-cps.ss" "source-ds.ss")
 (exit)

@@ -359,7 +359,9 @@
 	 (print-code
 	   (lambda (output-port)
 	     (if *include-define*-in-ds-code?*
-		 (fprintf output-port "(load \"transformer-macros.ss\")~%~%"))
+		 (begin
+		   (fprintf output-port "(load \"transformer-macros.ss\")~%~%")
+		   (fprintf output-port "(load \"datastructures.ss\")~%~%")))
 	     ;; did we see a define-datatype or cases form?
 	     (if need-eopl-support?
 	       (begin

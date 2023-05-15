@@ -48,7 +48,7 @@
   (syntax-rules ()
     [(_ name body ...) (define name body ...)]))
 
-;; definitions that should NOT be transformed to C#
+;; definitions that should NOT be transformed
 
 (define-syntax define-native
   (syntax-rules ()

@@ -1,6 +1,5 @@
-(delete-file "scheme-rm.ss")
-
 (load "rm-transformer.ss")
+(delete-file "source-rm.ss")
 (compile-level-output)
-(rm-transform-file "scheme-ds.ss" "scheme-rm.ss")
+(rm-transform-file "source-ds.ss" "source-rm.ss")
 (exit)
