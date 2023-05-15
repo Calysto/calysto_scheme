@@ -1,12 +1,12 @@
-;; Calico Scheme scanner and s-expression reader
+;; Calysto Scheme scanner and s-expression reader
 ;;
 ;; includes support for vectors, rationals, exponents, and backquote
 ;;
 ;; Written by James B. Marshall and Douglas S. Blank
 ;; jmarshall@slc.edu
-;; http://science.slc.edu/~jmarshall
-;; dblank@brynmawr.edu
-;; http://cs.brynmawr.edu/~dblank
+;; http://science.slc.edu/jmarshall
+;; doug.blank@gmail.com
+;; https://github.com/dsblank
 
 (load "transformer-macros.ss")
 (load "datastructures.ss")

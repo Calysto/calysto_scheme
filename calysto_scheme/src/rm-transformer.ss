@@ -3,7 +3,7 @@
 ;;
 ;; Written by James B. Marshall
 ;; jmarshall@slc.edu
-;; http://science.slc.edu/~jmarshall
+;; http://science.slc.edu/jmarshall
 ;;
 ;; assumptions:
 ;; - code in first-order tail form

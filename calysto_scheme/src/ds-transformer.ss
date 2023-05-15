@@ -4,7 +4,7 @@
 ;;
 ;; Written by James B. Marshall
 ;; jmarshall@slc.edu
-;; http://science.slc.edu/~jmarshall
+;; http://science.slc.edu/jmarshall
 
 (case-sensitive #t)
 

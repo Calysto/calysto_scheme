@@ -7904,18 +7904,6 @@
                   line-number column-number (cadddr line)))))
         (return* (format "  Source \"~a\"~%" line)))))
 
-(define start-rm
-  (lambda ()
-    (set! toplevel-env (make-toplevel-env))
-    (set! macro-env (make-macro-env^))
-    (set! unit-test-table (dict))
-    (return* (read-eval-print-loop-rm))))
-
-(define restart-rm
-  (lambda ()
-    (printf "Restarting...\n")
-    (return* (read-eval-print-loop-rm))))
-
 (define read-eval-print-loop-rm
   (lambda ()
     (let ((input 'undefined))
@@ -10958,4 +10946,16 @@
     (apply setup args)
     (return* (trampoline))))
 
-(start-rm)
+(define start
+  (lambda ()
+    (set! toplevel-env (make-toplevel-env))
+    (set! macro-env (make-macro-env^))
+    (set! unit-test-table (dict))
+    (return* (read-eval-print-loop-rm))))
+
+(define restart
+  (lambda ()
+    (printf "Restarting...\n")
+    (return* (read-eval-print-loop-rm))))
+
+(start)

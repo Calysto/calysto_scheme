@@ -1,24 +1,24 @@
-;; Calico Scheme interpreter with support for choose
+;; Calysto Scheme interpreter with support for choose
 ;;
 ;; Written by James B. Marshall and Douglas S. Blank
 ;; jmarshall@slc.edu
-;; http://science.slc.edu/~jmarshall
-;; dblank@brynmawr.edu
-;; http://cs.brynmawr.edu/~dblank
+;; http://science.slc.edu/jmarshall
+;; doug.blank@gmail.com
+;; https://github.com/dsblank
 
 (load "transformer-macros.ss")
 (load "environments-cps.ss")
 (load "parser-cps.ss")
 
 ;;----------------------------------------------------------------------------
-;; to run the scheme data structure machine within Petite:
-;; % petite pjscheme-ds.ss
+;; to run the scheme data structure machine within Chez Scheme:
+;; % scheme scheme-ds.ss
 ;; > (start)
 
 ;;----------------------------------------------------------------------------
-;; to run the scheme register machine within Petite:
-;; % petite pjscheme-rm.ss
-;; > (run start-rm)
+;; to run the scheme register machine within Chez Scheme:
+;; % scheme scheme-rm.ss
+;; > (start)
 
 ;;----------------------------------------------------------------------------
 ;; used by scheme CPS, DS, RM, and Host RM code

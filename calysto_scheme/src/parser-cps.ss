@@ -1,10 +1,10 @@
-;; Calico Scheme parser
+;; Calysto Scheme parser
 ;;
 ;; Written by James B. Marshall and Douglas S. Blank
 ;; jmarshall@slc.edu
-;; http://science.slc.edu/~jmarshall
-;; dblank@brynmawr.edu
-;; http://cs.brynmawr.edu/~dblank
+;; http://science.slc.edu/jmarshall
+;; doug.blank@gmail.com
+;; https://github.com/dsblank
 
 (load "transformer-macros.ss")
 
