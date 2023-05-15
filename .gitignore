@@ -57,6 +57,4 @@ docs/_build/
 target/
 
 ## Temp files:
-*-rm.ss
-*-ds.ss
 scheme-cps.ss
