@@ -10624,6 +10624,8 @@
 
 (define apply-prim (make-proc <proc-22>))
 
+(define ^-prim (make-proc <proc-23>))
+
 (define sqrt-prim (make-proc <proc-23>))
 
 (define odd?-prim (make-proc <proc-24>))

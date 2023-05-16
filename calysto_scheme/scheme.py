@@ -1184,17 +1184,16 @@ def dlr_apply(f, args):
     largs = list_to_vector(args)
     fargs = []
     fkwargs = {}
-    for larg in largs:
-        if association_q(larg):
-            sym = symbol_to_string(larg.car)
-            if sym == "*":
-                fargs = larg.cdr.cdr.car
-            elif sym == "**":
-                fkwargs = larg.cdr.cdr.car
-            else:
-                fkwargs[sym] = larg.cdr.cdr.car
-        else:
-            fargs.append(larg)
+
+    # args can be: (), (1, 2, 3), (dict, dict), (dict)
+    # if last is a dict, use it for kwargs
+
+    if isinstance(largs[-1], dict):
+        fkwargs = largs[-1]
+        fargs = largs[:-1]
+    else:
+        fargs = largs
+
     return f(*fargs, **fkwargs)
 
 def dlr_func(schemeProc):
@@ -8970,6 +8969,7 @@ unparse_procedure_prim = make_proc(b_proc_19_d)
 parse_string_prim = make_proc(b_proc_20_d)
 read_string_prim = make_proc(b_proc_21_d)
 apply_prim = make_proc(b_proc_22_d)
+_hat_prim = make_proc(b_proc_23_d)
 sqrt_prim = make_proc(b_proc_23_d)
 odd_q_prim = make_proc(b_proc_24_d)
 even_q_prim = make_proc(b_proc_25_d)
