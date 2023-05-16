@@ -922,7 +922,7 @@ def trampoline():
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
             except Exception as e:
-                exception_reg = make_exception("UnhandledException", str(e), symbol_none, symbol_none, symbol_none)
+                exception_reg = make_exception("Unhandled %s" % e.__class__.__name__, str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
     return final_reg
 
@@ -2343,7 +2343,7 @@ def b_cont_57_d(apair1, apair2, pair1, pair2, k):
         GLOBALS['k_reg'] = k
         GLOBALS['pc'] = apply_cont
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_126_d, apair2, pair2, value_reg, k)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_125_d, apair2, pair2, value_reg, k)
         GLOBALS['ap_reg'] = cdr_hat(apair1)
         GLOBALS['s_reg'] = value_reg
         GLOBALS['pattern_reg'] = (pair1).cdr
@@ -3282,17 +3282,12 @@ def b_cont2_119_d(k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_120_d(args, k2):
-    GLOBALS['value1_reg'] = cons((args).car, value1_reg)
+def b_cont2_120_d(x, k2):
+    GLOBALS['value1_reg'] = cons(List(symbol_to_string((x).car.car), (x).car.cdr.cdr.car), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_121_d(args, k2):
-    GLOBALS['value1_reg'] = cons(List((args).car.car, (args).car.cdr.cdr.car), value1_reg)
-    GLOBALS['k_reg'] = k2
-    GLOBALS['pc'] = apply_cont2
-
-def b_cont2_122_d(elements, pred, env2, info, handler, k2):
+def b_cont2_121_d(elements, pred, env2, info, handler, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['fail_reg'] = value2_reg
     GLOBALS['handler_reg'] = handler
@@ -3303,18 +3298,18 @@ def b_cont2_122_d(elements, pred, env2, info, handler, k2):
     GLOBALS['proc_reg'] = pred
     GLOBALS['pc'] = insert_element
 
-def b_cont2_123_d(elements, k2):
+def b_cont2_122_d(elements, k2):
     GLOBALS['value1_reg'] = cons((elements).car, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_124_d(elements, proc, x, env2, info, handler, k2):
+def b_cont2_123_d(elements, proc, x, env2, info, handler, k2):
     if (False if ((value1_reg) is False) else True):
         GLOBALS['value1_reg'] = cons(x, elements)
         GLOBALS['k_reg'] = k2
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_123_d, elements, k2)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_122_d, elements, k2)
         GLOBALS['fail_reg'] = value2_reg
         GLOBALS['handler_reg'] = handler
         GLOBALS['info_reg'] = info
@@ -3324,7 +3319,7 @@ def b_cont2_124_d(elements, proc, x, env2, info, handler, k2):
         GLOBALS['proc_reg'] = proc
         GLOBALS['pc'] = insert_element
 
-def b_cont2_125_d(new_acdr1, new_cdr1, s_car, k):
+def b_cont2_124_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['k_reg'] = make_cont(b_cont_56_d, s_car, k)
     GLOBALS['ap2_reg'] = value2_reg
     GLOBALS['ap1_reg'] = new_acdr1
@@ -3332,27 +3327,27 @@ def b_cont2_125_d(new_acdr1, new_cdr1, s_car, k):
     GLOBALS['p1_reg'] = new_cdr1
     GLOBALS['pc'] = unify_patterns_hat
 
-def b_cont2_126_d(apair2, pair2, s_car, k):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_125_d, value2_reg, value1_reg, s_car, k)
+def b_cont2_125_d(apair2, pair2, s_car, k):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_124_d, value2_reg, value1_reg, s_car, k)
     GLOBALS['ap_reg'] = cdr_hat(apair2)
     GLOBALS['s_reg'] = s_car
     GLOBALS['pattern_reg'] = (pair2).cdr
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_127_d(a, aa, ap, k2):
+def b_cont2_126_d(a, aa, ap, k2):
     GLOBALS['value2_reg'] = cons_hat(aa, value2_reg, get_source_info(ap))
     GLOBALS['value1_reg'] = cons(a, value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_128_d(ap, pattern, s, k2):
-    GLOBALS['k2_reg'] = make_cont2(b_cont2_127_d, value1_reg, value2_reg, ap, k2)
+def b_cont2_127_d(ap, pattern, s, k2):
+    GLOBALS['k2_reg'] = make_cont2(b_cont2_126_d, value1_reg, value2_reg, ap, k2)
     GLOBALS['ap_reg'] = cdr_hat(ap)
     GLOBALS['s_reg'] = s
     GLOBALS['pattern_reg'] = (pattern).cdr
     GLOBALS['pc'] = instantiate_hat
 
-def b_cont2_129_d(s2, k2):
+def b_cont2_128_d(s2, k2):
     GLOBALS['k2_reg'] = k2
     GLOBALS['ap_reg'] = value2_reg
     GLOBALS['s_reg'] = s2
@@ -5414,8 +5409,8 @@ def b_proc_171_d():
         GLOBALS['pc'] = apply_cont2
     else:
         GLOBALS['k2_reg'] = make_cont2(b_cont2_119_d, k2_reg)
-        GLOBALS['args_reg'] = (args_reg).car
-        GLOBALS['pc'] = make_dict
+        GLOBALS['x_reg'] = (args_reg).car
+        GLOBALS['pc'] = make_pairs
 
 def b_proc_172_d():
     if (False if ((not(length_two_q(args_reg))) is False) else True):
@@ -8647,21 +8642,22 @@ def apply_native(proc, args):
     else:
         return Apply(proc, args)
 
-def make_dict():
-    if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
+def make_pairs():
+    if (False if ((((x_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if (False if ((association_q((args_reg).car)) is False) else True):
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_121_d, args_reg, k2_reg)
-            GLOBALS['args_reg'] = (args_reg).cdr
-            GLOBALS['pc'] = make_dict
+        if (False if ((association_q(x_reg)) is False) else True):
+            GLOBALS['value2_reg'] = fail_reg
+            GLOBALS['value1_reg'] = List(List(symbol_to_string((x_reg).car), (x_reg).cdr.cdr.car))
+            GLOBALS['k_reg'] = k2_reg
+            GLOBALS['pc'] = apply_cont2
         else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, args_reg, k2_reg)
-            GLOBALS['args_reg'] = (args_reg).cdr
-            GLOBALS['pc'] = make_dict
+            GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, x_reg, k2_reg)
+            GLOBALS['x_reg'] = (x_reg).cdr
+            GLOBALS['pc'] = make_pairs
 
 def insert_element():
     if (False if ((((elements_reg) is symbol_emptylist)) is False) else True):
@@ -8670,7 +8666,7 @@ def insert_element():
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        GLOBALS['k2_reg'] = make_cont2(b_cont2_124_d, elements_reg, proc_reg, x_reg, env2_reg, info_reg, handler_reg, k2_reg)
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_123_d, elements_reg, proc_reg, x_reg, env2_reg, info_reg, handler_reg, k2_reg)
         GLOBALS['args_reg'] = List(x_reg, (elements_reg).car)
         GLOBALS['pc'] = apply_proc
 
@@ -8759,7 +8755,7 @@ def make_associations(dict):
     if (False if ((((dict) is symbol_emptylist)) is False) else True):
         return symbol_emptylist
     else:
-        value = (dict).car.cdr.car
+        value = (dict).car.cdr.cdr.car
         keyword = (dict).car.car
         return cons(association(keyword, value), make_associations((dict).cdr))
 
@@ -8842,7 +8838,7 @@ def instantiate_hat():
             GLOBALS['pc'] = apply_sub_hat
         else:
             if (False if ((pair_q(pattern_reg)) is False) else True):
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_128_d, ap_reg, pattern_reg, s_reg, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_127_d, ap_reg, pattern_reg, s_reg, k2_reg)
                 GLOBALS['ap_reg'] = car_hat(ap_reg)
                 GLOBALS['pattern_reg'] = (pattern_reg).car
                 GLOBALS['pc'] = instantiate_hat
@@ -8879,7 +8875,7 @@ def apply_sub_hat():
             if (False if ((((temp_1).car) is (symbol_composite)) is False) else True):
                 s2 = list_ref(temp_1, 2)
                 s1 = list_ref(temp_1, 1)
-                GLOBALS['k2_reg'] = make_cont2(b_cont2_129_d, s2, k2_reg)
+                GLOBALS['k2_reg'] = make_cont2(b_cont2_128_d, s2, k2_reg)
                 GLOBALS['s_reg'] = s1
                 GLOBALS['pc'] = apply_sub_hat
             else:
