@@ -2662,7 +2662,7 @@
      (cond
       ((null? args)
        (k2 (dict) fail))
-      (else (make-dict (car args) fail
+      (else (make-pairs (car args) fail
 	      (lambda-cont2 (pairs fail)
 	         (k2 (apply-native dict (list pairs)) fail)))))))
 
@@ -2675,20 +2675,18 @@
 	(dlr-apply proc args)
 	(apply proc args))))
 
-(define* make-dict
-  (lambda (args fail k2)
+(define* make-pairs
+  (lambda (x fail k2)
     (cond
-     ((null? args) (k2 '() fail))
-     ((association? (car args))
-      (make-dict (cdr args) fail
-	 (lambda-cont2 (pairs fail)
-	     (k2 (cons (list (caar args)
-			     (caddar args))
-		       pairs) fail))))
+     ((null? x) (k2 '() fail))
+     ((association? x) (k2 (list (list (symbol->string (car x))
+				 (caddr x))) fail))
      (else
-      (make-dict (cdr args) fail
-	 (lambda-cont2 (pairs fail)
-	     (k2 (cons (car args) pairs) fail)))))))
+        (make-pairs (cdr x) fail
+	   (lambda-cont2 (pairs fail)
+	      (k2 (cons (list (symbol->string (caar x))
+	  		      (caddar x))
+		        pairs) fail)))))))
 
 (define property-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -3119,6 +3117,6 @@
     (cond
       ((null? dict) '())
       (else (let ((keyword (caar dict))
-		  (value (cadar dict)))
+		  (value (caddar dict)))
 	      (cons (association keyword value) (make-associations (cdr dict))))))))
 

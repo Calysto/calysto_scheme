@@ -701,7 +701,7 @@
             (cdr pair1)
             value
             (cdr^ apair1)
-            (make-cont2 <cont2-126> apair2 pair2 value k))))))
+            (make-cont2 <cont2-125> apair2 pair2 value k))))))
 
 ;;----------------------------------------------------------------------
 ;; continuation2 datatype
@@ -1987,20 +1987,14 @@
 (define+
   <cont2-120>
   (lambda (value1 value2 fields)
-    (let ((args (car fields)) (k2 (cadr fields)))
-      (apply-cont2 k2 (cons (car args) value1) value2))))
-
-(define+
-  <cont2-121>
-  (lambda (value1 value2 fields)
-    (let ((args (car fields)) (k2 (cadr fields)))
+    (let ((x (car fields)) (k2 (cadr fields)))
       (apply-cont2
         k2
-        (cons (list (caar args) (caddar args)) value1)
+        (cons (list (symbol->string (caar x)) (caddar x)) value1)
         value2))))
 
 (define+
-  <cont2-122>
+  <cont2-121>
   (lambda (value1 value2 fields)
     (let ((elements (car fields))
           (pred (cadr fields))
@@ -2012,13 +2006,13 @@
         value2 k2))))
 
 (define+
-  <cont2-123>
+  <cont2-122>
   (lambda (value1 value2 fields)
     (let ((elements (car fields)) (k2 (cadr fields)))
       (apply-cont2 k2 (cons (car elements) value1) value2))))
 
 (define+
-  <cont2-124>
+  <cont2-123>
   (lambda (value1 value2 fields)
     (let ((elements (car fields))
           (proc (cadr fields))
@@ -2030,10 +2024,10 @@
       (if value1
           (apply-cont2 k2 (cons x elements) value2)
           (insert-element proc x (cdr elements) env2 info handler
-            value2 (make-cont2 <cont2-123> elements k2))))))
+            value2 (make-cont2 <cont2-122> elements k2))))))
 
 (define+
-  <cont2-125>
+  <cont2-124>
   (lambda (value1 value2 fields)
     (let ((new-acdr1 (car fields))
           (new-cdr1 (cadr fields))
@@ -2043,7 +2037,7 @@
         (make-cont <cont-56> s-car k)))))
 
 (define+
-  <cont2-126>
+  <cont2-125>
   (lambda (value1 value2 fields)
     (let ((apair2 (car fields))
           (pair2 (cadr fields))
@@ -2053,10 +2047,10 @@
         (cdr pair2)
         s-car
         (cdr^ apair2)
-        (make-cont2 <cont2-125> value2 value1 s-car k)))))
+        (make-cont2 <cont2-124> value2 value1 s-car k)))))
 
 (define+
-  <cont2-127>
+  <cont2-126>
   (lambda (value1 value2 fields)
     (let ((a (car fields))
           (aa (cadr fields))
@@ -2068,7 +2062,7 @@
         (cons^ aa value2 (get-source-info ap))))))
 
 (define+
-  <cont2-128>
+  <cont2-127>
   (lambda (value1 value2 fields)
     (let ((ap (car fields))
           (pattern (cadr fields))
@@ -2078,10 +2072,10 @@
         (cdr pattern)
         s
         (cdr^ ap)
-        (make-cont2 <cont2-127> value1 value2 ap k2)))))
+        (make-cont2 <cont2-126> value1 value2 ap k2)))))
 
 (define+
-  <cont2-129>
+  <cont2-128>
   (lambda (value1 value2 fields)
     (let ((s2 (car fields)) (k2 (cadr fields)))
       (instantiate^ value1 s2 value2 k2))))
@@ -4765,7 +4759,10 @@
       (cond
         ((null? args) (apply-cont2 k2 (dict) fail))
         (else
-         (make-dict (car args) fail (make-cont2 <cont2-119> k2)))))))
+         (make-pairs
+           (car args)
+           fail
+           (make-cont2 <cont2-119> k2)))))))
 
 (define+
   <proc-172>
@@ -7988,20 +7985,17 @@
         (apply proc args))))
 
 (define*
-  make-dict
-  (lambda (args fail k2)
+  make-pairs
+  (lambda (x fail k2)
     (cond
-      ((null? args) (apply-cont2 k2 '() fail))
-      ((association? (car args))
-       (make-dict
-         (cdr args)
-         fail
-         (make-cont2 <cont2-121> args k2)))
+      ((null? x) (apply-cont2 k2 '() fail))
+      ((association? x)
+       (apply-cont2
+         k2
+         (list (list (symbol->string (car x)) (caddr x)))
+         fail))
       (else
-       (make-dict
-         (cdr args)
-         fail
-         (make-cont2 <cont2-120> args k2))))))
+       (make-pairs (cdr x) fail (make-cont2 <cont2-120> x k2))))))
 
 (define*
   sort-native
@@ -8016,7 +8010,7 @@
       ((null? elements) (apply-cont2 k2 '() fail))
       (else
        (sort-elements pred (cdr elements) env2 info handler fail
-         (make-cont2 <cont2-122> elements pred env2 info handler
+         (make-cont2 <cont2-121> elements pred env2 info handler
            k2))))))
 
 (define*
@@ -8026,7 +8020,7 @@
       ((null? elements) (apply-cont2 k2 (list x) fail))
       (else
        (apply-proc proc (list x (car elements)) env2 info handler fail
-         (make-cont2 <cont2-124> elements proc x env2 info handler
+         (make-cont2 <cont2-123> elements proc x env2 info handler
            k2))))))
 
 (define make-toplevel-env
@@ -8757,7 +8751,7 @@
     (cond
       ((null? dict) '())
       (else
-       (let ((keyword (caar dict)) (value (cadar dict)))
+       (let ((keyword (caar dict)) (value (caddar dict)))
          (cons
            (association keyword value)
            (make-associations (cdr dict))))))))
@@ -8823,7 +8817,7 @@
          (car pattern)
          s
          (car^ ap)
-         (make-cont2 <cont2-128> ap pattern s k2)))
+         (make-cont2 <cont2-127> ap pattern s k2)))
       (else (error 'instantiate^ "bad pattern: ~a" pattern)))))
 
 (define make-sub (lambda args (cons 'substitution args)))
@@ -8838,7 +8832,7 @@
            (apply-cont2 k2 new-pattern new-apattern)
            (apply-cont2 k2 var avar)))
       (composite (s1 s2)
-       (apply-sub^ s1 var avar (make-cont2 <cont2-129> s2 k2)))
+       (apply-sub^ s1 var avar (make-cont2 <cont2-128> s2 k2)))
       (else (error 'apply-sub^ "bad substitution: ~a" s)))))
 
 (define chars-to-scan 'undefined)

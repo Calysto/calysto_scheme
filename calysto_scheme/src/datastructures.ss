@@ -6,7 +6,7 @@
 
 (define-native dict
   (lambda assoc
-    (cons 'dictionary '())))
+    (cons 'dictionary assoc)))
 
 (define-native setitem-native
   (lambda (dict keyword value)

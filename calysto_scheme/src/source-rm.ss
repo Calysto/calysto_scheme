@@ -835,7 +835,7 @@
           (set! pc apply-cont))
         (begin
           (set! k2_reg
-            (make-cont2 <cont2-126> apair2 pair2 value_reg k))
+            (make-cont2 <cont2-125> apair2 pair2 value_reg k))
           (set! ap_reg (cdr^ apair1))
           (set! s_reg value_reg)
           (set! pattern_reg (cdr pair1))
@@ -2195,19 +2195,15 @@
     (set! pc apply-cont2)))
 
 (define <cont2-120>
-  (lambda (args k2)
-    (set! value1_reg (cons (car args) value1_reg))
+  (lambda (x k2)
+    (set! value1_reg
+      (cons
+        (list (symbol->string (caar x)) (caddar x))
+        value1_reg))
     (set! k_reg k2)
     (set! pc apply-cont2)))
 
 (define <cont2-121>
-  (lambda (args k2)
-    (set! value1_reg
-      (cons (list (caar args) (caddar args)) value1_reg))
-    (set! k_reg k2)
-    (set! pc apply-cont2)))
-
-(define <cont2-122>
   (lambda (elements pred env2 info handler k2)
     (set! k2_reg k2)
     (set! fail_reg value2_reg)
@@ -2219,13 +2215,13 @@
     (set! proc_reg pred)
     (set! pc insert-element)))
 
-(define <cont2-123>
+(define <cont2-122>
   (lambda (elements k2)
     (set! value1_reg (cons (car elements) value1_reg))
     (set! k_reg k2)
     (set! pc apply-cont2)))
 
-(define <cont2-124>
+(define <cont2-123>
   (lambda (elements proc x env2 info handler k2)
     (if value1_reg
         (begin
@@ -2233,7 +2229,7 @@
           (set! k_reg k2)
           (set! pc apply-cont2))
         (begin
-          (set! k2_reg (make-cont2 <cont2-123> elements k2))
+          (set! k2_reg (make-cont2 <cont2-122> elements k2))
           (set! fail_reg value2_reg)
           (set! handler_reg handler)
           (set! info_reg info)
@@ -2243,7 +2239,7 @@
           (set! proc_reg proc)
           (set! pc insert-element)))))
 
-(define <cont2-125>
+(define <cont2-124>
   (lambda (new-acdr1 new-cdr1 s-car k)
     (set! k_reg (make-cont <cont-56> s-car k))
     (set! ap2_reg value2_reg)
@@ -2252,32 +2248,32 @@
     (set! p1_reg new-cdr1)
     (set! pc unify-patterns^)))
 
-(define <cont2-126>
+(define <cont2-125>
   (lambda (apair2 pair2 s-car k)
     (set! k2_reg
-      (make-cont2 <cont2-125> value2_reg value1_reg s-car k))
+      (make-cont2 <cont2-124> value2_reg value1_reg s-car k))
     (set! ap_reg (cdr^ apair2))
     (set! s_reg s-car)
     (set! pattern_reg (cdr pair2))
     (set! pc instantiate^)))
 
-(define <cont2-127>
+(define <cont2-126>
   (lambda (a aa ap k2)
     (set! value2_reg (cons^ aa value2_reg (get-source-info ap)))
     (set! value1_reg (cons a value1_reg))
     (set! k_reg k2)
     (set! pc apply-cont2)))
 
-(define <cont2-128>
+(define <cont2-127>
   (lambda (ap pattern s k2)
     (set! k2_reg
-      (make-cont2 <cont2-127> value1_reg value2_reg ap k2))
+      (make-cont2 <cont2-126> value1_reg value2_reg ap k2))
     (set! ap_reg (cdr^ ap))
     (set! s_reg s)
     (set! pattern_reg (cdr pattern))
     (set! pc instantiate^)))
 
-(define <cont2-129>
+(define <cont2-128>
   (lambda (s2 k2)
     (set! k2_reg k2)
     (set! ap_reg value2_reg)
@@ -4886,8 +4882,8 @@
           (set! pc apply-cont2))
         (begin
           (set! k2_reg (make-cont2 <cont2-119> k2_reg))
-          (set! args_reg (car args_reg))
-          (set! pc make-dict)))))
+          (set! x_reg (car args_reg))
+          (set! pc make-pairs)))))
 
 (define <proc-172>
   (lambda ()
@@ -9331,23 +9327,25 @@
         (return* (apply proc args)))))
 
 (define*
-  make-dict
+  make-pairs
   (lambda ()
-    (if (null? args_reg)
+    (if (null? x_reg)
         (begin
           (set! value2_reg fail_reg)
           (set! value1_reg '())
           (set! k_reg k2_reg)
           (set! pc apply-cont2))
-        (if (association? (car args_reg))
+        (if (association? x_reg)
             (begin
-              (set! k2_reg (make-cont2 <cont2-121> args_reg k2_reg))
-              (set! args_reg (cdr args_reg))
-              (set! pc make-dict))
+              (set! value2_reg fail_reg)
+              (set! value1_reg
+                (list (list (symbol->string (car x_reg)) (caddr x_reg))))
+              (set! k_reg k2_reg)
+              (set! pc apply-cont2))
             (begin
-              (set! k2_reg (make-cont2 <cont2-120> args_reg k2_reg))
-              (set! args_reg (cdr args_reg))
-              (set! pc make-dict))))))
+              (set! k2_reg (make-cont2 <cont2-120> x_reg k2_reg))
+              (set! x_reg (cdr x_reg))
+              (set! pc make-pairs))))))
 
 (define*
   sort-native
@@ -9370,7 +9368,7 @@
           (set! pc apply-cont2))
         (begin
           (set! k2_reg
-            (make-cont2 <cont2-122> elements_reg pred_reg env2_reg
+            (make-cont2 <cont2-121> elements_reg pred_reg env2_reg
               info_reg handler_reg k2_reg))
           (set! elements_reg (cdr elements_reg))
           (set! pc sort-elements)))))
@@ -9386,7 +9384,7 @@
           (set! pc apply-cont2))
         (begin
           (set! k2_reg
-            (make-cont2 <cont2-124> elements_reg proc_reg x_reg env2_reg
+            (make-cont2 <cont2-123> elements_reg proc_reg x_reg env2_reg
               info_reg handler_reg k2_reg))
           (set! args_reg (list x_reg (car elements_reg)))
           (set! pc apply-proc)))))
@@ -10115,7 +10113,7 @@
     (if (null? dict)
         (return* '())
         (let ((keyword 'undefined) (value 'undefined))
-          (set! value (cadar dict))
+          (set! value (caddar dict))
           (set! keyword (caar dict))
           (return*
             (cons
@@ -10225,7 +10223,7 @@
             (if (pair? pattern_reg)
                 (begin
                   (set! k2_reg
-                    (make-cont2 <cont2-128> ap_reg pattern_reg s_reg k2_reg))
+                    (make-cont2 <cont2-127> ap_reg pattern_reg s_reg k2_reg))
                   (set! ap_reg (car^ ap_reg))
                   (set! pattern_reg (car pattern_reg))
                   (set! pc instantiate^))
@@ -10267,7 +10265,7 @@
                   (let ((s1 'undefined) (s2 'undefined))
                     (set! s2 (list-ref temp_1 2))
                     (set! s1 (list-ref temp_1 1))
-                    (set! k2_reg (make-cont2 <cont2-129> s2 k2_reg))
+                    (set! k2_reg (make-cont2 <cont2-128> s2 k2_reg))
                     (set! s_reg s1)
                     (set! pc apply-sub^))
                   (error 'apply-sub^ "bad substitution: ~a" s_reg)))))))

@@ -914,7 +914,7 @@ def trampoline():
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
             except Exception as e:
-                exception_reg = make_exception("UnhandledException", str(e), symbol_none, symbol_none, symbol_none)
+                exception_reg = make_exception("Unhandled %s" % e.__class__.__name__, str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
     return final_reg
 
