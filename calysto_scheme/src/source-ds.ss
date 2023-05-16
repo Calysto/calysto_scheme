@@ -4636,7 +4636,9 @@
 (define+
   <proc-159>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (apply setitem-native args) fail))))
+    (let ()
+      (apply setitem-native args)
+      (apply-cont2 k2 void-value fail))))
 
 (define+
   <proc-160>
@@ -4651,7 +4653,9 @@
 (define+
   <proc-162>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (apply setattr-native args) fail))))
+    (let ()
+      (apply setattr-native args)
+      (apply-cont2 k2 void-value fail))))
 
 (define+
   <proc-163>

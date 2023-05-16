@@ -5413,7 +5413,8 @@
 
 (define setitem-prim
   (lambda-proc (args env2 info handler fail k2)
-       (k2 (apply setitem-native args) fail)))
+    (apply setitem-native args)
+    (k2 void-value fail)))
 
 (define hasitem-prim
   (lambda-proc (args env2 info handler fail k2)
@@ -5425,7 +5426,8 @@
 
 (define setattr-prim
   (lambda-proc (args env2 info handler fail k2)
-       (k2 (apply setattr-native args) fail)))
+    (apply setattr-native args)
+    (k2 void-value fail)))
 
 (define hasattr-prim
   (lambda-proc (args env2 info handler fail k2)

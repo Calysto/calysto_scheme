@@ -4756,8 +4756,9 @@
 
 (define <proc-159>
   (lambda ()
+    (apply setitem-native args_reg)
     (set! value2_reg fail_reg)
-    (set! value1_reg (apply setitem-native args_reg))
+    (set! value1_reg void-value)
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
@@ -4777,8 +4778,9 @@
 
 (define <proc-162>
   (lambda ()
+    (apply setattr-native args_reg)
     (set! value2_reg fail_reg)
-    (set! value1_reg (apply setattr-native args_reg))
+    (set! value1_reg void-value)
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
