@@ -5305,8 +5305,9 @@ def b_proc_158_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_159_d():
+    Apply(setitem_native, args_reg)
     GLOBALS['value2_reg'] = fail_reg
-    GLOBALS['value1_reg'] = Apply(setitem_native, args_reg)
+    GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
@@ -5323,8 +5324,9 @@ def b_proc_161_d():
     GLOBALS['pc'] = apply_cont2
 
 def b_proc_162_d():
+    Apply(setattr_native, args_reg)
     GLOBALS['value2_reg'] = fail_reg
-    GLOBALS['value1_reg'] = Apply(setattr_native, args_reg)
+    GLOBALS['value1_reg'] = void_value
     GLOBALS['k_reg'] = k2_reg
     GLOBALS['pc'] = apply_cont2
 
