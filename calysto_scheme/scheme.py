@@ -1188,11 +1188,12 @@ def dlr_apply(f, args):
     # args can be: (), (1, 2, 3), (dict, dict), (dict)
     # if last is a dict, use it for kwargs
 
-    if isinstance(largs[-1], dict):
-        fkwargs = largs[-1]
-        fargs = largs[:-1]
-    else:
-        fargs = largs
+    if len(largs) > 0:
+        if isinstance(largs[-1], dict):
+            fkwargs = largs[-1]
+            fargs = largs[:-1]
+        else:
+            fargs = largs
 
     return f(*fargs, **fkwargs)
 
