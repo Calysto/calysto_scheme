@@ -5,37 +5,39 @@
 ;;  associtive list in Scheme
 
 (define-native dict
-  (lambda assoc
-    (cons 'dictionary assoc)))
+  (lambda args
+    (cond
+      ((null? args) (list 'dictionary '()))
+      (else (list 'dictionary (car args))))))
 
 (define-native setitem-native
   (lambda (dict keyword value)
-    (let ((entry (assoc keyword (cdr dict))))
+    (let ((entry (assoc (to-string keyword) (cadr dict))))
       (if entry
-	  (set-cdr! entry value)
-	  (set-cdr! dict (cons (cons keyword value) (cdr dict)))))))
+	  (set-car! (cdr entry) value)
+	  (set-car! (cdr dict) (cons (list (to-string keyword) value) (cadr dict)))))))
 
 (define-native getitem-native
   (lambda (dict keyword)
-    (let ((entry (assoc keyword (cdr dict))))
+    (let ((entry (assoc (to-string keyword) (cadr dict))))
       (if entry
-	  (cdr entry)
+	  (cadr entry)
 	  #f))))
 
 (define-native hasitem-native
   (lambda (dict keyword)
-    (let ((entry (assoc keyword (cdr dict))))
+    (let ((entry (assoc (to-string keyword) (cadr dict))))
       (if entry
 	  #t
 	  #f))))
 
 (define-native dict->keys
   (lambda (dict)
-    (map car (cdr dict))))
+    (map car (cadr dict))))
 
 (define-native dict->values
   (lambda (dict)
-    (map cdr (cdr dict))))
+    (map cadr (cadr dict))))
 
 ;; A Vector List
 ;;  Python list in Python

@@ -1,4 +1,4 @@
-(define-syntax time 
+(define-syntax time
   [(time ?exp) (let* ((run (lambda () ?exp))
 		      (start (current-time))
 		      (result (run))
@@ -188,14 +188,13 @@
        (26 (20 (17 () ()) ())
 	   (31 () ()))))
 
-(define empty? (lambda (tree) (null? tree)))
-(define root (lambda (tree) (car tree)))
-(define left-branch (lambda (tree) (car (cdr tree))))
-(define right-branch (lambda (tree) (car (cdr (cdr tree)))))
+(define root car)
+(define left-branch cadr)
+(define right-branch caddr)
 
 (define guess-path
   (lambda (n tree)
-    (require (not (empty? tree)))
+    (require (not (null? tree)))
     (if (= (root tree) n)
       '()
       (choose

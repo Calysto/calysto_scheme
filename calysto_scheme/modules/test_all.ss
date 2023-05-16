@@ -22,10 +22,19 @@
 	    (cons (f (car values)) (filter-map f pred? (cdr values)))
 	    (filter-map f pred? (cdr values))))))
 
+;;(define-syntax time
+;;  [(time ?exp) (let ((start (current-time)))
+;;		 ?exp
+;;		 (- (current-time) start))])
+
 (define-syntax time
-  [(time ?exp) (let ((start (current-time)))
-		 ?exp
-		 (- (current-time) start))])
+  [(time ?exp) (let* ((run (lambda () ?exp))
+		      (start (current-time))
+		      (result (run))
+		      (end (current-time)))
+		 (display (list 'took (- end start) 'seconds))
+		 (newline)
+		 result)])
 
 ;;---------------------------------------------------------------------
 ;; for loops
@@ -529,7 +538,7 @@
 	  '(23)
 	  "cut")
   (assert (lambda (a b) #t)
-	  (dict '((1 2) (3 4)))
+	  (dict '((a : 1) (b : 2)))
 	  'none
 	  "dict")
   (assert >=

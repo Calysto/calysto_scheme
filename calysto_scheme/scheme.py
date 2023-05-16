@@ -1810,6 +1810,7 @@ apair1_reg = symbol_undefined
 apair2_reg = symbol_undefined
 args_reg = symbol_undefined
 assertions_reg = symbol_undefined
+associations_reg = symbol_undefined
 avar_reg = symbol_undefined
 ax_reg = symbol_undefined
 bindings_reg = symbol_undefined
@@ -3282,8 +3283,10 @@ def b_cont2_119_d(k2):
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
-def b_cont2_120_d(x, k2):
-    GLOBALS['value1_reg'] = cons(List(symbol_to_string((x).car.car), (x).car.cdr.cdr.car), value1_reg)
+def b_cont2_120_d(associations, k2):
+    value = ((associations).car).cdr.cdr.car
+    key = to_string(((associations).car).car)
+    GLOBALS['value1_reg'] = cons(List(key, value), value1_reg)
     GLOBALS['k_reg'] = k2
     GLOBALS['pc'] = apply_cont2
 
@@ -5404,13 +5407,13 @@ def b_proc_170_d():
 def b_proc_171_d():
     if (False if ((((args_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
-        GLOBALS['value1_reg'] = dict()
+        GLOBALS['value1_reg'] = apply_native(dict, List(symbol_emptylist))
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
         GLOBALS['k2_reg'] = make_cont2(b_cont2_119_d, k2_reg)
-        GLOBALS['x_reg'] = (args_reg).car
-        GLOBALS['pc'] = make_pairs
+        GLOBALS['associations_reg'] = (args_reg).car
+        GLOBALS['pc'] = make_dict_tuples
 
 def b_proc_172_d():
     if (False if ((not(length_two_q(args_reg))) is False) else True):
@@ -8636,28 +8639,28 @@ def for_each_primitive():
                 GLOBALS['args_reg'] = Map(car, arg_list)
                 GLOBALS['pc'] = apply_proc
 
-def apply_native(proc, args):
-    if (False if ((dlr_proc_q(proc)) is False) else True):
-        return dlr_apply(proc, args)
-    else:
-        return Apply(proc, args)
-
-def make_pairs():
-    if (False if ((((x_reg) is symbol_emptylist)) is False) else True):
+def make_dict_tuples():
+    if (False if ((((associations_reg) is symbol_emptylist)) is False) else True):
         GLOBALS['value2_reg'] = fail_reg
         GLOBALS['value1_reg'] = symbol_emptylist
         GLOBALS['k_reg'] = k2_reg
         GLOBALS['pc'] = apply_cont2
     else:
-        if (False if ((association_q(x_reg)) is False) else True):
-            GLOBALS['value2_reg'] = fail_reg
-            GLOBALS['value1_reg'] = List(List(symbol_to_string((x_reg).car), (x_reg).cdr.cdr.car))
-            GLOBALS['k_reg'] = k2_reg
-            GLOBALS['pc'] = apply_cont2
-        else:
-            GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, x_reg, k2_reg)
-            GLOBALS['x_reg'] = (x_reg).cdr
-            GLOBALS['pc'] = make_pairs
+        GLOBALS['k2_reg'] = make_cont2(b_cont2_120_d, associations_reg, k2_reg)
+        GLOBALS['associations_reg'] = (associations_reg).cdr
+        GLOBALS['pc'] = make_dict_tuples
+
+def to_string(obj):
+    if (False if ((symbol_q(obj)) is False) else True):
+        return symbol_to_string(obj)
+    else:
+        return obj
+
+def apply_native(proc, args):
+    if (False if ((dlr_proc_q(proc)) is False) else True):
+        return dlr_apply(proc, args)
+    else:
+        return Apply(proc, args)
 
 def insert_element():
     if (False if ((((elements_reg) is symbol_emptylist)) is False) else True):

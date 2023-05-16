@@ -1987,11 +1987,10 @@
 (define+
   <cont2-120>
   (lambda (value1 value2 fields)
-    (let ((x (car fields)) (k2 (cadr fields)))
-      (apply-cont2
-        k2
-        (cons (list (symbol->string (caar x)) (caddar x)) value1)
-        value2))))
+    (let ((associations (car fields)) (k2 (cadr fields)))
+      (let ((key (to-string (car (car associations))))
+            (value (caddr (car associations))))
+        (apply-cont2 k2 (cons (list key value) value1) value2)))))
 
 (define+
   <cont2-121>
@@ -4757,11 +4756,10 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((null? args) (apply-cont2 k2 (dict) fail))
+        ((null? args)
+         (apply-cont2 k2 (apply-native dict (list '())) fail))
         (else
-         (make-pairs
-           (car args)
-           fail
+         (make-dict-tuples (car args) env2 info handler fail
            (make-cont2 <cont2-119> k2)))))))
 
 (define+
@@ -7978,24 +7976,24 @@
                     (make-cont2 <cont2-118> arg-list proc env handler
                       k))))))))
 
+(define*
+  make-dict-tuples
+  (lambda (associations env2 info handler fail k2)
+    (cond
+      ((null? associations) (apply-cont2 k2 '() fail))
+      (else
+       (make-dict-tuples (cdr associations) env2 info handler fail
+         (make-cont2 <cont2-120> associations k2))))))
+
+(define to-string
+  (lambda (obj)
+    (cond ((symbol? obj) (symbol->string obj)) (else obj))))
+
 (define apply-native
   (lambda (proc args)
     (if (dlr-proc? proc)
         (dlr-apply proc args)
         (apply proc args))))
-
-(define*
-  make-pairs
-  (lambda (x fail k2)
-    (cond
-      ((null? x) (apply-cont2 k2 '() fail))
-      ((association? x)
-       (apply-cont2
-         k2
-         (list (list (symbol->string (car x)) (caddr x)))
-         fail))
-      (else
-       (make-pairs (cdr x) fail (make-cont2 <cont2-120> x k2))))))
 
 (define*
   sort-native

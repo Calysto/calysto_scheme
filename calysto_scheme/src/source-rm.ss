@@ -75,6 +75,7 @@
 (define apair2_reg 'undefined)
 (define args_reg 'undefined)
 (define assertions_reg 'undefined)
+(define associations_reg 'undefined)
 (define avar_reg 'undefined)
 (define ax_reg 'undefined)
 (define bindings_reg 'undefined)
@@ -2195,13 +2196,13 @@
     (set! pc apply-cont2)))
 
 (define <cont2-120>
-  (lambda (x k2)
-    (set! value1_reg
-      (cons
-        (list (symbol->string (caar x)) (caddar x))
-        value1_reg))
-    (set! k_reg k2)
-    (set! pc apply-cont2)))
+  (lambda (associations k2)
+    (let ((key 'undefined) (value 'undefined))
+      (set! value (caddr (car associations)))
+      (set! key (to-string (car (car associations))))
+      (set! value1_reg (cons (list key value) value1_reg))
+      (set! k_reg k2)
+      (set! pc apply-cont2))))
 
 (define <cont2-121>
   (lambda (elements pred env2 info handler k2)
@@ -4877,13 +4878,13 @@
     (if (null? args_reg)
         (begin
           (set! value2_reg fail_reg)
-          (set! value1_reg (dict))
+          (set! value1_reg (apply-native dict (list '())))
           (set! k_reg k2_reg)
           (set! pc apply-cont2))
         (begin
           (set! k2_reg (make-cont2 <cont2-119> k2_reg))
-          (set! x_reg (car args_reg))
-          (set! pc make-pairs)))))
+          (set! associations_reg (car args_reg))
+          (set! pc make-dict-tuples)))))
 
 (define <proc-172>
   (lambda ()
@@ -9320,32 +9321,32 @@
                     (set! args_reg (map car arg-list))
                     (set! pc apply-proc))))))))
 
-(define apply-native
-  (lambda (proc args)
-    (if (dlr-proc? proc)
-        (return* (dlr-apply proc args))
-        (return* (apply proc args)))))
-
 (define*
-  make-pairs
+  make-dict-tuples
   (lambda ()
-    (if (null? x_reg)
+    (if (null? associations_reg)
         (begin
           (set! value2_reg fail_reg)
           (set! value1_reg '())
           (set! k_reg k2_reg)
           (set! pc apply-cont2))
-        (if (association? x_reg)
-            (begin
-              (set! value2_reg fail_reg)
-              (set! value1_reg
-                (list (list (symbol->string (car x_reg)) (caddr x_reg))))
-              (set! k_reg k2_reg)
-              (set! pc apply-cont2))
-            (begin
-              (set! k2_reg (make-cont2 <cont2-120> x_reg k2_reg))
-              (set! x_reg (cdr x_reg))
-              (set! pc make-pairs))))))
+        (begin
+          (set! k2_reg
+            (make-cont2 <cont2-120> associations_reg k2_reg))
+          (set! associations_reg (cdr associations_reg))
+          (set! pc make-dict-tuples)))))
+
+(define to-string
+  (lambda (obj)
+    (if (symbol? obj)
+        (return* (symbol->string obj))
+        (return* obj))))
+
+(define apply-native
+  (lambda (proc args)
+    (if (dlr-proc? proc)
+        (return* (dlr-apply proc args))
+        (return* (apply proc args)))))
 
 (define*
   sort-native

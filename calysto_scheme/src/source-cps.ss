@@ -5487,12 +5487,27 @@
 
 (define dict-prim
   (lambda-proc (args env2 info handler fail k2)
-     (cond
-      ((null? args)
-       (k2 (dict) fail))
-      (else (make-pairs (car args) fail
-	      (lambda-cont2 (pairs fail)
-	         (k2 (apply-native dict (list pairs)) fail)))))))
+    (cond
+      ((null? args) (k2 (apply-native dict (list '())) fail))
+      (else (make-dict-tuples (car args) env2 info handler fail
+	      (lambda-cont2 (tuples fail)
+		(k2 (apply-native dict (list tuples)) fail)))))))
+
+(define* make-dict-tuples
+  (lambda (associations env2 info handler fail k2)
+    (cond
+      ((null? associations) (k2 '() fail))
+      (else (make-dict-tuples (cdr associations) env2 info handler fail
+	      (lambda-cont2 (v fail)
+		(let ((key (to-string (car (car associations))))
+		      (value (caddr (car associations))))
+		  (k2 (cons (list key value) v) fail))))))))
+
+(define to-string
+  (lambda (obj)
+    (cond
+      ((symbol? obj) (symbol->string obj))
+      (else obj))))
 
 ;; so that we can use scheme or python natives anywhere
 ;; only needed until apply can use associations with scheme
@@ -5502,19 +5517,6 @@
     (if (dlr-proc? proc)
 	(dlr-apply proc args)
 	(apply proc args))))
-
-(define* make-pairs
-  (lambda (x fail k2)
-    (cond
-     ((null? x) (k2 '() fail))
-     ((association? x) (k2 (list (list (symbol->string (car x))
-				 (caddr x))) fail))
-     (else
-        (make-pairs (cdr x) fail
-	   (lambda-cont2 (pairs fail)
-	      (k2 (cons (list (symbol->string (caar x))
-	  		      (caddar x))
-		        pairs) fail)))))))
 
 (define property-prim
   (lambda-proc (args env2 info handler fail k2)
