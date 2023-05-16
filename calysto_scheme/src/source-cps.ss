@@ -3950,14 +3950,6 @@
 	  (k2 (dlr-apply proc proc-args) fail)
 	  (proc proc-args env2 info handler fail k2)))))
 
-;; ^
-(define ^-prim
-  (lambda-proc (args env2 info handler fail k2)
-    (cond
-      ((not (length-one? args))
-       (runtime-error "incorrect number of arguments to sqrt" info handler fail))
-      (else (k2 (apply sqrt args) fail)))))
-
 ;; sqrt
 (define sqrt-prim
   (lambda-proc (args env2 info handler fail k2)
