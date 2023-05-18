@@ -1176,17 +1176,17 @@ def dlr_apply(f, args):
     largs = list_to_vector(args)
     fargs = []
     fkwargs = {}
-    for larg in largs:
-        if association_q(larg):
-            sym = symbol_to_string(larg.car)
-            if sym == "*":
-                fargs = larg.cdr.cdr.car
-            elif sym == "**":
-                fkwargs = larg.cdr.cdr.car
-            else:
-                fkwargs[sym] = larg.cdr.cdr.car
+
+    # args can be: (), (1, 2, 3), (dict, dict), (dict)
+    # if last is a dict, use it for kwargs
+
+    if len(largs) > 0:
+        if isinstance(largs[-1], dict):
+            fkwargs = largs[-1]
+            fargs = largs[:-1]
         else:
-            fargs.append(larg)
+            fargs = largs
+
     return f(*fargs, **fkwargs)
 
 def dlr_func(schemeProc):
