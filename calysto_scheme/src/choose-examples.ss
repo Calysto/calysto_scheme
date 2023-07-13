@@ -354,3 +354,108 @@
 		    (list 'switzerland switzerland)
 		    (list 'austria austria)))))))))
 
+;;----------------------------------------------------------------------------
+;; prime sums
+
+(define choose-from-range
+  (lambda (low high)
+    (require (<= low high))
+    (choose low (choose-from-range (+ low 1) high))))
+
+(define prime-sums
+  (lambda ()
+    (let ((a (choose-from-range 1 10))
+	  (b (choose-from-range 1 10)))
+      (require (is-prime? (+ a b)))
+      (list a b))))
+
+;; searches for a divisor of n in the range d to n-1
+(define (has-any-divisors? d n)
+  (cond
+    [(= d n) #f]
+    [(= (remainder n d) 0) #t]
+    [else (has-any-divisors? (+ d 1) n)]))
+
+;; checks if n is a prime number
+(define (is-prime? n)
+  (cond
+    [(< n 2) #f]
+    [(has-any-divisors? 2 n) #f]
+    [else #t]))
+
+;;----------------------------------------------------------------------------
+;; temporary; for scheme-2023 paper
+
+;; smaller version of color-europe (removed holland and austria)
+
+(define choose-color
+  (lambda ()
+    (choose 'red 'yellow 'blue 'white)))
+
+(define-syntax color
+  [(color ?country different from . ?neighbors)
+   (require (not (member ?country (list . ?neighbors))))])
+
+(define color-europe
+  (lambda ()
+    (let ((portugal (choose-color))
+          (spain (choose-color))
+          (france (choose-color))
+          (belgium (choose-color))
+          (germany (choose-color))
+          (luxembourg (choose-color))
+          (italy (choose-color))
+          (switzerland (choose-color)))
+      ;; apply the constraints
+      (color portugal different from spain)
+      (color spain different from france portugal)
+      (color france different from spain italy switzerland belgium germany luxembourg)
+      (color belgium different from france luxembourg germany)
+      (color germany different from france switzerland belgium luxembourg)
+      (color luxembourg different from france belgium germany)
+      (color italy different from france switzerland)
+      (color switzerland different from france italy germany)
+      ;; return a coloring that satisfies the constraints
+      (list (list 'portugal portugal)
+	    (list 'spain spain)
+	    (list 'france france)
+	    (list 'belgium belgium)
+	    (list 'germany germany)
+	    (list 'luxembourg luxembourg)
+	    (list 'italy italy)
+	    (list 'switzerland switzerland)))))
+
+(define-syntax or
+  [(or ?exp) ?exp]
+  [(or ?first-exp . ?other-exps) (if ?first-exp #t (or . ?other-exps))])
+
+(define-syntax and
+  [(and ?exp) ?exp]
+  [(and ?first-exp . ?other-exps) (if ?first-exp (and . ?other-exps) #f)])
+
+(define-syntax unless
+  [(unless ?exp) (void)]
+  [(unless ?exp . ?statements) (if ?exp (void) (begin . ?statements))])
+
+;;(define-syntax while
+;;  [(while ?condition do . ?exps)
+;;   (let loop ()
+;;     (if ?condition
+;;	 (begin (begin . ?exps) (loop))
+;;	 'done))])
+   
+;;(let ((n 15))
+;;  (print n)
+;;  (while (> n 1) do
+;;    (if (odd? n)
+;;	(set! n (+ (* 3 n) 1))
+;;	(set! n (/ n 2)))
+;;    (print n)))
+
+(import "numpy")
+
+(let ((matrix3d '(((10 20 30) (40 50 60))
+		  ((70 80 90) (100 110 120))
+		  ((130 140 150) (160 170 180))
+		  ((190 200 210) (220 230 240)))))
+  (numpy.sum (numpy.array matrix3d)))
