@@ -149,11 +149,9 @@ project called Calico that was designed to be a multi-programming-language
 framework and learning environment for computing education \cite{Calico}.  The
 basic premise of this earlier project was to create a common architecture, user
 interface, and set of libraries for a variety of programming languages (see
-Figure~\ref{fig:calico}). Creating such a system has a number of educational
-benefits. Instead of having students learn a different IDE for each language
-under study, such as IDLE for Python, or DrRacket for Scheme, students could
-remain in the same IDE, but simply switch the programming
-language. Furthermore, many engaging ``pedagogical contexts'' for learning about
+Figure~\ref{fig:calico}).
+
+Many engaging ``pedagogical contexts'' for learning about
 computer science have been developed, including media computation
 \cite{Guzdial03}, gaming, AI and robotics \cite{Myro}, visualization, music,
 and art.  However, these contexts often depend on a set of libraries developed
@@ -162,25 +160,39 @@ if an instructor wishes to have students explore a particular learning
 context. Having a common framework separates the details of a specific language
 from other pedagogical goals.
 
-At the time (2007), Microsoft had embarked on a somewhat-related goal. They
-were actively developing what they called the Dynamic Language Runtime (DLR) as
-part of the .NET framework [DLR]. The DLR abstraction layer created a common
-API and allowed one to create languages, such as IronPython and IronRuby
-\cite{IronRuby}, without having to rewrite the common parts for each
-language. Our earlier project adopted the DLR as its foundation, and used these
-Iron languages. In addition, other languages were developed to augment these,
-including a visual block-based language.
+One of the interesting aspects of Calico was that instead of having
+students learn a different IDE for each language under study, such as
+IDLE for Python, or DrRacket for Scheme, students could remain in the
+same IDE, but simply switch the programming language. This is similar
+in spirit to the way that one can switch languages in
+DrRacket. However, in Calico, supported languages need not share much
+at all with each other.
 
-However, there was a gap in the languages available: there was no Scheme
-implementation that could work in this environment. Although the development of
-both IronLisp and IronScheme [IronScheme] had been attempted by other groups,
-they both ultimately failed for various reasons, including lack of support for
-tail-call optimization (TCO) in the DLR. Of course, the Scheme language can be
-implemented in languages without TCO. So, we set out to fill this void by
-developing a Scheme without using the DLR for internal function calls, but
-still allowing integration with the DLR for interoperation with other
-functionality (such as calling libraries). Thus, we began the development of
-what would become Calysto Scheme.
+At the time (2007), Microsoft had embarked on a somewhat-related
+goal. They were actively developing what they called the Dynamic
+Language Runtime (DLR) as part of the .NET framework [DLR]. The DLR
+abstraction layer created a common API and allowed one to create
+languages, such as IronPython and IronRuby \cite{IronRuby}, without
+having to rewrite the common parts for each language. Our earlier
+project adopted the DLR as its foundation, and used these Iron
+languages. In addition, the Calico team developed other languages to
+augment these, including a visual block-based language.
+
+However, there was a gap in the languages available: there was no
+Scheme implementation that could work in this environment. Although
+the development of both IronLisp and IronScheme [IronScheme] had been
+attempted by other groups, they both ultimately failed for various
+reasons, including lack of support for tail-call optimization (TCO) in
+the DLR.\footnote[1]{IronScheme eventually did include at least some
+support for first-class continuations. However, it was added
+incrementally late in 2008 \cite{IronScheme}}.
+
+Of course, the Scheme language can be implemented in languages without
+TCO. So, we set out to fill this void by developing a Scheme without
+using the DLR for internal function calls, but still allowing
+integration with the DLR for interoperation with other functionality
+(such as calling libraries). Thus, we began the development of what
+would become Calysto Scheme.
 
 Once the core Scheme language was written in Scheme (as described below), the
 final conversion step to C\# was relatively straightforward. At this point, we
@@ -324,7 +336,7 @@ def cdr(lst):
 
 def cadr(lst):
     return car(cdr(lst))
-   
+
 def cddr(lst):
     return cdr(cdr(lst))
 
@@ -744,7 +756,7 @@ $\rightarrow$ 3
 
 \noindent
 \begin{verbatim}
-(python-exec 
+(python-exec
 "
 def mypyfunc(a, b):
     return a * b
@@ -851,7 +863,7 @@ experiment.
                         (metrics : ,(vector "accuracy"))))]
        [epochs 5]
        [experiment (comet_ml.Experiment (dict '((project_name : "calysto-scheme"))))]
-       [model (tf.keras.models.Sequential 
+       [model (tf.keras.models.Sequential
                (vector
                 (tf.keras.layers.Flatten (dict '((input_shape : (28 28)))))
                     (tf.keras.layers.Dense hidden_layer_size (dict `((activation : ,activation))))
@@ -860,9 +872,9 @@ experiment.
   (print experiment.url)
   (model.compile options)
   (model.summary)
-  (experiment.log_parameters (dict `((optimizer : ,optimizer) 
-                                     (dropout_rate : ,dropout_rate) 
-                                     (activation : ,activation) 
+  (experiment.log_parameters (dict `((optimizer : ,optimizer)
+                                     (dropout_rate : ,dropout_rate)
+                                     (activation : ,activation)
                                      (hidden_layer_size : ,hidden_layer_size)
                                      (epochs : ,epochs)))
                              (dict))
@@ -888,13 +900,15 @@ experiment.
 
 \section{Calysto Scheme in Jupyter}
 
-The Jupyter Project is a language-independent client-server system for running
-code using a web browser as the IDE. Initially, Jupyter was limited to Python
-(and was originally called IPython). However, the developers realized that
-their system could be used for any language, and the Jupyter Project was
-born. Today, Jupyter is one of the most-used tools in data science. Jupyter
-Notebooks allow the mixing of code, text, mathematics, and visualizations
-within a single executable document.
+The Jupyter Project is a language-independent client-server system for
+running code using a web browser as the IDE
+\cite{Kluyver2016jupyter}. Initially, Jupyter was limited to Python
+(and was originally called IPython \cite{PER-GRA:2007}). However, the
+developers realized that their system could be used for any language,
+and the Jupyter Project was born. Today, Jupyter is one of the
+most-used tools in data science. Jupyter Notebooks allow the mixing of
+code, text, mathematics, and visualizations within a single executable
+document.
 
 In many ways, the goals of Jupyter were similar to the original goals of
 Calysto Scheme: language independence with a common UI. In fact, when Jupyter
@@ -920,6 +934,16 @@ function with the Greek symbol $\lambda$ in place of the \texttt{lambda}
 keyword by typing \textbf{\textbackslash lambda} and pressing [TAB] (see
 Figure~\ref{fig:fact1}). Building on top of the Jupyter system makes Calysto
 Scheme easy to use, and brings it into a modern language environment.
+
+It should be noted that many computer science educators find the use
+of Jupyter Notebooks problematic. The main objection is that it is
+easy for a student to create hidden state that creates a non-intuitive
+experience. For example, one can edit cells that have already been
+executed, creating dependencies that are no longer valid. In spite of
+this limitation, Jupyter Notebooks are popular with data scientists
+and others who tell stories with code, visualizations, and text. For
+more on this topic, see \cite{Calico2}.
+
 
 %%\begin{figure}
 %%  \centering
@@ -987,7 +1011,7 @@ def evaluator(expr):
     if car(expr) == "literal":
          return cadr(expr)
     elif car(expr) == "application":
-           return apply_operator(evaluator(cadr(expr)), 
+           return apply_operator(evaluator(cadr(expr)),
                               Map(evaluator, caddr(expr)))
     else:
          raise Exception("Invalid AST: %s" % expr)
@@ -1030,7 +1054,7 @@ ASTs:
 (define evaluator
   (lambda (ast_expr)
    (cond
-     [(isinstance ast_expr ast.Module) 
+     [(isinstance ast_expr ast.Module)
       (evaluator (get-item ast_expr.body 0))]
      [(isinstance ast_expr ast.Num)
       ast_expr.n]
@@ -1038,7 +1062,7 @@ ASTs:
       (evaluator ast_expr.value)]
      [(isinstance ast_expr ast.BinOp)
       (apply-operator ast_expr.op
-         (evaluator ast_expr.left) 
+         (evaluator ast_expr.left)
          (evaluator ast_expr.right))]
      [else (error 'evaluator (format "Unknown ast: ~s" ast_expr))])))
 
