@@ -284,13 +284,13 @@ pipeline.
 (define sum-cps
   (lambda ()
     (if (= n_reg 0)
-        (begin
-          (set! value_reg 0)
-          (set! pc apply-cont))
-        (begin
-            (set! k_reg (make-cont <cont-2> n_reg k_reg))
-          (set! n_reg (- n_reg 1))
-          (set! pc sum-cps)))))
+      (begin
+        (set! value_reg 0)
+        (set! pc apply-cont))
+      (begin
+          (set! k_reg (make-cont <cont-2> n_reg k_reg))
+        (set! n_reg (- n_reg 1))
+        (set! pc sum-cps)))))
 
 ;; top-level function
 (define sum
@@ -311,7 +311,7 @@ pipeline.
 \caption{Scheme register machine code}
 \label{fig:schemeRM}
 \end{minipage}
-\hspace{0.8in}
+\hspace{0.75in}
 \begin{minipage}{0.4\textwidth}
 {\scriptsize
 \begin{verbatim}
@@ -414,7 +414,7 @@ of this function written in CPS, using functional continuations, as shown
 below.  For example, calling the top-level function \texttt{(sum 100)} returns
 5050.
 
-{\footnotesize
+{\small
 \begin{verbatim}
 (define sum-cps
   (lambda (n k)
@@ -428,6 +428,7 @@ below.  For example, calling the top-level function \texttt{(sum 100)} returns
 (define sum
   (lambda (n)
     (sum-cps n (lambda (value) value))))
+
 \end{verbatim}
 }
 
@@ -463,17 +464,57 @@ specification and the transformation process itself.
 
 The current version of Calysto Scheme requires an existing Scheme
 implementation to carry out the transformations from CPS to Data Structures,
-and from Data Structures to Register Machine (the final conversion from Scheme
-to Python is written in Python). We used Petite Chez Scheme in early
+and from Data Structures to Register Machine.  The final conversion from Scheme
+to Python is written in Python.  We used Petite Chez Scheme in early
 development, and switched to Chez Scheme when it was made open source. In
 principle, it would be possible to make Calysto Scheme self-hosting
 (\emph{i.e.}, Calysto Scheme could carry out the transformations
-itself). However, our transformation program takes advantage of Chez Scheme's
-version of \texttt{define-syntax}, which is more advanced than the version
-currently implemented in Calysto Scheme.
+itself). However, our transformation program currently relies on Chez Scheme's
+\texttt{syntax-rules} macro definition facility, which differs somewhat from
+the version of \texttt{define-syntax} implemented in Calysto Scheme.
+
+%%However, our transformation program takes advantage of Chez Scheme's
+%%version of \texttt{define-syntax}, which is more advanced than the version
+%%currently implemented in Calysto Scheme.
+
+\section{Syntactic Extension}
+
+\noindent
+Calysto Scheme supports syntactic extension through its own version of
+\texttt{define-syntax}, which can define simple macros using standard list
+notation in conjunction with unification pattern matching variables that
+begin with the \texttt{?} character.  For example, consider the following
+macro expansion rules for \texttt{and} and \texttt{or} expressions:\\
+
+\begin{minipage}{\textwidth}
+\texttt{(and $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
+\texttt{(and $\mathit{exp}_1~\mathit{exp}_2~\mathit{exp}_3~\ldots$)} $~\rightarrow~$
+\texttt{(if $\mathit{exp}_1$ (and $\mathit{exp}_2~\mathit{exp}_3~\ldots$) \#f)}\\
+
+\texttt{(or $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
+\texttt{(or $\mathit{exp}_1~\mathit{exp}_2~\mathit{exp}_3~\ldots$)} $~\rightarrow~$
+\texttt{(if $\mathit{exp}_1$ \#t (or $\mathit{exp}_2~\mathit{exp}_3~\ldots$))}\\
+\end{minipage}
+
+\noindent
+Although \texttt{and} and \texttt{or} are already available in Calysto Scheme,
+in principle they could be implemented with the following recursive macro
+definitions:
+
+\begin{verbatim}
+(define-syntax and
+  [(and ?exp) ?exp]
+  [(and ?first-exp . ?other-exps) (if ?first-exp (and . ?other-exps) #f)])
+
+
+(define-syntax or
+  [(or ?exp) ?exp]
+  [(or ?first-exp . ?other-exps) (if ?first-exp #t (or . ?other-exps))])
+\end{verbatim}
 
 \section{Nondeterministic Backtracking}
 
+\noindent
 In their classic text \emph{Structure and Interpretation of Computer Programs}
 (SICP) \cite{SICP}, Abelson and Sussman introduce the nondeterministic ``amb''
 operator for automatic backtracking.  We have incorporated this operator into
@@ -485,136 +526,15 @@ resulting value.  From there, the computation proceeds normally, unless
 computation ``fails'' and immediately jumps back to the previous
 \texttt{choose} expression, whereby a different argument is chosen to evaluate
 next, and the computation restarts from that point with the new value.  Many
-constraint-satisfaction problems can be elegantly solved using \texttt{choose},
-such as the following logic puzzle taken from SICP:
+constraint-satisfaction problems can be elegantly solved using \texttt{choose}.
 
-\begin{quote}
-\emph{Baker, Cooper, Fletcher, Miller, and Smith live on different floors of an
-  apartment house that contains only five floors. Baker does not live on the
-  top floor. Cooper does not live on the bottom floor. Fletcher does not live
-  on either the top or the bottom floor. Miller lives on a higher floor than
-  does Cooper. Smith does not live on a floor adjacent to Fletcher's. Fletcher
-  does not live on a floor adjacent to Cooper's. Where does everyone live?}
-\end{quote}
-
-\noindent
-The Calysto Scheme program
-%in Figure~\ref{fig:floors}
-below
-returns the puzzle
-solution \texttt{((baker 3) (cooper 2) (fletcher 4) (miller 5) (smith 1))}.
-The \texttt{require} function is a Calysto Scheme primitive similar to an
-assertion statement, which takes a boolean value as input and invokes
-\texttt{(choose)} if the input is false in order to force the program to
-backtrack to the most recent choice point, instead of raising an exception.
-The \texttt{distinct?} predicate is an auxiliary function that takes a list of
-elements and returns true if the list contains no repeated elements.
-
-%---------------------------------------------------------------------------------
-
-%%\begin{figure}[h]
-%%\begin{minipage}{0.4\textwidth}
-%%{\scriptsize
-%%\begin{verbatim}
-%%(define multiple-dwelling
-%%  (lambda ()
-%%    (let ([baker (choose 1 2 3 4 5)]
-%%          [cooper (choose 1 2 3 4 5)]
-%%          [fletcher (choose 1 2 3 4 5)]
-%%          [miller (choose 1 2 3 4 5)]
-%%          [smith (choose 1 2 3 4 5)])
-%%      (require (distinct? (list baker cooper fletcher miller smith)))
-%%      (require (not (= baker 5)))
-%%      (require (not (= cooper 1)))
-%%      (require (not (= fletcher 5)))
-%%      (require (not (= fletcher 1)))
-%%      (require (> miller cooper))
-%%      (require (not (= (abs (- smith fletcher)) 1)))
-%%      (require (not (= (abs (- fletcher cooper)) 1)))
-%%      (list (list 'baker baker)
-%%            (list 'cooper cooper)
-%%            (list 'fletcher fletcher)
-%%            (list 'miller miller)
-%%            (list 'smith smith)))))
-%%\end{verbatim}
-%%}
-%%\end{minipage}
-%%\caption{A nondeterministic program.}
-%%\label{fig:floors}
-%%\end{figure}
-
-\begin{minipage}{0.4\textwidth}
-{\footnotesize
-\begin{verbatim}
-(define multiple-dwelling
-  (lambda ()
-    (let ([baker (choose 1 2 3 4 5)]
-          [cooper (choose 1 2 3 4 5)]
-          [fletcher (choose 1 2 3 4 5)]
-          [miller (choose 1 2 3 4 5)]
-          [smith (choose 1 2 3 4 5)])
-      (require (distinct? (list baker cooper fletcher miller smith)))
-      (require (not (= baker 5)))
-      (require (not (= cooper 1)))
-      (require (not (= fletcher 5)))
-      (require (not (= fletcher 1)))
-      (require (> miller cooper))
-      (require (not (= (abs (- smith fletcher)) 1)))
-      (require (not (= (abs (- fletcher cooper)) 1)))
-      (list (list 'baker baker)
-            (list 'cooper cooper)
-            (list 'fletcher fletcher)
-            (list 'miller miller)
-            (list 'smith smith)))))
-\end{verbatim}
-}
-\end{minipage}\\\\
-
-%---------------------------------------------------------------------------------
-
-\noindent
-Calysto Scheme also supports syntactic extension through the special form
-\texttt{define-syntax}, which can define simple macros using standard list
-notation in conjunction with unification pattern matching variables.  For
-example, consider the following recursive macro expansion rules for
-\texttt{and} and \texttt{or} expressions:\\
-
-{\footnotesize
-\noindent
-\texttt{(and $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
-\texttt{(and $\mathit{exp}_1~\mathit{exp}_2~\mathit{exp}_3~\ldots$)} $~\rightarrow~$
-\texttt{(if $\mathit{exp}_1$ (and $\mathit{exp}_2~\mathit{exp}_3~\ldots$) \#f)}\\
-
-\noindent
-\texttt{(or $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
-\texttt{(or $\mathit{exp}_1~\mathit{exp}_2~\mathit{exp}_3~\ldots$)} $~\rightarrow~$
-\texttt{(if $\mathit{exp}_1$ \#t (or $\mathit{exp}_2~\mathit{exp}_3~\ldots$))}\\
-}
-
-\noindent
-Although \texttt{and} and \texttt{or} are already available in Calysto Scheme,
-in principle they could be implemented with the following macro definitions:
-
-{\footnotesize
-\begin{verbatim}
-(define-syntax and
-  [(and ?exp) ?exp]
-  [(and ?first-exp . ?other-exps) (if ?first-exp (and . ?other-exps) #f)])
-
-(define-syntax or
-  [(or ?exp) ?exp]
-  [(or ?first-exp . ?other-exps) (if ?first-exp #t (or . ?other-exps))])
-\end{verbatim}
-}
-
-\noindent
-As another example illustrating both \texttt{choose} and
+As an example illustrating both \texttt{choose} and
 \texttt{define-syntax}, suppose we wish to write a program to determine how to
 color a map of (a portion of) Western Europe using four distinct colors.  We
 first define a function to nondeterministically return one of four possible
 colors:
 
-{\footnotesize
+{\small
 \begin{verbatim}
 (define choose-color
   (lambda ()
@@ -626,8 +546,7 @@ colors:
 The \texttt{color-europe} program begins by nondeterministically assigning a
 color to each country on the map:
 
-\begin{minipage}{\textwidth}
-{\footnotesize
+{\small
 \begin{verbatim}
 (define color-europe
   (lambda ()
@@ -642,44 +561,52 @@ color to each country on the map:
         ...)))
 \end{verbatim}
 }
-\end{minipage}
 
-\noindent\\
+\noindent
 Next, we must apply the following constraint to each country: its chosen color
 must be different from that of all of its adjacent neighbors.  For example,
 since Luxembourg is bordered by France, Belgium, and Germany, we could express
 its color constraint as follows:
 
-\noindent
-{\footnotesize
+{\small
 \begin{verbatim}
 (require (not (member luxembourg (list france belgium germany))))
 \end{verbatim}
 }
 
 \noindent
-A more elegant approach might be to define a new syntactic form called
-\texttt{color} that expresses this constraint in a very readable way, as
-follows:
+The \texttt{require} function is a Calysto Scheme primitive similar to an
+assertion statement, which takes a boolean value as input and invokes
+\texttt{(choose)} if the input is false in order to force the program to
+backtrack to the most recent choice point, instead of raising an exception.
+However, a more elegant approach might be to define a new syntactic form called
+\texttt{color} that expresses this constraint in a very readable way:
 
-\noindent
-{\footnotesize
+{\small
 \begin{verbatim}
 (color luxembourg different from france belgium germany)
-\end{verbatim}}
+\end{verbatim}
+}
 
 \noindent
 The Calysto Scheme macro definition for \texttt{color}, along with the complete
 program to determine a consistent map-coloring, is given below:
 
-\noindent
-{\footnotesize
+%\noindent
+%\begin{minipage}{\textwidth}
+{\small
 \begin{verbatim}
-
 (define-syntax color
   [(color ?country different from . ?neighbors)
    (require (not (member ?country (list . ?neighbors))))])
+\end{verbatim}
+}
+%\end{minipage}
 
+\noindent
+\begin{minipage}{\textwidth}
+{\small
+\begin{verbatim}
 (define color-europe
   (lambda ()
     (let ([portugal (choose-color)]
@@ -708,8 +635,10 @@ program to determine a consistent map-coloring, is given below:
             (list 'luxembourg luxembourg)
             (list 'italy italy)
             (list 'switzerland switzerland)))))
+
 \end{verbatim}
 }
+\end{minipage}
 
 \noindent
 Calling \texttt{(color-europe)} returns the solution \texttt{((portugal red)
@@ -720,7 +649,7 @@ program to backtrack to find another combination that satisfies the
 constraints, simply by calling \texttt{(choose)} as many times as we like,
 until all valid choices have been returned:
 
-{\footnotesize
+{\small
 \begin{verbatim}
 ==> (choose)
 ((portugal red) (spain yellow) (france red) (belgium yellow) (germany blue)
@@ -728,13 +657,14 @@ until all valid choices have been returned:
 ==> (choose)
 ((portugal red) (spain yellow) (france red) (belgium yellow) (germany blue)
  (luxembourg white) (italy blue) (switzerland white))
-\end{verbatim}}
+\end{verbatim}
+}
 
 \noindent
 and so on.  Eventually, after all possible combinations of choices that satisfy
 the constraints have been returned, any subsequent calls to \texttt{(choose)}
-will return the string ``no more choices'', until a new choose expression is
-executed.
+will return the string ``no more choices'', until a new \texttt{choose}
+expression is executed.
 
 \section{Python / Scheme Interoperation}
 
@@ -747,9 +677,10 @@ into Scheme and called from within Scheme programs.
 Whereas in Scheme everything is an expression, Python makes a distinction
 between evaluation and execution. In Calysto Scheme, the function
 \texttt{python-eval} can be used to evaluate strings representing Python
-expressions, and python-exec can be used to execute Python statements.\\
+expressions, and \texttt{python-exec} can be used to execute Python
+statements.\\
 
-{\footnotesize
+{\small
 \noindent
 \texttt{(python-eval "1 + 2")}\\
 $\rightarrow$ 3
@@ -770,7 +701,7 @@ $\rightarrow$ 6\\
 The special form \texttt{func} turns a Scheme procedure into a Python function,
 and \texttt{define!} puts it into the shared environment with Python:\\
 
-{\footnotesize
+{\small
 \noindent
 \texttt{(define! mypyfunc2 (func (lambda (n) (* n n))))}\\
 \texttt{(python-eval "mypyfunc2(3)")}\\
@@ -784,7 +715,7 @@ which the elements of a nested Scheme list are summed by converting it into a
 Numpy array and then applying the Numpy \texttt{sum} function:\\
 
 \begin{minipage}{\textwidth}
-{\footnotesize
+{\small
 \begin{verbatim}
 (import "numpy")
 
@@ -794,16 +725,16 @@ Numpy array and then applying the Numpy \texttt{sum} function:\\
                   ((190 200 210) (220 230 240)))])
   (numpy.sum (numpy.array matrix3d)))
 \end{verbatim}
-$\rightarrow$ 3000
+$\rightarrow$ 3000\\
 }
-\end{minipage}\\
+\end{minipage}
 
 \noindent
 Python dictionaries can also be created and manipulated from within Calysto
 Scheme using a special syntax, as shown in the example interaction below:\\
 
 \begin{minipage}{\textwidth}
-{\footnotesize
+{\small
 \begin{verbatim}
 ==> (define d (dict '((apple : red) (banana : yellow) (lime : green))))
 ==> d
@@ -863,12 +794,12 @@ experiment.
                         (metrics : ,(vector "accuracy"))))]
        [epochs 5]
        [experiment (comet_ml.Experiment (dict '((project_name : "calysto-scheme"))))]
-       [model (tf.keras.models.Sequential
-               (vector
-                (tf.keras.layers.Flatten (dict '((input_shape : (28 28)))))
-                    (tf.keras.layers.Dense hidden_layer_size (dict `((activation : ,activation))))
-                (tf.keras.layers.Dropout dropout_rate)
-                (tf.keras.layers.Dense 10)))])
+       [model (tf.keras.models.Sequential 
+                (vector
+                 (tf.keras.layers.Flatten (dict '((input_shape : (28 28)))))
+                     (tf.keras.layers.Dense hidden_layer_size (dict `((activation : ,activation))))
+                 (tf.keras.layers.Dropout dropout_rate)
+                 (tf.keras.layers.Dense 10)))])
   (print experiment.url)
   (model.compile options)
   (model.summary)
@@ -881,13 +812,13 @@ experiment.
   (experiment.set_model_graph model)
   (let ([history (model.fit x_train y_train (dict `((epochs : ,epochs))))]
         [step 0])
-      (map (lambda (key)
-          (set! step 0)
-          (map (lambda (v)
-                 (experiment.log_metric key v step)
-                 (set! step (+ step 1)))
-               (get-item history.history key)))
-       history.history))
+    (map (lambda (key)
+           (set! step 0)
+           (map (lambda (v)
+                  (experiment.log_metric key v step)
+                  (set! step (+ step 1)))
+                (get-item history.history key)))
+         history.history))
   (experiment.end))
 \end{verbatim}
 }
@@ -997,30 +928,29 @@ as Python. This is a relatively straightforward process, which is considerably
 simplified by Scheme's easy-to-parse syntax.  For example, the following code
 shows part of an interpreter written in Python with the functions
 \texttt{evaluator} and \texttt{apply\_operator} for evaluating Scheme
-expressions and applying Scheme functions, respectively:
+expressions and applying Scheme functions, respectively:\\
 
-\begin{minipage}{0.5\textwidth}
-{\footnotesize
+\begin{minipage}{\textwidth}
+{\small
 \begin{verbatim}
-
 # Scheme-in-Python interpreter
 
 # define parser, reader, tokenizer, and utilities (Map, car, cdr, etc.)
 
 def evaluator(expr):
     if car(expr) == "literal":
-         return cadr(expr)
+        return cadr(expr)
     elif car(expr) == "application":
-           return apply_operator(evaluator(cadr(expr)),
+        return apply_operator(evaluator(cadr(expr)),
                               Map(evaluator, caddr(expr)))
     else:
-         raise Exception("Invalid AST: %s" % expr)
+        raise Exception("Invalid AST: %s" % expr)
 
 def apply_operator(op, operands):
     if op == "+":
         return sum(operands)
     else:
-          raise Exception("Unknown operator: %s" % op)
+        raise Exception("Unknown operator: %s" % op)
 
 \end{verbatim}
 \texttt{evaluator(parser(reader(tokenizer("(+ 1 2)"))))}\\
@@ -1041,12 +971,11 @@ into ASTs \cite{PythonInScheme}.
 
 Mirroring the above Python functions for interpreting Scheme code, one can
 easily construct similar functions written in Scheme for interpreting Python
-ASTs:
+ASTs:\\
 
-\begin{minipage}{0.5\textwidth}
-{\footnotesize
+\begin{minipage}{\textwidth}
+{\small
 \begin{verbatim}
-
 ;; Python-in-Scheme interpreter
 
 (import "ast")
@@ -1069,8 +998,8 @@ ASTs:
 (define apply-operator
   (lambda (op v1 v2)
     (cond
-     [(isinstance op ast.Add) (+ v1 v2)]
-     [else (error 'apply-operator (format "Invalid operator: ~s" op))])))
+      [(isinstance op ast.Add) (+ v1 v2)]
+      [else (error 'apply-operator (format "Invalid operator: ~s" op))])))
 
 \end{verbatim}
 \texttt{(evaluator (ast.parse "1 + 2"))}\\
