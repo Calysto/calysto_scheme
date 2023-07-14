@@ -59,17 +59,8 @@
 
 \title[Calysto Scheme]{The Calysto Scheme Project}
 
-\author{Douglas S. Blank}
-\authornote{Both authors contributed equally to this work.}
-\affiliation{
-  \institution{Comet, Inc.}
-  \city{San Francisco}
-  \country{USA}
-}
-\email{doug.blank@gmail.com}
-
 \author{James B. Marshall}
-\authornotemark[1]
+\authornote{Both authors contributed equally to this work.}
 \affiliation{
   \institution{Sarah Lawrence College}
   \streetaddress{1 Mead Way}
@@ -79,6 +70,15 @@
   \country{USA}
 }
 \email{jmarshall@sarahlawrence.edu}
+
+\author{Douglas S. Blank}
+\authornotemark[1]
+\affiliation{
+  \institution{Comet ML, Inc.}
+  \city{New York}
+  \country{USA}
+}
+\email{doug.blank@gmail.com}
 
 %% By default, the full list of authors will be used in the page
 %% headers. Often, this list is too long, and will overlap other information
@@ -180,12 +180,14 @@ augment these, including a visual block-based language.
 
 However, there was a gap in the languages available: there was no
 Scheme implementation that could work in this environment. Although
-the development of both IronLisp and IronScheme [IronScheme] had been
-attempted by other groups, they both ultimately failed for various
-reasons, including lack of support for tail-call optimization (TCO) in
-the DLR.\footnote[1]{IronScheme eventually did include at least some
-support for first-class continuations. However, it was added
-incrementally late in 2008 \cite{IronScheme}}.
+the development of both IronLisp and IronScheme \cite{IronScheme} had
+been attempted by other groups, they both ultimately failed for
+various reasons, including lack of support for tail-call optimization
+(TCO) in the DLR.\footnote[1]{IronScheme eventually did include at
+least some support for first-class continuations. However, it was
+incrementally added beginning in late 2008
+\cite{IronScheme-Continuations} after we had begun building Calysto
+Scheme.}
 
 Of course, the Scheme language can be implemented in languages without
 TCO. So, we set out to fill this void by developing a Scheme without
@@ -230,7 +232,7 @@ pipeline.
 
 \begin{figure}
   \includegraphics[width=0.7\textwidth]{graphics-scripts.jpg}
-  \caption{Calling the same graphics library functions from four different languages.}
+  \caption{Calling the same graphics library functions from four different languages in Calico.}
   \label{fig:scripts}
   \Description{}
 \end{figure}
@@ -874,6 +876,21 @@ executed, creating dependencies that are no longer valid. In spite of
 this limitation, Jupyter Notebooks are popular with data scientists
 and others who tell stories with code, visualizations, and text. For
 more on this topic, see \cite{Calico2}.
+
+Jusging from the Calysto Scheme github reported issues, most people
+discover Calysto Scheme through the Jupyter Project's ``Try Jupyter''
+page where Calysto Scheme is featured along with kernels in C++,
+Julia, GNU Octave, R, and Ruby \cite{TryJupyter}. Many people
+apparently use Calysto Scheme for working through the SCIP
+exercises. See Figure~\ref{fig:try-jupyter}.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.6\textwidth]{try-jupyter.png}
+  \caption{Calysto Scheme is available online via the Jupyter Project's ``Try Jupyter'' page.}
+  \label{fig:try-jupyter}
+  \Description{Calysto Scheme, online.}
+\end{figure}
 
 
 %%\begin{figure}
