@@ -59,8 +59,17 @@
 
 \title[Calysto Scheme]{The Calysto Scheme Project}
 
+\author{Douglas S. Blank}
+%\authornote{Both authors contributed equally to this work.}
+\affiliation{
+  \institution{Comet ML, Inc.}
+  \city{New York}
+  \country{USA}
+}
+\email{doug.blank@gmail.com}
+
 \author{James B. Marshall}
-\authornote{Both authors contributed equally to this work.}
+%\authornotemark[1]
 \affiliation{
   \institution{Sarah Lawrence College}
   \streetaddress{1 Mead Way}
@@ -70,15 +79,6 @@
   \country{USA}
 }
 \email{jmarshall@sarahlawrence.edu}
-
-\author{Douglas S. Blank}
-\authornotemark[1]
-\affiliation{
-  \institution{Comet ML, Inc.}
-  \city{New York}
-  \country{USA}
-}
-\email{doug.blank@gmail.com}
 
 %% By default, the full list of authors will be used in the page
 %% headers. Often, this list is too long, and will overlap other information
@@ -475,18 +475,14 @@ itself). However, our transformation program currently relies on Chez Scheme's
 \texttt{syntax-rules} macro definition facility, which differs somewhat from
 the version of \texttt{define-syntax} implemented in Calysto Scheme.
 
-%%However, our transformation program takes advantage of Chez Scheme's
-%%version of \texttt{define-syntax}, which is more advanced than the version
-%%currently implemented in Calysto Scheme.
-
 \section{Syntactic Extension}
 
 \noindent
 Calysto Scheme supports syntactic extension through its own version of
 \texttt{define-syntax}, which can define simple macros using standard list
-notation in conjunction with unification pattern matching variables that
-begin with the \texttt{?} character.  For example, consider the following
-macro expansion rules for \texttt{and} and \texttt{or} expressions:\\
+notation in conjunction with unification pattern matching variables beginning
+with the \texttt{?} character.  For example, consider the following macro
+expansion rules for \texttt{and} and \texttt{or} expressions:\\
 
 \begin{minipage}{\textwidth}
 \texttt{(and $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
@@ -499,20 +495,48 @@ macro expansion rules for \texttt{and} and \texttt{or} expressions:\\
 \end{minipage}
 
 \noindent
-Although \texttt{and} and \texttt{or} are already available in Calysto Scheme,
-in principle they could be implemented with the following recursive macro
-definitions:
+Although \texttt{and} and \texttt{or} are already available as special forms in
+Calysto Scheme, in principle they could be implemented with the following
+recursive macro definitions:
 
+\begin{minipage}{\textwidth}
 \begin{verbatim}
+
 (define-syntax and
   [(and ?exp) ?exp]
   [(and ?first-exp . ?other-exps) (if ?first-exp (and . ?other-exps) #f)])
 
+\end{verbatim}
+\end{minipage}
+
+\begin{minipage}{\textwidth}
+\begin{verbatim}
 
 (define-syntax or
   [(or ?exp) ?exp]
   [(or ?first-exp . ?other-exps) (if ?first-exp #t (or . ?other-exps))])
+
 \end{verbatim}
+\end{minipage}
+
+\noindent
+For example, the input expression \texttt{(or a b c d)} would match the pattern
+of the second clause above, with the variable \texttt{?first-exp} bound to
+\texttt{a} and the variable \texttt{?other-exps} bound to the list
+\texttt{(b~c~d)}. The corresponding template expression
+\texttt{(or~.~?other-exps)} would then get expanded as \texttt{(or~b~c~d)}.
+This type of pattern matching facility is similar to Chez Scheme's
+\texttt{syntax-rules} form, except that instead of using ellipses to match
+sequences of one or more expressions, Calysto's \texttt{define-syntax} uses
+improper lists.
+
+Calysto's \texttt{define-syntax} form is not as powerful or general as Chez
+Scheme's \texttt{syntax-case}, but it does provide the ability to define
+syntactic transformation functions via pattern matching, as shown in the above
+examples.  Including a fully-general syntactic extension system, like that
+provided in Chez Scheme, was not a central goal of the Calysto project, but we
+nevertheless felt that it was important to provide at least basic support for
+easy-to-use, user-defined macros in Calysto Scheme.
 
 \section{Nondeterministic Backtracking}
 
