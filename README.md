@@ -37,6 +37,12 @@ ipcluster nbextension enable
 3. To start up a cluster, with 10 nodes, on a local IP address, in the shell, type:
 
 ```
+ipcluster start --n=10
+```
+
+or listening on a specific address:
+
+```
 ipcluster start --n=10 --ip=192.168.1.108
 ```
 
