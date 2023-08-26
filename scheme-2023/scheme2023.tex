@@ -919,6 +919,51 @@ keyword by typing \textbf{\textbackslash lambda} and pressing [TAB] (see
 Figure~\ref{fig:fact1}). Building on top of the Jupyter system makes Calysto
 Scheme easy to use, and brings it into a modern language environment.
 
+Many Jupyter language kernels (such as IPython's) also support a set
+of meta-commands called ``magics.'' These meta-commands allow the user
+to easily perform a variety of functions including running operating
+system commands, creating files, timing execution, and many more.
+
+We wanted the Calysto Scheme Jupyter kernel to also have easy to use
+meta-commands. Rather than building those directly into the Calysto
+Scheme kernel, we decided to put those in an abstraction layer. Thus,
+we collaborated with others to create a project called ``Metakernel''
+\cite{Metakernel}. Metakernel supports many meta-commands (including
+many designed for educational use), and does so in a
+language-independent manner. Metakernel's github page lists over 700
+projects that have included it as part of their project. Of all of the
+contributions we have made as part of the Calysto Scheme Project, this
+may be the most used.
+
+The full list of Metakernel's magics can be found in
+\cite{MetakernelMagics}. All of these extend Calysto Scheme to make it
+more useful in Jupyter environments. However, one meta-command that
+deserves mention in this context is the ``parallel'' magic. This turns
+Calysto Scheme into a parallelized version. The following command
+initializes the parallel cluster for Calysto Scheme.
+
+{\small
+\begin{verbatim}
+%parallel calysto_scheme CalystoScheme
+\end{verbatim}
+}
+
+After initializing the cluster, you can then run individual
+expressions, or entire cells, in
+parallel. Figure~\ref{fig:parallelized-scheme} shows Calysto Scheme
+code running in parallel to compute the Mandelbrot set. A full
+parallel example can be found in
+\cite{ParallelProcessingWithMetakernel}.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.5\textwidth]{parallel-scheme.png}
+  \caption{Code to generate the Mandelbrot set Calysto Scheme using Metakernel's parallel magic.}
+  \label{fig:parallelized-scheme}
+  \Description{Parallelized Calysto Scheme.}
+\end{figure}
+
+
 It should be noted that many computer science educators find the use
 of Jupyter Notebooks problematic. The main objection is that it is
 easy for a student to create hidden state that creates a non-intuitive
@@ -1093,10 +1138,12 @@ others have found Calysto Scheme to be useful in more general contexts as well.
 
 \begin{acks}
 We would like to express our gratitude to Dan Friedman and the Indiana
-University programming languages community, for instilling in us a deep and
-abiding appreciation for the programming language concepts and techniques that
-inspired the creation of Calysto Scheme.  Thanks also to Jason Hemann for many
-helpful comments on an earlier draft of this paper.
+University programming languages community, for instilling in us a
+deep and abiding appreciation for the programming language concepts
+and techniques that inspired the creation of Calysto Scheme.  We would
+also like to thank Steven Silvester for his constant and continued
+management of the Calysto repository. Thanks also to Jason Hemann for
+many helpful comments on an earlier draft of this paper.
 \end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
