@@ -1,15 +1,17 @@
-from __future__ import print_function
-
-from metakernel import MetaKernel
-from calysto_scheme import scheme
 import os
 import sys
 import logging
+import tempfile
+
+from metakernel import MetaKernel
+from calysto_scheme import scheme
 
 try:
     from IPython.core.latex_symbols import latex_symbols
+    from IPython.display import Image
     #from IPython.utils import io
 except:
+    Image = None
     latex_symbols = []
 
 try:
@@ -411,6 +413,31 @@ MAIN FEATURES
         else:
             return {'status' : 'incomplete',
                     'indent': ' ' * 4}
+
+    def handle_plot_settings(self):
+        """
+        Override of base method. Set up matplotlib plotting options
+        """
+        try:
+            import matplotlib
+            import matplotlib.pyplot as plt
+        except Error:
+            matplotlib = None
+
+        if matplotlib is not None:
+            if self.plot_settings["backend"] == "inline":
+                matplotlib.use("Agg")
+
+                def show():
+                    with tempfile.NamedTemporaryFile(suffix=".png") as fp:
+                        plt.savefig(fp.name)
+                        if Image is not None:
+                            return Image(fp.name)
+                        else:
+                            return None
+
+                plt.show = show
+
 
 def latex_matches(text):
     """
