@@ -188,11 +188,9 @@ students learn a different IDE for each language under study, such as
 IDLE for Python, or DrRacket for Scheme, students could remain in the
 same IDE, but simply switch the programming language. This is similar
 in spirit to the way that one can switch languages in DrRacket \cite{Racket}.
-%%%%%%%%% included new ref
 However, in Calico, supported languages can easily interoperate through shared
 libraries and data structures, even if the languages have little else in common
 with each other.
-%However, in Calico, supported languages need not share much at all with each other.
 
 At the time (2007), Microsoft had embarked on a related goal. They were
 actively developing what they called the Dynamic Language Runtime (DLR) as part
@@ -565,7 +563,6 @@ used to separate the let-bindings into their constituent identifiers and value
 expressions, but this cannot be done using Calysto Scheme's unification pattern
 matching mechanism.
 
-%Despite these limitations,
 Although Calysto's \texttt{define-syntax} form is not as powerful or general as
 \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability to
 easily define a wide range of syntactic transforms via pattern matching.
@@ -573,21 +570,6 @@ Including a fully-general syntactic extension system, like that provided in
 Chez Scheme, was not a central goal of the Calysto project, but we nevertheless
 felt that it was important to include at least basic support for easy-to-use,
 user-defined macros in Calysto Scheme.
-
-%This is sufficient to capture many types of simple macro transformations but is not
-%as expressive 
-%This approach, however, places some limitations on the kinds of
-%transformations that can be expressed
-%This approach has some limitations, however, compared to
-%\texttt{syntax-rules}, 
-
-%%Although Calysto's \texttt{define-syntax} form is not as powerful or general as
-%%\texttt{syntax-case} or \texttt{syntax-rules}, it does provide the ability to
-%%define syntactic transformation functions via pattern matching, as shown in the
-%%above examples.  Including a fully-general syntactic extension system, like
-%%that provided in Chez Scheme, was not a central goal of the Calysto project,
-%%but we nevertheless felt that it was important to provide at least basic
-%%support for easy-to-use, user-defined macros in Calysto Scheme.
 
 \section{Example: Nondeterministic Backtracking}
 
@@ -661,8 +643,6 @@ backtrack to the most recent choice point, instead of raising an exception.
 However, a more elegant approach might be to define a new syntactic form called
 \texttt{color} that expands to the above code but expresses the constraint in a
 more readable way:
-
-%expresses this constraint in a very readable way:
 
 {\small
 \begin{verbatim}
@@ -861,7 +841,6 @@ experiment.
 \begin{figure}[h]
 \begin{minipage}{0.8\textwidth}
 {\scriptsize
-%{\footnotesize
 \begin{verbatim}
 (import-as "tensorflow" "tf")
 (import-as "numpy" "np")
@@ -1029,7 +1008,6 @@ can be found in \cite{ParallelProcessingWithMetakernel}.
   \includegraphics[width=0.65\textwidth]{parallel-scheme.png}
   \caption{Parallel processing code for generating the Mandelbrot set in
     Calysto Scheme, from \cite{ParallelProcessingWithMetakernel}.}
-%  \caption{Code to generate the Mandelbrot set in Calysto Scheme using Metakernel's \texttt{\%parallel} magic.}
   \label{fig:parallelized-scheme}
   \Description{Parallelized Calysto Scheme.}
 \end{figure}
@@ -1074,8 +1052,6 @@ apparently also use Calysto Scheme for working through SICP exercises.
 \end{figure}
 
 %---------------------------------------------------------------------------------
-
-%\section{Stack-like Tracebacks for Debugging}
 
 \section{Scheme in Python, Python in Scheme}
 
