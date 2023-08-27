@@ -472,11 +472,15 @@ def sum(n):
 
 %---------------------------------------------------------------------------------
 
-In a similar fashion, we transform our Calysto Scheme interpreter from a
-high-level recursive CPS program written in Scheme into an equivalent low-level
-register machine written in Python, which does not grow Python's call stack.
-After the build process completes, the output is a single Python file with no
-dependencies, which can be easily installed and used.
+In a similar fashion, we transform our Calysto Scheme interpreter from
+a high-level recursive CPS program written in Scheme into an
+equivalent low-level register machine written in Python, which does
+not grow Python's call stack.\footnote[2]{Although there is no stack
+in the low-level register machine, a stack-like traceback can
+optionally be created for debugging purposes. See below for an
+example.} After the build process completes, the output is a single
+Python file with no dependencies, which can be easily installed and
+used.
 
 There is an interesting aspect to creating a language in this manner: the
 implementation can be tested at each stage of the transformation process to
@@ -1029,7 +1033,7 @@ this can make an excellent environment for teaching and learning. One of us
 Jupyter. That included courses on Data Structures (Java), Cognitive Science
 (Python), Assembly Language, Introduction to Computer Science (Processing),
 Programming Languages (Scheme), and Creative Writing (English). This was
-accomplished by hosting a local JupyterHub instance\footnote[2]{Incidentally,
+accomplished by hosting a local JupyterHub instance\footnote[3]{Incidentally,
   this was the very first publicly-hosted JupyterHub instance.} at Bryn Mawr
 College, so that students did not need to install anything and could perform
 all of their work via the web browser. For more on these ideas, see
