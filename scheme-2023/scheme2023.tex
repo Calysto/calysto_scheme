@@ -88,12 +88,12 @@
 
 \begin{abstract}
 Calysto Scheme is written in Scheme in Continuation-Passing Style, and
-converted through a series of correctness-preserving transformations into
-Python. It has support for standard Scheme functionality, including
+converted through a series of correctness-preserving program transformations
+into Python. It has support for standard Scheme functionality, including
 \texttt{call/cc}, as well as syntactic extensions, a nondeterministic operator
 for automatic backtracking, and many extensions to allow Python
-interoperation. Because of its Python foundation, it can easily take advantage
-of modern Python libraries, including those for machine learning and other
+interoperation. Because of its Python foundation, it can take advantage of
+modern Python libraries, including those for machine learning and other
 pedagogical contexts. Although Calysto Scheme was developed with educational
 purposes in mind, it has proven to be generally useful due to its simplicity
 and ease of installation. It has been integrated into the Jupyter Notebook
@@ -142,7 +142,7 @@ with some interesting and unique twists.
 
 \section{Introduction}
 
-This paper describes the development of Calysto Scheme, a fully-featured
+This paper describes the development of Calysto Scheme, a full-featured
 implementation of the Scheme programming language written in Scheme, which can
 be automatically translated into other languages, such as Python and C\#
 \cite{CalystoScheme}.  Although our path through the development of this system
@@ -169,13 +169,16 @@ One of the interesting aspects of Calico was that instead of having
 students learn a different IDE for each language under study, such as
 IDLE for Python, or DrRacket for Scheme, students could remain in the
 same IDE, but simply switch the programming language. This is similar
-in spirit to the way that one can switch languages in
-DrRacket. However, in Calico, supported languages need not share much
-at all with each other.
+in spirit to the way that one can switch languages in DrRacket \cite{Racket}.
+%%%%%%%%% included new ref
+However, in Calico, supported languages can easily interoperate through shared
+libraries and data structures, even if the languages have little else in common
+with each other.
+%However, in Calico, supported languages need not share much at all with each other.
 
-At the time (2007), Microsoft had embarked on a somewhat-related goal. They
-were actively developing what they called the Dynamic Language Runtime (DLR) as
-part of the .NET framework. The DLR abstraction layer created a common API and
+At the time (2007), Microsoft had embarked on a related goal. They were
+actively developing what they called the Dynamic Language Runtime (DLR) as part
+of the .NET framework. The DLR abstraction layer created a common API and
 allowed one to create languages, such as IronPython and IronRuby
 \cite{IronRuby}, without having to rewrite the common parts for each
 language. Our earlier project adopted the DLR as its foundation, and used these
@@ -193,11 +196,10 @@ incrementally added beginning in late 2008
 \cite{IronScheme-Continuations} after we had begun building Calysto
 Scheme.}
 
-Of course, the Scheme language can be implemented in languages without
-TCO. So we set out to fill this void by developing a Scheme without
-using the DLR for internal function calls, but still allowing
-integration with the DLR for interoperation with other functionality,
-such as calling libraries.
+Of course, Scheme can be implemented in languages without TCO. So we set out to
+fill this void by developing a Scheme without using the DLR for internal
+function calls, but still allowing integration with the DLR for interoperation
+with other functionality, such as calling libraries.
 
 But why focus on Scheme? After all, creating a full implementation from scratch
 was not a small undertaking, especially since we were not actively involved in
@@ -321,7 +323,7 @@ dependencies, which can be easily installed and used.
 There is an interesting aspect to creating a language in this manner: the
 implementation can be tested at each stage of the transformation process to
 ensure correctness. That is, the same suite of Scheme test programs can be run
-independently with the CPS, Data Structure, Register Machine, and Python
+independently with the CPS, Data Structures, Register Machine, and Python
 implementations. In essence, the initial CPS definition serves as both a
 high-level language specification and an executable implementation of the
 language, from which the other three implementations are subsequently
@@ -500,7 +502,7 @@ Calysto Scheme supports syntactic extension through its own version of
 \texttt{define-syntax}, which can define simple macros using standard list
 notation in conjunction with unification pattern matching variables beginning
 with the \texttt{?} character.  For example, consider the following macro
-expansion rules for \texttt{and} and \texttt{or} expressions:\\
+expansion rules for the logical expressions \texttt{and} and \texttt{or}:\\
 
 \begin{minipage}{\textwidth}
 \texttt{(and $\mathit{exp}$)} $~\rightarrow~$ $\mathit{exp}$\\
@@ -541,22 +543,45 @@ recursive macro definitions:\\
 For example, the input expression \texttt{(or a b c d)} would match the pattern
 of the second clause above, with the variable \texttt{?first-exp} bound to
 \texttt{a} and the variable \texttt{?other-exps} bound to the list
-\texttt{(b~c~d)}. The corresponding template expression
-\texttt{(or~.~?other-exps)} would then get instantiated as \texttt{(or~b~c~d)}.
-This type of pattern matching facility is similar to Chez Scheme's
-\texttt{syntax-rules} form, except that instead of using ellipses to match
-sequences of one or more expressions, Calysto's \texttt{define-syntax} uses
-improper lists.
+\texttt{(b~c~d)}. The corresponding template subexpression
+\texttt{(or~.~?other-exps)} would then get instantiated as \texttt{(or~b~c~d)},
+and recursively expanded further. This type of pattern matching facility
+is similar to Chez Scheme's \texttt{syntax-rules} form, except that instead of
+using ellipses to match sequences of zero or more expressions, Calysto Scheme's
+\texttt{define-syntax} uses improper lists.
 
-Calysto's \texttt{define-syntax} form is not as powerful or general as Chez
-Scheme's \texttt{syntax-case}, but it does provide the ability to define
-syntactic transformation functions via pattern matching, as shown in the above
-examples.  Including a fully-general syntactic extension system, like that
-provided in Chez Scheme, was not a central goal of the Calysto project, but we
-nevertheless felt that it was important to provide at least basic support for
-easy-to-use, user-defined macros in Calysto Scheme.
+Compared to \texttt{syntax-rules}, however, this approach has some limitations
+and cannot capture certain transforms that can be expressed using ellipses.
+For example, to transform the expression \texttt{(let ((i e) ...) b)} into
+\texttt{((lambda (i ...) b) e ...)}, the ellipses are used to separate the
+let-bindings into their constituent identifiers and value expressions, but this
+cannot be done using Calysto Scheme's unification pattern matching mechanism.
 
-\section{Nondeterministic Backtracking}
+%Despite these limitations,
+Although Calysto's \texttt{define-syntax} form is not as powerful or general as
+\texttt{syntax-case} or \texttt{syntax-rules}, it does provide the ability to
+easily define a fairly wide range of syntactic transforms via pattern matching,
+as shown in the previous examples.  Including a fully-general syntactic
+extension system, like that provided in Chez Scheme, was not a central goal of
+the Calysto project, but we nevertheless felt that it was important to provide
+at least basic support for easy-to-use, user-defined macros in Calysto Scheme.
+
+%This is sufficient to capture many types of simple macro transformations but is not
+%as expressive 
+%This approach, however, places some limitations on the kinds of
+%transformations that can be expressed
+%This approach has some limitations, however, compared to
+%\texttt{syntax-rules}, 
+
+%%Although Calysto's \texttt{define-syntax} form is not as powerful or general as
+%%\texttt{syntax-case} or \texttt{syntax-rules}, it does provide the ability to
+%%define syntactic transformation functions via pattern matching, as shown in the
+%%above examples.  Including a fully-general syntactic extension system, like
+%%that provided in Chez Scheme, was not a central goal of the Calysto project,
+%%but we nevertheless felt that it was important to provide at least basic
+%%support for easy-to-use, user-defined macros in Calysto Scheme.
+
+\section{Example: Nondeterministic Backtracking}
 
 \noindent
 In their classic text \emph{Structure and Interpretation of Computer Programs}
@@ -572,7 +597,7 @@ computation ``fails'' and immediately jumps back to the previous
 next, and the computation restarts from that point with the new value.  Many
 constraint-satisfaction problems can be elegantly solved using \texttt{choose}.
 
-As an example illustrating both \texttt{choose} and
+As an extended example illustrating both \texttt{choose} and
 \texttt{define-syntax}, suppose we wish to write a program to determine how to
 color a map of (a portion of) Western Europe using four distinct colors.  We
 first define a function to nondeterministically return one of four possible
@@ -624,7 +649,10 @@ an assertion statement, which takes a boolean value as input and invokes
 \texttt{(choose)} if the input is false in order to force the program to
 backtrack to the most recent choice point, instead of raising an exception.
 However, a more elegant approach might be to define a new syntactic form called
-\texttt{color} that expresses this constraint in a very readable way:
+\texttt{color} that expands to the above code but expresses the constraint in a
+more readable way:
+
+%expresses this constraint in a very readable way:
 
 {\small
 \begin{verbatim}
@@ -633,8 +661,8 @@ However, a more elegant approach might be to define a new syntactic form called
 }
 
 \noindent
-The Calysto Scheme macro definition for \texttt{color}, along with the complete
-program to determine a consistent map-coloring, is given below:
+The Calysto Scheme macro definition for \texttt{color} is given below, along
+with the complete program to determine a consistent map-coloring:
 
 {\small
 \begin{verbatim}
@@ -752,7 +780,7 @@ $\rightarrow$ 9\\
 \noindent
 As a simple illustration of Calysto Scheme's ability to leverage the power of
 Python libraries, consider the following example, in which the elements of a
-nested Scheme list are summed by converting it into a Numpy array and then
+nested Scheme list are summed by converting it to a Numpy array and then
 applying the Numpy \texttt{sum} function, instead of first flattening the list
 or recursively summing the sublists:\\
 
@@ -778,7 +806,7 @@ Calysto Scheme:\\
 {\small
 \begin{verbatim}
 (import-as "matplotlib.pyplot" "plt")
-(plt.plot '(1 2 3 4 5) '(4 6 3 2 1))
+(plt.plot '(1 2 3 4 5) '(1 4 9 16 25))
 (plt.show)
 
 \end{verbatim}
@@ -908,7 +936,7 @@ console, or qtconsole) provides the following additional features:
 \begin{itemize}
 \item TAB completions of Scheme functions and variable names
 \item Ability to directly display rich media such as images
-\item Access to so-called magics (\texttt{\%} meta commands)
+\item Access to so-called magics (\texttt{\%} meta-commands)
 \item Ability to easily run shell commands using the ``\texttt{!} command'' format
 \item \LaTeX-style equations and variables
 \end{itemize}
@@ -919,28 +947,28 @@ keyword by typing \textbf{\textbackslash lambda} and pressing [TAB] (see
 Figure~\ref{fig:fact1}). Building on top of the Jupyter system makes Calysto
 Scheme easy to use, and brings it into a modern language environment.
 
-Many Jupyter language kernels (such as IPython's) also support a set
-of meta-commands called ``magics.'' These meta-commands allow the user
-to easily perform a variety of functions including running operating
+Many Jupyter language kernels (including IPython's) also support a set
+of meta-commands called ``magics''. These meta-commands allow the user
+to easily perform a variety of functions such as running operating
 system commands, creating files, timing execution, and many more.
 
-We wanted the Calysto Scheme Jupyter kernel to also have easy to use
-meta-commands. Rather than building those directly into the Calysto
-Scheme kernel, we decided to put those in an abstraction layer. Thus,
-we collaborated with others to create a project called ``Metakernel''
-\cite{Metakernel}. Metakernel supports many meta-commands (including
-many designed for educational use), and does so in a
-language-independent manner. Metakernel's github page lists over 700
-projects that have included it as part of their project. Of all of the
-contributions we have made as part of the Calysto Scheme Project, this
-may be the most used.
+We wanted the Calysto Scheme Jupyter kernel also to have easy-to-use
+meta-commands. However, rather than building those directly into the Calysto
+Scheme kernel, we decided to put them in a separate abstraction layer. Thus, we
+collaborated with others to create a project called ``Metakernel''
+\cite{Metakernel}. Metakernel supports many meta-commands, including many
+designed for educational use, and does so in a language-independent
+manner. Metakernel's GitHub page currently lists over 700 different projects
+that have incorporated it in one way or another. In fact, Metakernel may be the
+most widely used contribution of the Calysto Scheme Project to date.
 
 The full list of Metakernel's magics can be found in
-\cite{MetakernelMagics}. All of these extend Calysto Scheme to make it
-more useful in Jupyter environments. However, one meta-command that
-deserves mention in this context is the ``parallel'' magic. This turns
-Calysto Scheme into a parallelized version. The following command
-initializes the parallel cluster for Calysto Scheme.
+\cite{MetakernelMagics}. All of these extend Calysto Scheme to make it more
+useful in Jupyter environments. However, one meta-command that deserves special
+mention in this context is the \texttt{\%parallel} magic. If a parallel
+computing cluster is available, this magic turns Calysto Scheme into a
+parallelized interpreter. For example, the following command initializes the
+cluster for running Calysto Scheme:
 
 {\small
 \begin{verbatim}
@@ -948,42 +976,40 @@ initializes the parallel cluster for Calysto Scheme.
 \end{verbatim}
 }
 
-After initializing the cluster, you can then run individual
-expressions, or entire cells, in
-parallel. Figure~\ref{fig:parallelized-scheme} shows Calysto Scheme
-code running in parallel to compute the Mandelbrot set. A full
-parallel example can be found in
-\cite{ParallelProcessingWithMetakernel}.
+After initializing the cluster, individual Scheme expressions or entire code
+cells can be run in parallel using the \texttt{\%px}
+command. Figure~\ref{fig:parallelized-scheme} shows an excerpt of Calysto
+Scheme code for computing the Mandelbrot set in parallel. A full example of
+parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.5\textwidth]{parallel-scheme.png}
-  \caption{Code to generate the Mandelbrot set Calysto Scheme using Metakernel's parallel magic.}
+  \caption{Parallel processing code for generating the Mandelbrot set in Calysto Scheme.}
+%  \caption{Code to generate the Mandelbrot set in Calysto Scheme using Metakernel's \texttt{\%parallel} magic.}
   \label{fig:parallelized-scheme}
   \Description{Parallelized Calysto Scheme.}
 \end{figure}
 
-
-It should be noted that many computer science educators find the use
-of Jupyter Notebooks problematic. The main objection is that it is
-easy for a student to create hidden state that creates a non-intuitive
-experience. For example, one can edit cells that have already been
-executed, creating dependencies that are no longer valid. On the other
-hand, we have also heard educators lament that ``Jupyter is too
-convenient'' for the student.
+It should be noted that many computer science educators find the use of Jupyter
+Notebooks to be problematic. The main objection is that it is easy for a
+student to create hidden state that may lead to unexpected and non-intuitive
+results. For example, one can edit cells that have already been executed,
+creating dependencies that are difficult to reproduce. On the other hand, we
+have also heard educators lament that ``Jupyter is \emph{too} convenient'' for
+the student.
 
 In spite of these warnings, Jupyter Notebooks are popular with data scientists
-and others who tell stories with code, visualizations, and text. This can also
-make an excellent environment for teaching and learning. One of us (Blank)
-taught all of his classes for four years using nothing but Jupyter. That
-included courses on Data Structures (Java), Cognitive Science (Python),
-Assembly Language, Introduction to Computer Science (Processing), Programming
-Languages (Scheme), and Creative Writing (English). This was accomplished by
-hosting a local JupyterHub instance at Bryn Mawr
-College\footnote[2]{Incidentally, this was the very first publicly-hosted
-  JupyterHub instance.}, so that students did not need to install anything and
-could perform all of their work via the web browser. For more on these ideas,
-see \cite{Calico2}.
+and others who tell stories with code, visualizations, and text. This can make
+an excellent environment for teaching and learning. One of us (Blank) taught
+all of his classes for four years using nothing but Jupyter. That included
+courses on Data Structures (Java), Cognitive Science (Python), Assembly
+Language, Introduction to Computer Science (Processing), Programming Languages
+(Scheme), and Creative Writing (English). This was accomplished by hosting a
+local JupyterHub instance\footnote[2]{Incidentally, this was the very first
+  publicly-hosted JupyterHub instance.} at Bryn Mawr College, so that students
+did not need to install anything and could perform all of their work via the
+web browser. For more on these ideas, see \cite{Calico2}.
 
 Judging from the Calysto Scheme issues reported on GitHub, most people discover
 Calysto Scheme through the Jupyter Project's ``Try Jupyter'' page
@@ -1029,7 +1055,7 @@ calling \texttt{(use-stack-trace~\#f)} turns off stack tracing.
 
 \section{Scheme in Python, Python in Scheme}
 
-An approach commonly taken in teaching a course in Programming Languages (PL)
+An approach commonly taken in teaching a course on Programming Languages
 is to implement an interpreter for a subset of Scheme in another language, such
 as Python. This is a relatively straightforward process, which is considerably
 simplified by Scheme's easy-to-parse syntax.  For example, the following code
@@ -1066,15 +1092,15 @@ $\rightarrow$ 3\\
 \end{minipage}
 
 \noindent
-Conversely, one could also teach PL principles by implementing Python in
-Scheme. However, this would be much more difficult to attempt in a single
-semester course, due to the complexity of Python's syntax. However, if it were
-possible to outsource the parsing of Python syntax into Abstract Syntax Tree
-(AST) structures, then one could commence with building a Python interpreter
-written in Scheme that operates directly on Python ASTs. Because Calysto Scheme
-can call Python libraries, this becomes a simple task, as the \texttt{ast}
-Python library has the ability to take strings of Python code and turn them
-into ASTs \cite{PythonInScheme}.
+Conversely, one could also teach programming language principles by
+implementing Python in Scheme. However, this would be much more challenging to
+attempt in a single semester course, due to the complexity of Python's
+syntax. However, if it were possible to outsource the parsing of Python syntax
+into Abstract Syntax Tree (AST) structures, then one could commence with
+building a Python interpreter written in Scheme that operates directly on
+Python ASTs. Because Calysto Scheme can call Python libraries, this becomes a
+simple task, as the \texttt{ast} Python library has the ability to take strings
+of Python code and turn them into ASTs \cite{PythonInScheme}.
 
 Mirroring the above Python functions for interpreting Scheme code, one can
 easily construct similar functions written in Scheme for interpreting Python
@@ -1122,7 +1148,7 @@ treated as a function application AST by the Scheme-in-Python interpreter,
 whereas the Python expression \texttt{"1~+~2"} is treated as a binary operator
 AST by the Python-in-Scheme interpreter.  One could easily change the Scheme
 abstract syntax structures to more closely mimic the Python AST structures if
-desired, in order to make the two interpreters more parallel.
+desired, in order to make the two interpreters more symmetric.
 
 \section{Summary}
 
@@ -1137,13 +1163,13 @@ Scheme. Although our focus has been mainly on pedagogy, we are gratified that
 others have found Calysto Scheme to be useful in more general contexts as well.
 
 \begin{acks}
-We would like to express our gratitude to Dan Friedman and the Indiana
-University programming languages community, for instilling in us a
-deep and abiding appreciation for the programming language concepts
-and techniques that inspired the creation of Calysto Scheme.  We would
-also like to thank Steven Silvester for his constant and continued
-management of the Calysto repository. Thanks also to Jason Hemann for
-many helpful comments on an earlier draft of this paper.
+We would like to express our gratitude to Professor Dan Friedman and the
+Indiana University programming languages community, for instilling in us a deep
+and abiding appreciation for the programming language concepts and techniques
+that inspired the creation of Calysto Scheme.  We would also like to thank
+Steven Silvester for his constant and continued management of the Calysto
+repository. Thanks also to Jason Hemann for many helpful comments on an earlier
+draft of this paper.
 \end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
