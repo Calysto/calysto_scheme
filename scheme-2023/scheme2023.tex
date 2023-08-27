@@ -472,15 +472,19 @@ def sum(n):
 
 %---------------------------------------------------------------------------------
 
-In a similar fashion, we transform our Calysto Scheme interpreter from
-a high-level recursive CPS program written in Scheme into an
-equivalent low-level register machine written in Python, which does
-not grow Python's call stack.\footnote[2]{Although there is no stack
-in the low-level register machine, a stack-like traceback can
-optionally be created for debugging purposes. See below for an
-example.} After the build process completes, the output is a single
-Python file with no dependencies, which can be easily installed and
+In a similar fashion, we transform our Calysto Scheme interpreter from a
+high-level recursive CPS program written in Scheme into an equivalent low-level
+register machine written in Python, which does not grow Python's call
+stack.\footnote[2]{Although the register machine does not use Python's stack,
+  Calysto Scheme can nevertheless generate stack-like tracebacks from
+  continuations for debugging purposes if desired. See Figure~\ref{fig:fact2}
+  below for an example.}  After the build process completes, the output is a
+single Python file with no dependencies, which can be easily installed and
 used.
+
+%Although there is no stack in the low-level register machine, a stack-like
+%traceback can optionally be created for debugging purposes. See below for an
+%example.
 
 There is an interesting aspect to creating a language in this manner: the
 implementation can be tested at each stage of the transformation process to
