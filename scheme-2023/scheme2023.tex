@@ -54,7 +54,7 @@
 %% sponsored by ACM SIGGRAPH, you must use the "author year" style of
 %% citations and references.
 %% Uncommenting the next command will enable that style.
-\citestyle{acmauthoryear}
+%%\citestyle{acmauthoryear}
 
 
 \begin{document}
@@ -552,21 +552,22 @@ of the second clause above, with the variable \texttt{?first-exp} bound to
 \texttt{a} and the variable \texttt{?other-exps} bound to the list
 \texttt{(b~c~d)}. The corresponding template subexpression
 \texttt{(or~.~?other-exps)} would then get instantiated as \texttt{(or~b~c~d)},
-and recursively expanded further. This type of pattern matching facility
-is similar to Chez Scheme's \texttt{syntax-rules} form, except that instead of
-using ellipses to match sequences of zero or more expressions, Calysto Scheme's
+and recursively expanded further. This type of pattern matching facility is
+similar to Chez Scheme's \texttt{syntax-rules} form, except that instead of
+using ellipses to match sequences of expressions, Calysto Scheme's
 \texttt{define-syntax} uses improper lists.
 
 Compared to \texttt{syntax-rules}, however, this approach has some limitations
 and cannot capture certain transforms that can be expressed using ellipses.
 For example, to transform the expression \texttt{(let ((i e) ...) b)} into
-\texttt{((lambda (i ...) b) e ...)}, the ellipses are used to separate the
-let-bindings into their constituent identifiers and value expressions, but this
-cannot be done using Calysto Scheme's unification pattern matching mechanism.
+\texttt{((lambda (i ...) b) e ...)} with \texttt{syntax-rules}, ellipses are
+used to separate the let-bindings into their constituent identifiers and value
+expressions, but this cannot be done using Calysto Scheme's unification pattern
+matching mechanism.
 
 %Despite these limitations,
 Although Calysto's \texttt{define-syntax} form is not as powerful or general as
-\texttt{syntax-case} or \texttt{syntax-rules}, it does provide the ability to
+\texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability to
 easily define a fairly wide range of syntactic transforms via pattern matching,
 as shown in the previous examples.  Including a fully-general syntactic
 extension system, like that provided in Chez Scheme, was not a central goal of
@@ -609,6 +610,8 @@ As an extended example illustrating both \texttt{choose} and
 color a map of (a portion of) Western Europe using four distinct colors.  We
 first define a function to nondeterministically return one of four possible
 colors:\\\\
+
+\vspace{-0.3in}
 
 {\small
 \begin{verbatim}
@@ -858,6 +861,7 @@ experiment.
 \begin{figure}[h]
 \begin{minipage}{0.8\textwidth}
 {\scriptsize
+%{\footnotesize
 \begin{verbatim}
 (import-as "tensorflow" "tf")
 (import-as "numpy" "np")
@@ -974,20 +978,29 @@ Scheme easy to use, and brings it into a modern language environment.
 
 %---------------------------------------------------------------------------------
 
-Many Jupyter language kernels (including IPython's) also support a set
-of meta-commands called ``magics''. These meta-commands allow the user
-to easily perform a variety of functions such as running operating
-system commands, creating files, timing execution, and many more.
+Stack-like tracebacks are also available to help with debugging. For example,
+in Figure~\ref{fig:fact2} the definition of the factorial function contains a
+typo, with \texttt{q} instead of 1 for the base case, which generates an
+unbound variable error. The traceback shows the sequence of recursive calls
+that were made before the error occurred. In many Scheme implementations, since
+control is not managed with a stack, it is not possible to generate such a
+stack trace. However, in Calysto Scheme stack tracing can be enabled or
+disabled via the parameter \texttt{use-stack-trace}. For example, calling
+\texttt{(use-stack-trace~\#f)} turns off stack tracing.
 
-We wanted the Calysto Scheme Jupyter kernel also to have easy-to-use
-meta-commands. However, rather than building those directly into the Calysto
-Scheme kernel, we decided to put them in a separate abstraction layer. Thus, we
-collaborated with others to create a project called ``Metakernel''
-\cite{Metakernel}. Metakernel supports many meta-commands, including many
-designed for educational use, and does so in a language-independent
-manner. Metakernel's GitHub page currently lists over 700 different projects
-that have incorporated it in one way or another. In fact, Metakernel may be the
-most widely used contribution of the Calysto Scheme Project to date.
+Many Jupyter language kernels (including IPython's) support a set of
+meta-commands called ``magics''. These meta-commands allow the user to easily
+perform a variety of functions such as running operating system commands,
+creating files, timing execution, and many more. We wanted the Calysto Scheme
+Jupyter kernel also to have easy-to-use meta-commands. However, rather than
+building those directly into the Calysto Scheme kernel, we decided to put them
+in a separate abstraction layer. Thus, we collaborated with others to create a
+project called ``Metakernel'' \cite{Metakernel}. Metakernel supports many
+meta-commands, including many designed for educational use, and does so in a
+language-independent manner. Metakernel's GitHub page currently lists over 700
+different projects that have incorporated it in one way or another. In fact,
+Metakernel may be the most widely used contribution of the Calysto Scheme
+Project to date.
 
 The full list of Metakernel's magics can be found in
 \cite{MetakernelMagics}. All of these extend Calysto Scheme to make it more
@@ -1013,8 +1026,9 @@ parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.5\textwidth]{parallel-scheme.png}
-  \caption{Parallel processing code for generating the Mandelbrot set in Calysto Scheme.}
+  \includegraphics[width=0.65\textwidth]{parallel-scheme.png}
+  \caption{Parallel processing code for generating the Mandelbrot set in
+    Calysto Scheme, from \cite{ParallelProcessingWithMetakernel}.}
 %  \caption{Code to generate the Mandelbrot set in Calysto Scheme using Metakernel's \texttt{\%parallel} magic.}
   \label{fig:parallelized-scheme}
   \Description{Parallelized Calysto Scheme.}
@@ -1052,7 +1066,7 @@ apparently also use Calysto Scheme for working through SICP exercises.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.5\textwidth]{try-jupyter.png}
+  \includegraphics[width=0.4\textwidth]{try-jupyter.png}
   \caption{Calysto Scheme is available online via the Jupyter Project's ``Try Jupyter'' page.}
   \label{fig:try-jupyter}
   \Description{Calysto Scheme, online.}
@@ -1060,17 +1074,7 @@ apparently also use Calysto Scheme for working through SICP exercises.
 
 %---------------------------------------------------------------------------------
 
-\section{Stack-like Tracebacks for Debugging}
-
-In Calysto Scheme, tracebacks are available to help with debugging. For
-example, in Figure~\ref{fig:fact2} the definition of the factorial function
-contains a typo, with \texttt{q} instead of 1 for the base case, which
-generates an unbound variable error. The traceback shows the sequence of
-recursive calls that were made before the error occurred. In many Scheme
-implementations, since control is not managed with a stack, it is not possible
-to generate such a stack trace. However, in Calysto Scheme stack tracing can be
-enabled or disabled via the parameter \texttt{use-stack-trace}. For example,
-calling \texttt{(use-stack-trace~\#f)} turns off stack tracing.
+%\section{Stack-like Tracebacks for Debugging}
 
 \section{Scheme in Python, Python in Scheme}
 
