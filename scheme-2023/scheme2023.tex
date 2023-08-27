@@ -28,7 +28,7 @@
 %% Use this when submitting an article to a sponsored event. You'll
 %% receive a unique submission ID from the organizers
 %% of the event, and this ID should be used as the parameter to this command.
-\acmSubmissionID{XXX-XXX-XXX}
+\acmSubmissionID{68}
 
 %%
 %% For managing citations, it is recommended to use bibliography
@@ -47,12 +47,14 @@
 %% The majority of ACM publications use numbered citations and
 %% references.  The command \citestyle{authoryear} switches to the
 %% "author year" style.
-%%
+
+%% \citestyle{authoryear}
+
 %% If you are preparing content for an event
 %% sponsored by ACM SIGGRAPH, you must use the "author year" style of
 %% citations and references.
 %% Uncommenting the next command will enable that style.
-%%\citestyle{acmauthoryear}
+\citestyle{acmauthoryear}
 
 
 \begin{document}
@@ -156,6 +158,22 @@ basic premise of this earlier project was to create a common architecture, user
 interface, and set of libraries for a variety of programming languages (see
 Figure~\ref{fig:calico}).
 
+%---------------------------------------------------------------------------------
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.40\textwidth]{calico-interface-python.jpg}
+  \hspace{0.15in}
+  \includegraphics[width=0.523\textwidth]{calico-interface-jigsaw.jpg}
+  \caption{The Calico interface, running Python (left),
+    and Jigsaw, a visual block-based language (right).}
+  \label{fig:calico}
+  \Description{User interface windows showing code written in Python and code
+    written in a visual block-based language.}
+\end{figure}
+
+%---------------------------------------------------------------------------------
+
 Many engaging ``pedagogical contexts'' for learning about
 computer science have been developed, including media computation
 \cite{Guzdial03}, gaming, AI and robotics \cite{Myro}, visualization, music,
@@ -223,6 +241,17 @@ titled ``Hello'', and draws a line between points (0,~0) and (100,~100). The
 calls to library functions in each language differ merely in their syntax, but
 there are many deeper differences between the languages in terms of semantics.
 
+%---------------------------------------------------------------------------------
+
+\begin{figure}[h]
+  \includegraphics[width=0.8\textwidth]{graphics-scripts.jpg}
+  \caption{Calling the same graphics library functions from four different languages in Calico.}
+  \label{fig:scripts}
+  \Description{}
+\end{figure}
+
+%---------------------------------------------------------------------------------
+
 Although we initially targeted C\# as the implementation language, we
 eventually decided to replace C\# with Python (see below). The core Calysto
 Scheme architecture remained the same, only the final transformation step
@@ -230,29 +259,6 @@ needed to be changed to target Python rather than C\#. The transformation to
 Python also included changing calls to C\#'s DLR to calls to standard Python
 functions. The following section outlines the overall Calysto Scheme design
 pipeline.
-
-%---------------------------------------------------------------------------------
-
-\begin{figure}
-  \centering
-  \includegraphics[width=0.40\textwidth]{calico-interface-python.jpg}
-  \hspace{0.15in}
-  \includegraphics[width=0.523\textwidth]{calico-interface-jigsaw.jpg}
-  \caption{The Calico interface, running Python (left),
-    and Jigsaw, a visual block-based language (right).}
-  \label{fig:calico}
-  \Description{User interface windows showing code written in Python and code
-    written in a visual block-based language.}
-\end{figure}
-
-%---------------------------------------------------------------------------------
-
-\begin{figure}
-  \includegraphics[width=0.8\textwidth]{graphics-scripts.jpg}
-  \caption{Calling the same graphics library functions from four different languages in Calico.}
-  \label{fig:scripts}
-  \Description{}
-\end{figure}
 
 %---------------------------------------------------------------------------------
 
@@ -314,36 +320,9 @@ calls.  This code can then be converted into Python in a straightforward way
 no longer constrained by the depth of the recursion stack, it can be called
 with arbitrarily large values of $n$.
 
-In a similar fashion, we transform our Calysto Scheme interpreter from a
-high-level recursive CPS program written in Scheme into an equivalent low-level
-register machine written in Python, which does not grow Python's call stack.
-After the build process completes, the output is a single Python file with no
-dependencies, which can be easily installed and used.
-
-There is an interesting aspect to creating a language in this manner: the
-implementation can be tested at each stage of the transformation process to
-ensure correctness. That is, the same suite of Scheme test programs can be run
-independently with the CPS, Data Structures, Register Machine, and Python
-implementations. In essence, the initial CPS definition serves as both a
-high-level language specification and an executable implementation of the
-language, from which the other three implementations are subsequently
-derived. This allows us to test each stage separately to catch bugs in the CPS
-specification and the transformation process itself.
-
-The current version of Calysto Scheme requires an existing Scheme
-implementation to carry out the transformations from CPS to Data Structures,
-and from Data Structures to Register Machine.  The final transformation step
-from Scheme to Python is carried out by a Python program.  We used Petite Chez
-Scheme in early development, and switched to Chez Scheme when it was made open
-source. In principle, it would be possible to make Calysto Scheme be
-self-hosting (\emph{i.e.}, Calysto Scheme could carry out the transformations
-itself). However, our transformation program currently relies on Chez Scheme's
-\texttt{syntax-rules} macro definition facility, which differs somewhat from
-the version of \texttt{define-syntax} implemented in Calysto Scheme.
-
 %---------------------------------------------------------------------------------
 
-\begin{figure}[h]
+\begin{figure}[h!]
 \begin{minipage}{0.4\textwidth}
 {\scriptsize
 \begin{verbatim}
@@ -494,6 +473,34 @@ def sum(n):
 \end{figure}
 
 %---------------------------------------------------------------------------------
+
+In a similar fashion, we transform our Calysto Scheme interpreter from a
+high-level recursive CPS program written in Scheme into an equivalent low-level
+register machine written in Python, which does not grow Python's call stack.
+After the build process completes, the output is a single Python file with no
+dependencies, which can be easily installed and used.
+
+There is an interesting aspect to creating a language in this manner: the
+implementation can be tested at each stage of the transformation process to
+ensure correctness. That is, the same suite of Scheme test programs can be run
+independently with the CPS, Data Structures, Register Machine, and Python
+implementations. In essence, the initial CPS definition serves as both a
+high-level language specification and an executable implementation of the
+language, from which the other three implementations are subsequently
+derived. This allows us to test each stage separately to catch bugs in the CPS
+specification and the transformation process itself.
+
+The current version of Calysto Scheme requires an existing Scheme
+implementation to carry out the transformations from CPS to Data Structures,
+and from Data Structures to Register Machine.  The final transformation step
+from Scheme to Python is carried out by a Python program.  We used Petite Chez
+Scheme in early development, and switched to Chez Scheme when it was made open
+source. In principle, it would be possible to make Calysto Scheme be
+self-hosting (\emph{i.e.}, Calysto Scheme could carry out the transformations
+itself). However, our transformation program currently relies on Chez Scheme's
+\texttt{syntax-rules} macro definition facility, which differs somewhat from
+the version of \texttt{define-syntax} implemented in Calysto Scheme.
+
 
 \section{Syntactic Extension}
 
@@ -780,8 +787,8 @@ $\rightarrow$ 9\\
 \noindent
 As a simple illustration of Calysto Scheme's ability to leverage the power of
 Python libraries, consider the following example, in which the elements of a
-nested Scheme list are summed by converting it to a Numpy array and then
-applying the Numpy \texttt{sum} function, instead of first flattening the list
+nested Scheme list are summed by converting it to a NumPy array and then
+applying the NumPy \texttt{sum} function, instead of first flattening the list
 or recursively summing the sublists:\\
 
 \noindent
@@ -835,12 +842,12 @@ red
 \noindent
 A more complex example that shows the power of combining these features is
 shown in Figure~\ref{fig:tensorflow}. This Scheme code sets up a series of
-machine learning experiments using the Numpy and Tensorflow libraries imported
+machine learning experiments using the NumPy and TensorFlow libraries imported
 from Python, along with a third-party library called \texttt{comet\_ml} that
 provides tools for managing experiments.  The \texttt{choose} operator is used
 to select a particular combination of ``hyperparameters'' for an experiment,
-and a neural network is then defined using Tensorflow functions.  Many
-Tensorflow functions are configured via keyword parameters in Python, which
+and a neural network is then defined using TensorFlow functions.  Many
+TensorFlow functions are configured via keyword parameters in Python, which
 here we provide as Calysto Scheme dictionaries.  After an experiment using a
 particular set of hyperparameters has run to completion, we can simply invoke
 \texttt{(choose)} to pick a new combination of hyperparameters and rerun the
@@ -848,7 +855,7 @@ experiment.
 
 %---------------------------------------------------------------------------------
 
-\begin{figure}
+\begin{figure}[h]
 \begin{minipage}{0.8\textwidth}
 {\scriptsize
 \begin{verbatim}
@@ -905,7 +912,7 @@ experiment.
 \end{verbatim}
 }
 \end{minipage}
-\caption{Calysto Scheme code for running Tensorflow experiments.}
+\caption{Calysto Scheme code for running TensorFlow experiments.}
 \label{fig:tensorflow}
 \end{figure}
 
@@ -947,6 +954,26 @@ keyword by typing \textbf{\textbackslash lambda} and pressing [TAB] (see
 Figure~\ref{fig:fact1}). Building on top of the Jupyter system makes Calysto
 Scheme easy to use, and brings it into a modern language environment.
 
+%---------------------------------------------------------------------------------
+
+\begin{figure}[h]
+\begin{minipage}{0.47\textwidth}
+  \includegraphics[width=\textwidth]{factorial1.jpg}
+  \caption{Calysto Scheme running in a Jupyter Notebook.}
+  \label{fig:fact1}
+  \Description{Calysto Scheme code for the factorial function.}
+\end{minipage}
+\hspace{0.2in}
+\begin{minipage}{0.47\textwidth}
+  \includegraphics[width=\textwidth]{factorial2.jpg}
+  \caption{Example of a traceback in Calysto Scheme.}
+  \label{fig:fact2}
+  \Description{An error message in the Calysto Scheme programming language.}
+\end{minipage}
+\end{figure}
+
+%---------------------------------------------------------------------------------
+
 Many Jupyter language kernels (including IPython's) also support a set
 of meta-commands called ``magics''. These meta-commands allow the user
 to easily perform a variety of functions such as running operating
@@ -982,6 +1009,8 @@ command. Figure~\ref{fig:parallelized-scheme} shows an excerpt of Calysto
 Scheme code for computing the Mandelbrot set in parallel. A full example of
 parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
 
+%---------------------------------------------------------------------------------
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.5\textwidth]{parallel-scheme.png}
@@ -990,6 +1019,8 @@ parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
   \label{fig:parallelized-scheme}
   \Description{Parallelized Calysto Scheme.}
 \end{figure}
+
+%---------------------------------------------------------------------------------
 
 It should be noted that many computer science educators find the use of Jupyter
 Notebooks to be problematic. The main objection is that it is easy for a
@@ -1017,6 +1048,8 @@ Calysto Scheme through the Jupyter Project's ``Try Jupyter'' page
 Julia, GNU Octave, R, and Ruby. See Figure~\ref{fig:try-jupyter}. Many people
 apparently also use Calysto Scheme for working through SICP exercises.
 
+%---------------------------------------------------------------------------------
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.5\textwidth]{try-jupyter.png}
@@ -1025,21 +1058,7 @@ apparently also use Calysto Scheme for working through SICP exercises.
   \Description{Calysto Scheme, online.}
 \end{figure}
 
-\begin{figure}
-\begin{minipage}{0.47\textwidth}
-  \includegraphics[width=\textwidth]{factorial1.jpg}
-  \caption{Calysto Scheme running in a Jupyter Notebook.}
-  \label{fig:fact1}
-  \Description{Calysto Scheme code for the factorial function.}
-\end{minipage}
-\hspace{0.2in}
-\begin{minipage}{0.47\textwidth}
-  \includegraphics[width=\textwidth]{factorial2.jpg}
-  \caption{Example of a traceback in Calysto Scheme.}
-  \label{fig:fact2}
-  \Description{An error message in the Calysto Scheme programming language.}
-\end{minipage}
-\end{figure}
+%---------------------------------------------------------------------------------
 
 \section{Stack-like Tracebacks for Debugging}
 
