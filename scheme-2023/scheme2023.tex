@@ -146,7 +146,7 @@ with some interesting and unique twists.
 
 This paper describes the development of Calysto Scheme, a full-featured
 implementation of the Scheme programming language written in Scheme, which can
-be automatically translated into other languages, such as Python and C\#
+be automatically transpiled into other languages, such as Python and C\#
 \cite{CalystoScheme}.  Although our path through the development of this system
 was circuitous, the completed project ended up being far more interesting (and
 useful) than we could have imagined.
@@ -568,11 +568,11 @@ matching mechanism.
 %Despite these limitations,
 Although Calysto's \texttt{define-syntax} form is not as powerful or general as
 \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability to
-easily define a fairly wide range of syntactic transforms via pattern matching,
-as shown in the previous examples.  Including a fully-general syntactic
-extension system, like that provided in Chez Scheme, was not a central goal of
-the Calysto project, but we nevertheless felt that it was important to provide
-at least basic support for easy-to-use, user-defined macros in Calysto Scheme.
+easily define a wide range of syntactic transforms via pattern matching.
+Including a fully-general syntactic extension system, like that provided in
+Chez Scheme, was not a central goal of the Calysto project, but we nevertheless
+felt that it was important to include at least basic support for easy-to-use,
+user-defined macros in Calysto Scheme.
 
 %This is sufficient to capture many types of simple macro transformations but is not
 %as expressive 
@@ -756,7 +756,7 @@ into Scheme and called from within Scheme programs.
 Whereas in Scheme the function \texttt{eval} can be used to evaluate all types
 of expressions, Python makes a distinction between evaluating expressions and
 executing statements. Thus in Calysto Scheme, the function \texttt{python-eval} is
-used to evaluate strings representing Python expressions, and
+available to evaluate strings representing Python expressions, and
 \texttt{python-exec} is used to execute Python statements.\\
 
 {\small
@@ -1019,8 +1019,8 @@ cluster for running Calysto Scheme:
 After initializing the cluster, individual Scheme expressions or entire code
 cells can be run in parallel using the \texttt{\%px}
 command. Figure~\ref{fig:parallelized-scheme} shows an excerpt of Calysto
-Scheme code for computing the Mandelbrot set in parallel. A full example of
-parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
+Scheme code for computing the Mandelbrot set in parallel. The full example
+can be found in \cite{ParallelProcessingWithMetakernel}.
 
 %---------------------------------------------------------------------------------
 
@@ -1036,25 +1036,26 @@ parallel execution can be found in \cite{ParallelProcessingWithMetakernel}.
 
 %---------------------------------------------------------------------------------
 
-It should be noted that many computer science educators find the use of Jupyter
-Notebooks to be problematic. The main objection is that it is easy for a
-student to create hidden state that may lead to unexpected and non-intuitive
-results. For example, one can edit cells that have already been executed,
-creating dependencies that are difficult to reproduce. On the other hand, we
-have also heard educators lament that ``Jupyter is \emph{too} convenient'' for
-the student.
+It should be noted that some computer science educators find the use of Jupyter
+Notebooks to be problematic \cite{Johnson2020}. The main objection is that it
+is easy for a student to create hidden state that may lead to unexpected and
+non-intuitive results. For example, one can edit and rerun cells that have
+already been executed, introducing new dependencies that may be difficult to
+reproduce. On the other hand, we have also heard educators lament that
+``Jupyter is \emph{too} convenient'' for the student.
 
 In spite of these warnings, Jupyter Notebooks are popular with data scientists
-and others who tell stories with code, visualizations, and text. This can make
-an excellent environment for teaching and learning. One of us (Blank) taught
-all of his classes for four years using nothing but Jupyter. That included
-courses on Data Structures (Java), Cognitive Science (Python), Assembly
-Language, Introduction to Computer Science (Processing), Programming Languages
-(Scheme), and Creative Writing (English). This was accomplished by hosting a
-local JupyterHub instance\footnote[2]{Incidentally, this was the very first
-  publicly-hosted JupyterHub instance.} at Bryn Mawr College, so that students
-did not need to install anything and could perform all of their work via the
-web browser. For more on these ideas, see \cite{Calico2}.
+and others who tell stories with code, visualizations, and text. We believe
+this can make an excellent environment for teaching and learning. One of us
+(Blank) taught all of his classes for four years using nothing but
+Jupyter. That included courses on Data Structures (Java), Cognitive Science
+(Python), Assembly Language, Introduction to Computer Science (Processing),
+Programming Languages (Scheme), and Creative Writing (English). This was
+accomplished by hosting a local JupyterHub instance\footnote[2]{Incidentally,
+  this was the very first publicly-hosted JupyterHub instance.} at Bryn Mawr
+College, so that students did not need to install anything and could perform
+all of their work via the web browser. For more on these ideas, see
+\cite{Calico2}.
 
 Judging from the Calysto Scheme issues reported on GitHub, most people discover
 Calysto Scheme through the Jupyter Project's ``Try Jupyter'' page
