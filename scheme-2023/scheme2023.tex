@@ -2,6 +2,9 @@
 \documentclass[acmsmall,screen,nonacm]{acmart}
 
 \usepackage{fancyhdr}
+\usepackage{fancyvrb}
+
+\VerbatimFootnotes
 
 %% \BibTeX command to typeset BibTeX logo in the docs
 \AtBeginDocument{
@@ -211,7 +214,7 @@ Scheme implementation that could work in this environment. Although
 the development of both IronLisp and IronScheme \cite{IronScheme} had
 been attempted by other groups, they both ultimately failed for
 various reasons, including lack of support for tail-call optimization
-(TCO) in the DLR.\footnote[1]{IronScheme eventually did include at
+(TCO) in the DLR.\footnote{IronScheme eventually did include at
 least some support for first-class continuations. However, it was
 incrementally added beginning in late 2008
 \cite{IronScheme-Continuations} after we had begun building Calysto
@@ -289,8 +292,6 @@ function that adds up the first $n$ positive integers.  We start with a version
 of this function written in CPS, using functional continuations, as shown
 below.  For example, calling the top-level function \texttt{(sum 100)} returns
 5050.
-
-\pagebreak
 
 \begin{minipage}{\textwidth}
 {\small
@@ -485,7 +486,7 @@ def cddr(lst):
 In a similar fashion, we transform our Calysto Scheme interpreter from a
 high-level recursive CPS program written in Scheme into an equivalent low-level
 register machine written in Python, which does not grow Python's call
-stack.\footnote[2]{Although the register machine does not use Python's stack,
+stack.\footnote{Although the register machine does not use Python's stack,
   Calysto Scheme can nevertheless generate stack-like tracebacks from
   continuations for debugging purposes if desired. See Figure~\ref{fig:fact2}
   below for an example.}  After the build process completes, the output is a
@@ -571,12 +572,24 @@ using ellipses to match sequences of expressions, Calysto Scheme's
 \texttt{define-syntax} uses improper lists.
 
 Compared to \texttt{syntax-rules}, however, this approach has some limitations
-and cannot directly describe certain transforms that can be expressed naturally
-using ellipses.  For example, to transform the expression
+and cannot describe certain transforms that can be expressed succinctly and
+naturally using ellipses.  For example, to transform the pattern
 \texttt{(let~((i~e)~...)~b)} into \texttt{((lambda~(i~...)~b)~e~...)} with
-\texttt{syntax-rules}, ellipses are used to separate the let-bindings into
-their constituent identifiers and value expressions, but this cannot be done so
-easily using Calysto Scheme's unification pattern matching notation.
+\texttt{syntax-rules}, ellipses are used to separate the variable bindings into
+their constituent identifiers and value expressions, but this cannot be done as
+easily with Calysto Scheme's unification pattern matching
+notation.\footnote{However, the \texttt{let} macro could be defined using an
+auxiliary ``helper'' definition.  For example:
+\begin{verbatim}
+(define-syntax let
+  [(let ?bindings . ?bodies) (let-helper ?bindings () () . ?bodies)])
+
+(define-syntax let-helper
+  [(let-helper () ?ids ?exps . ?bodies) ((lambda ?ids . ?bodies) . ?exps)]
+  [(let-helper ((?i ?e) . ?other-bindings) ?ids ?exps . ?bodies)
+   (let-helper ?other-bindings (?i . ?ids) (?e . ?exps) . ?bodies)])
+\end{verbatim}
+}
 
 Although Calysto's \texttt{define-syntax} form is not as convenient or powerful
 as \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability
@@ -606,9 +619,7 @@ As an extended example illustrating both \texttt{choose} and
 \texttt{define-syntax}, suppose we wish to write a program to determine how to
 color a map of (a portion of) Western Europe using four distinct colors.  We
 first define a function to nondeterministically return one of four possible
-colors:\\\\
-
-\vspace{-0.3in}
+colors:
 
 {\small
 \begin{verbatim}
@@ -1044,7 +1055,7 @@ this can make an excellent environment for teaching and learning. One of us
 Jupyter. That included courses on Data Structures (Java), Cognitive Science
 (Python), Assembly Language, Introduction to Computer Science (Processing),
 Programming Languages (Scheme), and Creative Writing (English). This was
-accomplished by hosting a local JupyterHub instance\footnote[3]{Incidentally,
+accomplished by hosting a local JupyterHub instance\footnote{Incidentally,
   this was the very first publicly-hosted JupyterHub instance.} at Bryn Mawr
 College, so that students did not need to install anything and could perform
 all of their work via the web browser. For more on these ideas, see
