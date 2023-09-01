@@ -571,17 +571,17 @@ using ellipses to match sequences of expressions, Calysto Scheme's
 \texttt{define-syntax} uses improper lists.
 
 Compared to \texttt{syntax-rules}, however, this approach has some limitations
-and cannot capture certain transforms that can be expressed using ellipses.
-For example, to transform the expression \texttt{(let ((i e) ...) b)} into
-\texttt{((lambda (i ...) b) e ...)} with \texttt{syntax-rules}, ellipses are
-used to separate the let-bindings into their constituent identifiers and value
-expressions, but this cannot be done using Calysto Scheme's unification pattern
-matching mechanism.
+and cannot directly describe certain transforms that can be expressed naturally
+using ellipses.  For example, to transform the expression
+\texttt{(let~((i~e)~...)~b)} into \texttt{((lambda~(i~...)~b)~e~...)} with
+\texttt{syntax-rules}, ellipses are used to separate the let-bindings into
+their constituent identifiers and value expressions, but this cannot be done so
+easily using Calysto Scheme's unification pattern matching notation.
 
-Although Calysto's \texttt{define-syntax} form is not as powerful or general as
-\texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability to
-easily define a wide range of syntactic transforms via pattern matching.
-Including a fully-general syntactic extension system, like that provided in
+Although Calysto's \texttt{define-syntax} form is not as convenient or powerful
+as \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability
+to define a wide range of syntactic transforms via pattern matching.
+Implementing a sophisticated syntactic extension system, like that provided in
 Chez Scheme, was not a central goal of the Calysto project, but we nevertheless
 felt that it was important to include at least basic support for easy-to-use,
 user-defined macros in Calysto Scheme.
@@ -1044,7 +1044,7 @@ this can make an excellent environment for teaching and learning. One of us
 Jupyter. That included courses on Data Structures (Java), Cognitive Science
 (Python), Assembly Language, Introduction to Computer Science (Processing),
 Programming Languages (Scheme), and Creative Writing (English). This was
-accomplished by hosting a local JupyterHub instance\footnote[3]{Incidentally,
+accomplished by hosting a local JupyterHub instance\footnote[4]{Incidentally,
   this was the very first publicly-hosted JupyterHub instance.} at Bryn Mawr
 College, so that students did not need to install anything and could perform
 all of their work via the web browser. For more on these ideas, see
