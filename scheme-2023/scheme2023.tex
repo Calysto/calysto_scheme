@@ -1,6 +1,7 @@
 %\documentclass[acmsmall,screen,authorversion]{acmart}
-%\documentclass[acmsmall,screen]{acmart}
-\documentclass[acmsmall]{acmart}
+\documentclass[acmsmall,screen,nonacm]{acmart}
+
+\usepackage{fancyhdr}
 
 %% \BibTeX command to typeset BibTeX logo in the docs
 \AtBeginDocument{
@@ -17,7 +18,6 @@
 \acmYear{2023}
 %\acmDOI{XXXXXXX.XXXXXXX}
 \acmDOI{}
-%\acmISBN{}
 
 %%
 %% These commands are for a JOURNAL article.
@@ -26,9 +26,6 @@
 %%\acmNumber{4}
 %%\acmArticle{111}
 %%\acmMonth{8}
-
-%% see ctan.math.illinois.edu/macros/latex/contrib/acmart/acmguide.pdf
-%\acmConference{ICFP 2023 Scheme Workshop}{September 9, 2023}{Seattle, WA}
 
 %%
 %% Submission ID.
@@ -63,10 +60,10 @@
 %% Uncommenting the next command will enable that style.
 %%\citestyle{acmauthoryear}
 
-
 \begin{document}
 
-\title[Calysto Scheme]{The Calysto Scheme Project}
+%\title[Calysto Scheme]{The Calysto Scheme Project}
+\title{The Calysto Scheme Project}
 
 \author{Douglas S. Blank}
 %\authornote{Both authors contributed equally to this work.}
@@ -148,6 +145,9 @@ with some interesting and unique twists.
 %% This command processes the author and affiliation and title
 %% information and builds the first part of the formatted document.
 \maketitle
+
+\fancyfoot[L]{\small \emph{ICFP 2023 Scheme and Functional Programming Workshop, Seattle, WA}}
+%\fancyfoot[L]{\footnotesize \emph{International Conference on Functional Programming 2023 Scheme Workshop, Seattle, WA}}
 
 \section{Introduction}
 
@@ -292,6 +292,9 @@ of this function written in CPS, using functional continuations, as shown
 below.  For example, calling the top-level function \texttt{(sum 100)} returns
 5050.
 
+\pagebreak
+
+\begin{minipage}{\textwidth}
 {\small
 \begin{verbatim}
 (define sum-cps
@@ -306,8 +309,10 @@ below.  For example, calling the top-level function \texttt{(sum 100)} returns
 (define sum
   (lambda (n)
     (sum-cps n (lambda (value) value))))
+
 \end{verbatim}
 }
+\end{minipage}
 
 \noindent
 We wrote a program that takes any Scheme program written in CPS, such as the
@@ -418,18 +423,6 @@ def trampoline():
         pc()
     return final_reg
 
-def car(lst):
-    return lst[0]
-
-def cdr(lst):
-    return lst[1:]
-
-def cadr(lst):
-    return car(cdr(lst))
-
-def cddr(lst):
-    return cdr(cdr(lst))
-
 def make_cont(*args):
     return ("continuation",) + args
 
@@ -470,6 +463,18 @@ def sum(n):
     n_reg = n
     pc = sum_cps
     return trampoline()
+
+def car(lst):
+    return lst[0]
+
+def cdr(lst):
+    return lst[1:]
+
+def cadr(lst):
+    return car(cdr(lst))
+
+def cddr(lst):
+    return cdr(cdr(lst))
 \end{verbatim}
 }
 \caption{Python register machine code}
@@ -510,6 +515,7 @@ itself). However, our transformation program currently relies on Chez Scheme's
 \texttt{syntax-rules} macro definition facility, which differs somewhat from
 the version of \texttt{define-syntax} implemented in Calysto Scheme.
 
+\pagebreak
 
 \section{Syntactic Extension}
 
