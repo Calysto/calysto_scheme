@@ -590,15 +590,15 @@ notation.\footnote{The \texttt{let} macro can be defined in Calysto Scheme
   [(let-helper ((?i ?e) . ?other-bindings) ?ids ?exps . ?bodies)
    (let-helper ?other-bindings (?i . ?ids) (?e . ?exps) . ?bodies)])
 \end{verbatim}
-}
+}  Furthermore, macros in Calysto Scheme are not hygenic.
 
-Although Calysto's \texttt{define-syntax} form is not as convenient or powerful
-as \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability
-to define a wide range of syntactic transforms via pattern matching.
-Implementing a sophisticated syntactic extension system, like that provided in
-Chez Scheme, was not a central goal of the Calysto project, but we nevertheless
-felt that it was important to include at least basic support for easy-to-define
-macros in Calysto Scheme.
+Although Calysto's \texttt{define-syntax} form is not as convenient or
+powerful as \texttt{syntax-rules} or \texttt{syntax-case}, it does provide
+the ability to easily define a wide range of syntactic transforms via pattern
+matching.  Implementing a sophisticated syntactic extension system, like that
+provided in Chez Scheme, was not a central goal of the Calysto project, but we
+nevertheless felt that it was important to include at least basic support for
+user-defined macros in Calysto Scheme.
 
 \section{Example: Nondeterministic Backtracking}
 
