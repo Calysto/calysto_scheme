@@ -512,7 +512,8 @@ source. In principle, it would be possible to make Calysto Scheme be
 self-hosting (\emph{i.e.}, Calysto Scheme could carry out the transformations
 itself). However, our transformation program currently relies on Chez Scheme's
 \texttt{syntax-rules} macro definition facility, which differs somewhat from
-the version of \texttt{define-syntax} implemented in Calysto Scheme.
+the version of \texttt{define-syntax} implemented in Calysto Scheme, as
+explained in the next section.
 
 \pagebreak
 
@@ -578,8 +579,8 @@ naturally using ellipses.  For example, to transform the pattern
 \texttt{syntax-rules}, ellipses are used to separate the variable bindings into
 their constituent identifiers and value expressions, but this cannot be done as
 easily with Calysto Scheme's unification pattern matching
-notation.\footnote{However, the \texttt{let} macro could be defined using an
-auxiliary ``helper'' definition.  For example:
+notation.\footnote{The \texttt{let} macro can be defined in Calysto Scheme
+  using an auxiliary ``helper'' definition, as shown below:
 \begin{verbatim}
 (define-syntax let
   [(let ?bindings . ?bodies) (let-helper ?bindings () () . ?bodies)])
@@ -596,8 +597,8 @@ as \texttt{syntax-rules} or \texttt{syntax-case}, it does provide the ability
 to define a wide range of syntactic transforms via pattern matching.
 Implementing a sophisticated syntactic extension system, like that provided in
 Chez Scheme, was not a central goal of the Calysto project, but we nevertheless
-felt that it was important to include at least basic support for easy-to-use,
-user-defined macros in Calysto Scheme.
+felt that it was important to include at least basic support for easy-to-define
+macros in Calysto Scheme.
 
 \section{Example: Nondeterministic Backtracking}
 
