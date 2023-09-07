@@ -29,14 +29,19 @@ import io
 try:
     import yasi
     yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
-    opts = yasi.parse_options([])
+    opts = yasi.parse_args([])
     opts.dialect = "scheme"
 except:
     yasi = None
 
+
+# To trick some systems into believing input is interactive:
+sys.ps1 = "In : "
+sys.ps2 = "...: "
+
 PY3 = sys.version_info[0] == 3
 
-__version__ = "1.4.8"
+__version__ = "1.4.9"
 
 #############################################################
 # Python implementation notes:
@@ -9150,7 +9155,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 1.4.8')
+    print('Calysto Scheme, version 1.4.9')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
