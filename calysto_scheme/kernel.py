@@ -10,14 +10,14 @@ try:
     from IPython.core.latex_symbols import latex_symbols
     from IPython.display import Image
     #from IPython.utils import io
-except:
+except Exception:
     Image = None
     latex_symbols = []
 
 try:
     import yasi
     yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
-    opts = yasi.parse_options([])
+    opts = yasi.parse_args([])
     opts.dialect = "scheme"
 except:
     yasi = None
@@ -61,6 +61,12 @@ class CalystoScheme(MetaKernel):
         scheme.ENVIRONMENT["raw_input"] = self.raw_input
         scheme.ENVIRONMENT["read"] = self.raw_input
         scheme.ENVIRONMENT["input"] = self.raw_input
+
+        try:
+            import getpass
+            getpass.getpass = self.raw_input
+        except Exception:
+            pass
 
     def get_usage(self):
         return """Calysto Scheme

@@ -21,10 +21,15 @@ import io
 try:
     import yasi
     yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
-    opts = yasi.parse_options([])
+    opts = yasi.parse_args([])
     opts.dialect = "scheme"
 except:
     yasi = None
+
+
+# To trick some systems into believing input is interactive:
+sys.ps1 = "In : "
+sys.ps2 = "...: "
 
 PY3 = sys.version_info[0] == 3
 
