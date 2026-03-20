@@ -665,6 +665,10 @@ def _eval_direct(exp, env):
                 exp = exp.cdr.cdr.car       # tail: loop with then-branch
             else:
                 exp = exp.cdr.cdr.cdr.car   # tail: loop with else-branch
+        elif tag is symbol_lambda_aexp:
+            return closure(exp.cdr.car, exp.cdr.cdr.car, env)
+        elif tag is symbol_begin_aexp:
+            return _eval_sequence_direct(exp.cdr, env)
         elif tag is symbol_app_aexp:
             op   = _eval_direct(exp.cdr.car, env)
             args = []
