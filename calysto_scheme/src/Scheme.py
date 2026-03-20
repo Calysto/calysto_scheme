@@ -511,31 +511,120 @@ def vector_length(vec):
 ### Native make- functions:
 
 def make_proc(*args):
-    return List(symbol_procedure, *args)
+    return (symbol_procedure,) + args
 
 def make_macro(*args):
-    return List(symbol_macro_transformer, *args)
+    return (symbol_macro_transformer,) + args
 
 def make_cont(*args):
-    return List(symbol_continuation, *args)
+    return (symbol_continuation,) + args
 
 def make_cont2(*args):
-    return List(symbol_continuation2, *args)
+    return (symbol_continuation2,) + args
 
 def make_cont3(*args):
-    return List(symbol_continuation3, *args)
+    return (symbol_continuation3,) + args
 
 def make_cont4(*args):
-    return List(symbol_continuation4, *args)
+    return (symbol_continuation4,) + args
 
 def make_fail(*args):
-    return List(symbol_fail_continuation, *args)
+    return (symbol_fail_continuation,) + args
 
 def make_handler(*args):
-    return List(symbol_handler, *args)
+    return (symbol_handler,) + args
 
 def make_handler2(*args):
-    return List(symbol_handler2, *args)
+    return (symbol_handler2,) + args
+
+### Native apply dispatch functions (tuple-based):
+
+def apply_cont():
+    k_reg[1](*k_reg[2:])
+
+def apply_cont2():
+    k_reg[1](*k_reg[2:])
+
+def apply_cont3():
+    k_reg[1](*k_reg[2:])
+
+def apply_cont4():
+    k_reg[1](*k_reg[2:])
+
+def apply_fail():
+    fail_reg[1](*fail_reg[2:])
+
+def apply_handler():
+    handler_reg[1](*handler_reg[2:])
+
+def apply_handler2():
+    handler_reg[1](*handler_reg[2:])
+
+def apply_proc():
+    proc_reg[1](*proc_reg[2:])
+
+def apply_macro():
+    macro_reg[1](*macro_reg[2:])
+
+### Native frame functions (dict-cached for O(1) variable lookup):
+
+def make_frame(variables, values, docstrings):
+    # Single pass: build bindings list and search cache simultaneously
+    bindings = []
+    cache = {}
+    vars_cur, vals_cur, docs_cur = variables, values, docstrings
+    while isinstance(vars_cur, cons):
+        b = cons(vals_cur.car, docs_cur.car)  # make_binding inlined
+        bindings.append(b)
+        cache[vars_cur.car] = b
+        vars_cur = vars_cur.cdr
+        vals_cur = vals_cur.cdr
+        docs_cur = docs_cur.cdr
+    bindings_vector = Vector(bindings)
+    frame = List(bindings_vector, variables)
+    frame._search_cache = cache
+    return frame
+
+def add_binding(new_var, new_binding, frame):
+    vars = (frame).cdr.car
+    old_bindings = (frame).car  # Vector
+    new_bindings = Vector(list(old_bindings) + [new_binding])
+    new_frame = List(new_bindings, append(vars, List(new_var)))
+    cache = getattr(frame, '_search_cache', None)
+    if cache is not None:
+        new_cache = dict(cache)
+        new_cache[new_var] = new_binding
+        new_frame._search_cache = new_cache
+    return new_frame
+
+def continuation_object_q(x):
+    return (isinstance(x, tuple) and len(x) > 0 and
+            x[0] in (symbol_continuation, symbol_continuation2,
+                     symbol_continuation3, symbol_continuation4))
+
+_empty_docstrings_cache = {}
+def make_empty_docstrings(n):
+    if n not in _empty_docstrings_cache:
+        result = symbol_emptylist
+        for _ in range(n):
+            result = cons("", result)
+        _empty_docstrings_cache[n] = result
+    return _empty_docstrings_cache[n]
+
+def process_args(args, params, info, handler, fail):
+    return args
+
+def process_formals(params, info, handler, fail):
+    # Fast path: if all params are plain Symbols, return unchanged (avoids Map allocation)
+    cur = params
+    while isinstance(cur, cons):
+        if not isinstance(cur.car, Symbol):
+            return Map(get_symbol, params)
+        cur = cur.cdr
+    return params
+
+def process_formals_and_args(params, args, info, handler, fail):
+    return cons(process_formals(params, info, handler, fail), args)
 
 ### Native other functions:
 
@@ -631,7 +720,7 @@ def list_q(item):
     return current is symbol_emptylist
 
 def procedure_q(item):
-    return pair_q(item) and (item.car is symbol_procedure)
+    return isinstance(item, tuple) and len(item) > 0 and item[0] is symbol_procedure
 
 def symbol_q(item):
     return ((isinstance(item, Symbol) or association_q(item))
@@ -1026,6 +1115,9 @@ def make_safe(item):
 
 def search_frame(frame, variable):
     if isinstance(frame, cons):
+        cache = getattr(frame, '_search_cache', None)
+        if cache is not None:
+            return cache.get(variable, False)
         bindings = frame.car
         variables = frame.cdr.car
         i = 0

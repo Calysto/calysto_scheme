@@ -51,8 +51,7 @@ class Translator(object):
         self.initialize()
 
     def true_q(self, item):
-        return "(False if ((%s) is False) else True)" % (item,),
-        #return "(true_q(%s))" % (item,),
+        return "(%s is not False)" % (item,),
 
     def initialize(self):
         pass
@@ -82,6 +81,14 @@ class Translator(object):
             "init-handler", "init-handler2", "init-fail",
             "make-cont", "make-cont2", "make-cont3", "make-cont4", "make-macro", "make-proc",
             "make-fail", "make-handler", "make-handler2",
+            ## apply dispatch (native tuple-based in Scheme.py):
+            "apply-cont", "apply-cont2", "apply-cont3", "apply-cont4",
+            "apply-proc", "apply-macro", "apply-fail", "apply-handler", "apply-handler2",
+            ## frame functions (native dict-cached in Scheme.py):
+            "make-frame", "add-binding", "continuation-object?",
+            "make-empty-docstrings",
+            ## formals processing (native fast-path in Scheme.py):
+            "process-formals-and-args", "process-formals", "process-args",
             "sort-native", "sort-elements", "insert-elements",
         ] + self.overrides()
 
@@ -377,6 +384,18 @@ class PythonTranslator(Translator):
                     exception_message = "\"%s: \" + format(%s, *[%s])" % (
                         expr[1], expr[2], ", ".join([self.process_app(e) for e in expr[3:]]))
                     return "raise Exception(%s)" % exception_message
+                elif expr[0] == "list-ref" and len(expr) == 3:
+                    # Inline constant-position list-ref as direct .cdr.cdr...car access
+                    pos_expr = expr[2]
+                    if isinstance(pos_expr, str) and pos_expr.isdigit():
+                        n = int(pos_expr)
+                        result = "(%s)" % self.process_app(expr[1])
+                        for _ in range(n):
+                            result = "(%s).cdr" % result
+                        return "%s.car" % result
+                    else:
+                        return "list_ref(%s, %s)" % (self.process_app(expr[1]),
+                                                      self.process_app(pos_expr))
                 else:
                     ## function call:
                     if expr[0] in self.convert_to_expression:
