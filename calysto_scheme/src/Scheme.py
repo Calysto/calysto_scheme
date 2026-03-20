@@ -689,23 +689,130 @@ _fast_prim_map = None
 def _build_fast_prim_map():
     """Populate the fast prim map by resolving known symbol names in toplevel_env."""
     result = {}
+
+    def _direct_map(args):
+        f, lst = args[0], args[1]
+        items = []
+        while isinstance(lst, cons):
+            items.append(_apply_direct(f, [lst.car]))
+            lst = lst.cdr
+        out = symbol_emptylist
+        for v in reversed(items):
+            out = cons(v, out)
+        return out
+
+    def _direct_for_each(args):
+        f, lst = args[0], args[1]
+        while isinstance(lst, cons):
+            _apply_direct(f, [lst.car])
+            lst = lst.cdr
+        return void_value
+
+    def _set_car(args):
+        args[0].car = args[1]
+        return void_value
+
+    def _set_cdr(args):
+        args[0].cdr = args[1]
+        return void_value
+
     name_to_direct = {
+        # Arithmetic
         '+':     lambda args: plus(*args),
         '-':     lambda args: minus(*args),
         '*':     lambda args: multiply(*args),
         '/':     lambda args: divide(*args),
+        # Numeric comparisons
         '<':     lambda args: LessThan(*args),
         '>':     lambda args: GreaterThan(*args),
         '<=':    lambda args: LessThanEqual(*args),
         '>=':    lambda args: GreaterThanEqual(*args),
         '=':     lambda args: numeric_equal(*args),
+        # Logic
         'not':   lambda args: (args[0] is False),
-        'zero?': lambda args: (args[0] == 0),
-        'null?': lambda args: (args[0] is symbol_emptylist),
-        'pair?': lambda args: pair_q(args[0]),
-        'car':   lambda args: args[0].car,
-        'cdr':   lambda args: args[0].cdr,
-        'cons':  lambda args: cons(args[0], args[1]),
+        # Numeric predicates / math
+        'zero?':     lambda args: (args[0] == 0),
+        'even?':     lambda args: even_q(args[0]),
+        'odd?':      lambda args: odd_q(args[0]),
+        'abs':       lambda args: abs(args[0]),
+        'min':       lambda args: min(*args),
+        'max':       lambda args: max(*args),
+        'modulo':    lambda args: modulo(args[0], args[1]),
+        'remainder': lambda args: remainder(args[0], args[1]),
+        'quotient':  lambda args: quotient(args[0], args[1]),
+        'expt':      lambda args: expt_native(args[0], args[1]),
+        'sqrt':      lambda args: sqrt(args[0]),
+        'round':     lambda args: round(args[0]),
+        # Type predicates
+        'null?':      lambda args: (args[0] is symbol_emptylist),
+        'pair?':      lambda args: pair_q(args[0]),
+        'number?':    lambda args: number_q(args[0]),
+        'string?':    lambda args: string_q(args[0]),
+        'symbol?':    lambda args: symbol_q(args[0]),
+        'char?':      lambda args: char_q(args[0]),
+        'boolean?':   lambda args: boolean_q(args[0]),
+        'vector?':    lambda args: vector_q(args[0]),
+        'list?':      lambda args: list_q(args[0]),
+        'procedure?': lambda args: procedure_q(args[0]),
+        # Equality
+        'eq?':    lambda args: eq_q(args[0], args[1]),
+        'eqv?':   lambda args: eqv_q(args[0], args[1]),
+        'equal?': lambda args: equal_q(args[0], args[1]),
+        # Pair / list construction and access
+        'car':    lambda args: args[0].car,
+        'cdr':    lambda args: args[0].cdr,
+        'cons':   lambda args: cons(args[0], args[1]),
+        'set-car!': _set_car,
+        'set-cdr!': _set_cdr,
+        'caar':   lambda args: args[0].car.car,
+        'cadr':   lambda args: args[0].cdr.car,
+        'cdar':   lambda args: args[0].car.cdr,
+        'cddr':   lambda args: args[0].cdr.cdr,
+        'cadar':  lambda args: args[0].car.cdr.car,
+        'caddr':  lambda args: args[0].cdr.cdr.car,
+        'cdddr':  lambda args: args[0].cdr.cdr.cdr,
+        'cadddr': lambda args: args[0].cdr.cdr.cdr.car,
+        # List operations
+        'list':      lambda args: List(*args),
+        'length':    lambda args: length(args[0]),
+        'reverse':   lambda args: reverse(args[0]),
+        'append':    lambda args: append(*args),
+        'list-ref':  lambda args: list_ref(args[0], args[1]),
+        # Search
+        'memq':   lambda args: memq(args[0], args[1]),
+        'memv':   lambda args: memv(args[0], args[1]),
+        'member': lambda args: member(args[0], args[1]),
+        'assq':   lambda args: assq(args[0], args[1]),
+        'assv':   lambda args: assv(args[0], args[1]),
+        # Vector operations
+        'make-vector':   lambda args: make_vector(args[0]),
+        'vector-ref':    lambda args: vector_ref(args[0], args[1]),
+        'vector-set!':   lambda args: (vector_set_b(args[0], args[1], args[2]), void_value)[1],
+        'vector-length': lambda args: vector_length(args[0]),
+        'vector->list':  lambda args: vector_to_list(args[0]),
+        'list->vector':  lambda args: list_to_vector(args[0]),
+        # String operations
+        'string-length':  lambda args: string_length(args[0]),
+        'string-ref':     lambda args: string_ref(args[0], args[1]),
+        'string-append':  lambda args: string_append(*args),
+        'substring':      lambda args: substring(args[0], args[1], args[2]),
+        'string->list':   lambda args: string_to_list(args[0]),
+        'list->string':   lambda args: list_to_string(args[0]),
+        'string->number': lambda args: string_to_number(args[0]),
+        'number->string': lambda args: number_to_string(args[0]),
+        'string=?':       lambda args: string_is__q(args[0], args[1]),
+        'string<?':       lambda args: stringLessThan_q(args[0], args[1]),
+        # Symbol / char operations
+        'symbol->string':  lambda args: symbol_to_string(args[0]),
+        'string->symbol':  lambda args: string_to_symbol(args[0]),
+        'char->integer':   lambda args: char_to_integer(args[0]),
+        'integer->char':   lambda args: integer_to_char(args[0]),
+        'char-alphabetic?': lambda args: char_alphabetic_q(args[0]),
+        'char-numeric?':    lambda args: char_numeric_q(args[0]),
+        'char-whitespace?': lambda args: char_whitespace_q(args[0]),
+        # Higher-order (propagate _TrampolineFallback if proc not directly evaluable)
+        'map':      _direct_map,
+        'for-each': _direct_for_each,
     }
     for sym_name, direct_fn in name_to_direct.items():
         b = search_env(toplevel_env, make_symbol(sym_name))
