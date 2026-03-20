@@ -41,6 +41,9 @@ sys.ps2 = "...: "
 
 PY3 = sys.version_info[0] == 3
 
+# Increase recursion limit for direct-eval fast path (deep Scheme recursion)
+sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
+
 __version__ = "1.4.9"
 
 #############################################################
@@ -569,10 +572,202 @@ def apply_handler2():
     handler_reg[1](*handler_reg[2:])
 
 def apply_proc():
+    if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
+            and proc_reg[1] is b_proc_1_d and proc_reg[5]):
+        bodies, formals, cenv = proc_reg[2], proc_reg[3], proc_reg[4]
+        _args = args_reg
+        _k2   = k2_reg
+        _fail = fail_reg
+        try:
+            n = length(formals)
+            if n != length(_args):
+                raise _TrampolineFallback()
+            new_env = extend(cenv, formals, _args, make_empty_docstrings(n))
+            result = _eval_sequence_direct(bodies, new_env)
+            GLOBALS['value2_reg'] = _fail
+            GLOBALS['value1_reg'] = result
+            GLOBALS['k_reg'] = _k2
+            GLOBALS['pc'] = apply_cont2
+            return
+        except _TrampolineFallback:
+            GLOBALS['args_reg'] = _args   # restore for b_proc_1_d trampoline fallback
+            GLOBALS['k2_reg']   = _k2
+            GLOBALS['fail_reg'] = _fail
     proc_reg[1](*proc_reg[2:])
 
 def apply_macro():
     macro_reg[1](*macro_reg[2:])
+
+### Direct eval fast path for user closures:
+
+class _TrampolineFallback(Exception):
+    pass
+
+def _is_direct_eval_safe(bodies):
+    """True iff bodies contain no assign_aexp (set!) at any depth.
+    Stops recursion at inner lambda boundaries (they get their own analysis)."""
+    def _safe(exp):
+        if not isinstance(exp, cons):
+            return True
+        tag = exp.car
+        if tag is symbol_assign_aexp:
+            return False
+        # Inner lambdas are separate closures — don't recurse into them
+        if tag is symbol_lambda_aexp or tag is symbol_mu_lambda_aexp:
+            return True
+        cur = exp.cdr
+        while isinstance(cur, cons):
+            if not _safe(cur.car):
+                return False
+            cur = cur.cdr
+        return True
+    cur = bodies
+    while isinstance(cur, cons):
+        if not _safe(cur.car):
+            return False
+        cur = cur.cdr
+    return True
+
+def _extend_direct(env, formals, args_list):
+    """Extend environment from a Python list of arg values — no cons list construction."""
+    bindings = []
+    cache = {}
+    vars_cur = formals
+    for val in args_list:
+        b = cons(val, "")
+        bindings.append(b)
+        cache[vars_cur.car] = b
+        vars_cur = vars_cur.cdr
+    frame = cons(Vector(bindings), cons(formals, symbol_emptylist))
+    frame._search_cache = cache
+    return cons(symbol_environment, cons(frame, env.cdr))
+
+def _eval_direct(exp, env):
+    """Direct recursive AST interpreter. Raises _TrampolineFallback for unhandled cases."""
+    global _fast_prim_map
+    while True:
+        tag = exp.car
+        if tag is symbol_lit_aexp:
+            return exp.cdr.car
+        elif tag is symbol_lexical_address_aexp:
+            d   = exp.cdr.car
+            off = exp.cdr.cdr.car
+            return binding_value(
+                vector_ref(frame_bindings(list_ref(frames(env), d)), off))
+        elif tag is symbol_var_aexp:
+            b = search_env(env, exp.cdr.car)
+            if b is False:
+                raise _TrampolineFallback()
+            return binding_value(b)
+        elif tag is symbol_if_aexp:
+            test = _eval_direct(exp.cdr.car, env)
+            if test is not False:
+                exp = exp.cdr.cdr.car       # tail: loop with then-branch
+            else:
+                exp = exp.cdr.cdr.cdr.car   # tail: loop with else-branch
+        elif tag is symbol_app_aexp:
+            op   = _eval_direct(exp.cdr.car, env)
+            args = []
+            cur  = exp.cdr.cdr.car
+            while isinstance(cur, cons):
+                args.append(_eval_direct(cur.car, env))
+                cur = cur.cdr
+            # Inline _apply_direct for speed:
+            if isinstance(op, tuple) and op[0] is symbol_procedure:
+                fn = op[1]
+                if _fast_prim_map is None:
+                    _fast_prim_map = _build_fast_prim_map()
+                direct = _fast_prim_map.get(fn)
+                if direct is not None:
+                    return direct(args)
+                if len(op) == 6 and fn is b_proc_1_d and op[5]:
+                    new_env = _extend_direct(op[4], op[3], args)
+                    return _eval_sequence_direct(op[2], new_env)
+                raise _TrampolineFallback()
+            elif dlr_proc_q(op):
+                return dlr_apply(op, List(*args))
+            raise _TrampolineFallback()
+        else:
+            raise _TrampolineFallback()
+
+## Fast prim map: proc[1] function -> Python callable.
+## Built lazily on first use from the live toplevel environment.
+_fast_prim_map = None
+
+def _build_fast_prim_map():
+    """Populate the fast prim map by resolving known symbol names in toplevel_env."""
+    result = {}
+    name_to_direct = {
+        '+':     lambda args: plus(*args),
+        '-':     lambda args: minus(*args),
+        '*':     lambda args: multiply(*args),
+        '/':     lambda args: divide(*args),
+        '<':     lambda args: LessThan(*args),
+        '>':     lambda args: GreaterThan(*args),
+        '<=':    lambda args: LessThanEqual(*args),
+        '>=':    lambda args: GreaterThanEqual(*args),
+        '=':     lambda args: numeric_equal(*args),
+        'not':   lambda args: (args[0] is False),
+        'zero?': lambda args: (args[0] == 0),
+        'null?': lambda args: (args[0] is symbol_emptylist),
+        'pair?': lambda args: pair_q(args[0]),
+        'car':   lambda args: args[0].car,
+        'cdr':   lambda args: args[0].cdr,
+        'cons':  lambda args: cons(args[0], args[1]),
+    }
+    for sym_name, direct_fn in name_to_direct.items():
+        b = search_env(toplevel_env, make_symbol(sym_name))
+        if b is not False:
+            proc = binding_value(b)
+            if isinstance(proc, tuple) and proc[0] is symbol_procedure:
+                result[proc[1]] = direct_fn
+    return result
+
+def _apply_direct(proc, args, env):
+    global _fast_prim_map
+    if dlr_proc_q(proc):
+        return dlr_apply(proc, List(*args))
+    if isinstance(proc, tuple) and proc[0] is symbol_procedure:
+        fn = proc[1]
+        if _fast_prim_map is None:
+            _fast_prim_map = _build_fast_prim_map()
+        direct = _fast_prim_map.get(fn)
+        if direct is not None:
+            return direct(args)      # args is a Python list — no cons needed
+        if len(proc) == 6 and fn is b_proc_1_d and proc[5]:
+            bodies, formals, cenv = proc[2], proc[3], proc[4]
+            new_env = extend(cenv, formals, List(*args), make_empty_docstrings(len(args)))
+            return _eval_sequence_direct(bodies, new_env)
+    raise _TrampolineFallback()
+
+def _eval_sequence_direct(bodies, env):
+    cur = bodies
+    while True:
+        exp = cur.car
+        if cur.cdr is symbol_emptylist:
+            return _eval_direct(exp, env)   # tail expression: TCO via _eval_direct loop
+        _eval_direct(exp, env)              # intermediate expr: eval for side effects
+        cur = cur.cdr
+
+### Native b_proc_1_d and closure (direct-eval-aware):
+
+def b_proc_1_d(bodies, formals, env, _safe=False):
+    # _safe is used by apply_proc fast path, ignored here (trampoline path)
+    formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
+    new_formals = (formals_and_args).car
+    new_args = (formals_and_args).cdr
+    if (numeric_equal(length(new_args), length(new_formals)) is not False):
+        GLOBALS['k_reg'] = k2_reg
+        GLOBALS['env_reg'] = extend(env, new_formals, new_args, make_empty_docstrings(length(new_args)))
+        GLOBALS['exps_reg'] = bodies
+        GLOBALS['pc'] = eval_sequence
+    else:
+        GLOBALS['msg_reg'] = "incorrect number of arguments in application"
+        GLOBALS['pc'] = runtime_error
+
+def closure(formals, bodies, env):
+    safe = _is_direct_eval_safe(bodies)
+    return make_proc(b_proc_1_d, bodies, formals, env, safe)
 
 ### Native frame functions (dict-cached for O(1) variable lookup):
 
@@ -3696,19 +3891,6 @@ def b_handler2_7_d(cexps, cvar, fexps, env, handler, k):
     GLOBALS['env_reg'] = new_env
     GLOBALS['exps_reg'] = cexps
     GLOBALS['pc'] = eval_sequence
-
-def b_proc_1_d(bodies, formals, env):
-    formals_and_args = process_formals_and_args(formals, args_reg, info_reg, handler_reg, fail_reg)
-    new_formals = (formals_and_args).car
-    new_args = (formals_and_args).cdr
-    if (numeric_equal(length(new_args), length(new_formals)) is not False):
-        GLOBALS['k_reg'] = k2_reg
-        GLOBALS['env_reg'] = extend(env, new_formals, new_args, make_empty_docstrings(length(new_args)))
-        GLOBALS['exps_reg'] = bodies
-        GLOBALS['pc'] = eval_sequence
-    else:
-        GLOBALS['msg_reg'] = "incorrect number of arguments in application"
-        GLOBALS['pc'] = runtime_error
 
 def b_proc_2_d(bodies, formals, runt, env):
     new_args = args_reg
@@ -8284,9 +8466,6 @@ def eval_choices():
 
 def association(var, value):
     return List(var, symbol_colon, value)
-
-def closure(formals, bodies, env):
-    return make_proc(b_proc_1_d, bodies, formals, env)
 
 def mu_closure(formals, runt, bodies, env):
     return make_proc(b_proc_2_d, bodies, formals, runt, env)

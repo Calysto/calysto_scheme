@@ -90,6 +90,8 @@ class Translator(object):
             ## formals processing (native fast-path in Scheme.py):
             "process-formals-and-args", "process-formals", "process-args",
             "sort-native", "sort-elements", "insert-elements",
+            ## direct eval fast path (native in Scheme.py):
+            "<proc-1>", "closure",
         ] + self.overrides()
 
     def overrides(self):
