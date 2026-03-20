@@ -677,6 +677,13 @@ def _eval_direct(exp, env):
                 if direct is not None:
                     return direct(args)
                 if len(op) == 6 and fn is b_proc_1_d and op[5]:
+                    pid = id(op)
+                    jit_fn = _jit_lookup(op)
+                    if jit_fn is None:
+                        _jit_compile_proc(op)
+                        jit_fn = _jit_lookup(op)
+                    if jit_fn:
+                        return jit_fn(*args)
                     new_env = _extend_direct(op[4], op[3], args)
                     return _eval_sequence_direct(op[2], new_env)
                 raise _TrampolineFallback()
@@ -685,6 +692,236 @@ def _eval_direct(exp, env):
             raise _TrampolineFallback()
         else:
             raise _TrampolineFallback()
+
+## ===== JIT: compile safe Scheme closures to Python functions =====
+
+def _jit_mangle(sym):
+    """Scheme name → valid Python identifier (prefixed _j_ to avoid collisions)."""
+    s = sym.name if isinstance(sym, Symbol) else str(sym)
+    s = (s.replace('->', '_to_').replace('-', '_').replace('?', '_q')
+          .replace('!', '_b').replace('+', '_add').replace('*', '_mul')
+          .replace('/', '_div').replace('<', '_lt').replace('>', '_gt')
+          .replace('=', '_eq'))
+    if s and s[0].isdigit():
+        s = '_' + s
+    return '_j_' + s
+
+_jit_cache = {}   # id(proc_tuple) → (proc, compiled_fn) or (proc, False)
+
+def _jit_lookup(proc):
+    """Return the cached compiled function for proc, or None if not compiled/failed.
+    Validates that the cached id wasn't reused after GC."""
+    entry = _jit_cache.get(id(proc))
+    if entry is None:
+        return None           # not yet attempted
+    cached_proc, result = entry
+    if cached_proc is not proc:
+        del _jit_cache[id(proc)]  # stale — id was reused after GC
+        return None
+    return result if result is not False else None
+
+def _jit_compile_proc(proc):
+    """Try to JIT-compile a safe Scheme closure.
+    Sets _jit_cache[id(proc)] and returns the compiled fn or None."""
+    pid = id(proc)
+    formals, bodies, cenv = proc[3], proc[2], proc[4]
+    params = []
+    cur = formals
+    while isinstance(cur, cons):
+        params.append(cur.car.name)
+        cur = cur.cdr
+    self_ref = [None]   # forward-reference cell for self-recursive calls
+    free = {}           # name → value captured into the exec() namespace
+    try:
+        jc = _JitCompiler(proc, params, cenv, free, self_ref)
+        body_srcs = []
+        cur = bodies
+        while isinstance(cur, cons):
+            body_srcs.append(jc.expr(cur.car))
+            cur = cur.cdr
+        ps = ', '.join(_jit_mangle(p) for p in params)
+        lines = ['def _jit_fn(' + ps + '):']
+        for i, src in enumerate(body_srcs):
+            lines.append(('    return ' if i == len(body_srcs) - 1 else '    ') + src)
+        fn_src = '\n'.join(lines)
+        ns = dict(free)
+        ns['__builtins__'] = __builtins__
+        exec(compile(fn_src, '<scheme-jit>', 'exec'), ns)
+        fn = ns['_jit_fn']
+        self_ref[0] = fn
+        _jit_cache[pid] = (proc, fn)
+        return fn
+    except _TrampolineFallback:
+        _jit_cache[pid] = (proc, False)
+        return None
+    except Exception:
+        _jit_cache[pid] = (proc, False)
+        return None
+
+class _JitCompiler:
+    """Walks Scheme annotated-AST nodes and emits Python source strings."""
+
+    # Arithmetic: n-ary left-associative (matches Scheme semantics)
+    _NARY  = {'+': '+', '-': '-', '*': '*'}
+    # Binary comparisons
+    _CMP   = {'<': '<', '>': '>', '<=': '<=', '>=': '>=', '=': '=='}
+    # Unary — {0} substituted with the single compiled argument string
+    _UNARY = {
+        'not':   '({0} is False)',
+        'zero?': '({0} == 0)',
+        'even?': '({0} % 2 == 0)',
+        'odd?':  '({0} % 2 != 0)',
+        'car':   '({0}).car',
+        'cdr':   '({0}).cdr',
+        'abs':   'abs({0})',
+        'null?': '({0} is _j__empty)',
+        'pair?': 'isinstance({0}, _j__cons)',
+    }
+
+    def __init__(self, self_proc, params, env, free, self_ref):
+        self._self  = self_proc
+        self._pset  = set(_jit_mangle(p) for p in params)
+        self._env   = env
+        self._free  = free
+        self._sref  = self_ref
+
+    def expr(self, exp):
+        if not isinstance(exp, cons):
+            raise _TrampolineFallback()
+        tag = exp.car
+
+        if tag is symbol_lit_aexp:
+            val = exp.cdr.car
+            if isinstance(val, (int, float, bool, str)):
+                return repr(val)
+            raise _TrampolineFallback()
+
+        elif tag is symbol_lexical_address_aexp:
+            # layout: (tag depth offset name info)
+            # depth=0 → local parameter; depth>0 → free var in captured env
+            depth  = exp.cdr.car
+            offset = exp.cdr.cdr.car
+            name   = exp.cdr.cdr.cdr.car
+            m = _jit_mangle(name)
+            if depth == 0:
+                return m   # local parameter — already in function signature
+            # Outer frame: look up actual value and capture into free
+            if m not in self._free:
+                try:
+                    # depth 1 → frames(cenv)[0], depth 2 → frames(cenv)[1], …
+                    frm = list_ref(frames(self._env), depth - 1)
+                    val = binding_value(vector_ref(frame_bindings(frm), offset))
+                except Exception:
+                    raise _TrampolineFallback()
+                self._capture(m, val)
+            return m
+
+        elif tag is symbol_var_aexp:
+            return self._var(exp.cdr.car)
+
+        elif tag is symbol_if_aexp:
+            # layout: (tag test then else info)
+            test = self.expr(exp.cdr.car)
+            then = self.expr(exp.cdr.cdr.car)
+            els  = self.expr(exp.cdr.cdr.cdr.car)
+            return f'({then} if ({test}) is not False else {els})'
+
+        elif tag is symbol_app_aexp:
+            # layout: (tag op args-list info)
+            return self._app(exp.cdr.car, exp.cdr.cdr.car)
+
+        else:
+            raise _TrampolineFallback()
+
+    def _sym_name(self, op_exp):
+        """Extract the Scheme symbol name from a lex-addr or var operator node."""
+        if not isinstance(op_exp, cons):
+            return None
+        if op_exp.car is symbol_lexical_address_aexp:
+            s = op_exp.cdr.cdr.cdr.car
+            return s.name if isinstance(s, Symbol) else None
+        if op_exp.car is symbol_var_aexp:
+            s = op_exp.cdr.car
+            return s.name if isinstance(s, Symbol) else None
+        return None
+
+    def _app(self, op_exp, arg_list):
+        args = []
+        cur = arg_list
+        while isinstance(cur, cons):
+            args.append(self.expr(cur.car))
+            cur = cur.cdr
+        n   = len(args)
+        sym = self._sym_name(op_exp)
+
+        if sym:
+            # n-ary arithmetic (left-assoc)
+            if sym in self._NARY:
+                op = self._NARY[sym]
+                if n == 0:
+                    return '0' if sym == '+' else '1'
+                if n == 1 and sym == '-':
+                    return f'(-{args[0]})'
+                return '(' + f' {op} '.join(args) + ')'
+            # binary comparisons
+            if sym in self._CMP and n == 2:
+                return f'({args[0]} {self._CMP[sym]} {args[1]})'
+            # unary with inline template
+            if sym in self._UNARY and n == 1:
+                if sym == 'null?':
+                    self._free['_j__empty'] = symbol_emptylist
+                elif sym == 'pair?':
+                    self._free['_j__cons'] = cons
+                return self._UNARY[sym].format(args[0])
+
+        # If the operator is a local parameter (depth=0), we can't know at
+        # compile time whether it'll be a Python callable or a Scheme proc
+        # tuple — refuse to JIT this function.
+        if (isinstance(op_exp, cons) and
+                op_exp.car is symbol_lexical_address_aexp and
+                op_exp.cdr.car == 0):
+            raise _TrampolineFallback()
+
+        # General call: compile operator as expression and emit a call
+        op_src = self.expr(op_exp)
+        return f'{op_src}({", ".join(args)})'
+
+    def _var(self, sym):
+        """Handle var-aexp: local param or captured free variable."""
+        m = _jit_mangle(sym)
+        if m in self._pset or m in self._free:
+            return m
+        b = search_env(self._env, sym)
+        if b is False:
+            raise _TrampolineFallback()
+        self._capture(m, binding_value(b))
+        return m
+
+    def _capture(self, m, val):
+        """Add a free-variable value to self._free, or raise _TrampolineFallback."""
+        if val is self._self:
+            # Self-recursive: wrap the forward-ref cell as a callable
+            sref = self._sref
+            self._free[m] = lambda *a, _r=sref: _r[0](*a)
+            return
+        if isinstance(val, tuple) and val[0] is symbol_procedure:
+            pid = id(val)
+            jit_fn = _jit_lookup(val)
+            if jit_fn is not None:
+                self._free[m] = jit_fn
+                return
+            # Wrap a fast_prim_map entry (list interface → positional interface)
+            if _fast_prim_map is not None:
+                direct = _fast_prim_map.get(val[1])
+                if direct is not None:
+                    self._free[m] = lambda *a, _d=direct: _d(list(a))
+                    return
+            raise _TrampolineFallback()
+        # Plain value (number, string, bool…) — capture directly
+        if isinstance(val, (int, float, bool, str)):
+            self._free[m] = val
+            return
+        raise _TrampolineFallback()
 
 ## Fast prim map: proc[1] function -> Python callable.
 ## Built lazily on first use from the live toplevel environment.

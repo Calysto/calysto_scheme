@@ -14,11 +14,15 @@ python translate_rm.py source-rm.ss ../scheme.py
 `(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))`
 `(fib 20)` — 21,891 recursive calls, no memoization.
 
-| State | Time | Calls | vs original |
-|-------|------|-------|-------------|
-| Original | 7.4 s | 43 M | 1× |
-| After Phase 1 (trampoline optimizations) | 1.54 s | 6.4 M | **4.8×** |
-| After Phase 2 (direct eval fast path) | 0.081 s | ~330 K | **91×** |
+| State | Time | vs original |
+|-------|------|-------------|
+| Original | 7,400 ms | 1× |
+| After Phase 1 (trampoline optimizations) | 1,540 ms | **4.8×** |
+| After Phase 2 (direct eval fast path) | 82 ms | **91×** |
+| After Phase 3 (JIT to Python) | 1.6 ms | **~4,500×** |
+| Python native | 0.48 ms | — |
+
+The JIT brings Scheme `fib(20)` to within **3.5× of native Python**.
 
 ---
 
@@ -191,7 +195,7 @@ from the fast path, there are no double-execution side effects.
 
 ### `_eval_direct` — recursive AST interpreter
 
-Handles the five most common AST node types. The `if-aexp` branch uses a
+Handles the most common AST node types. The `if-aexp` branch uses a
 `while True` loop for tail-call optimization instead of recursion:
 
 ```python
@@ -211,51 +215,33 @@ def _eval_direct(exp, env):
         elif tag is symbol_if_aexp:
             test = _eval_direct(exp.cdr.car, env)
             exp = exp.cdr.cdr.car if test is not False else exp.cdr.cdr.cdr.car
-            # loop — no Python stack frame consumed for the branch
+        elif tag is symbol_lambda_aexp:
+            return closure(exp.cdr.car, exp.cdr.cdr.car, env)
+        elif tag is symbol_begin_aexp:
+            return _eval_sequence_direct(exp.cdr, env)
         elif tag is symbol_app_aexp:
-            op = _eval_direct(exp.cdr.car, env)
-            args = []
-            cur = exp.cdr.cdr.car
-            while isinstance(cur, cons):
-                args.append(_eval_direct(cur.car, env))
-                cur = cur.cdr
-            # ... apply (see below, inlined for speed)
-        else:
-            raise _TrampolineFallback()
+            # ... (see apply logic below)
 ```
 
 ---
 
-### `_fast_prim_map` — direct primitive dispatch
+### `_fast_prim_map` — direct primitive dispatch (83 entries)
 
-Common primitives (`+`, `-`, `*`, `/`, `<`, `>`, `<=`, `>=`, `=`,
-`not`, `car`, `cdr`, `cons`, `pair?`, `null?`, `zero?`) are stored in the
-environment as Scheme procedure tuples `(symbol_procedure, b_proc_XX_d)`.
-Going through the register-machine wrapper (`b_proc_XX_d`) would defeat
-the purpose of the fast path.
+Common primitives are stored in the environment as Scheme procedure tuples
+`(symbol_procedure, b_proc_XX_d)`. Going through the register-machine wrapper
+would defeat the purpose of the fast path.
 
-Instead, a dict is built **lazily on first use** by looking up each known
-symbol in the live `toplevel_env` and mapping its `b_proc_XX_d` function
-to the underlying Python callable:
+Instead, a dict is built **lazily on first use** mapping each `b_proc_XX_d`
+function to a Python callable that takes a plain Python list of args:
 
 ```python
-def _build_fast_prim_map():
-    name_to_direct = {
-        '+':  lambda args: plus(*args),
-        '-':  lambda args: minus(*args),
-        '<':  lambda args: LessThan(*args),
-        '=':  lambda args: numeric_equal(*args),
-        'car': lambda args: args[0].car,
-        'cons': lambda args: cons(args[0], args[1]),
-        # ... etc.
-    }
-    for sym_name, direct_fn in name_to_direct.items():
-        b = search_env(toplevel_env, make_symbol(sym_name))
-        if b is not False:
-            proc = binding_value(b)
-            if isinstance(proc, tuple) and proc[0] is symbol_procedure:
-                result[proc[1]] = direct_fn
-    return result
+'+':  lambda args: plus(*args),
+'<':  lambda args: LessThan(*args),
+'car': lambda args: args[0].car,
+'length': lambda args: length(args[0]),
+'map': _direct_map,   # uses _apply_direct internally
+# ... 83 total entries covering arithmetic, predicates,
+#     list/vector/string ops, char ops, HOF (map, for-each)
 ```
 
 The `args` parameter is already a **Python list** from `_eval_direct`'s
@@ -285,41 +271,117 @@ def _extend_direct(env, formals, args_list):
 
 ---
 
-### Fast path dispatch in `apply_proc`
+## Phase 3 — JIT compilation to Python
+
+### Overview
+
+Phase 2 still pays per-call overhead: environment extension, AST dispatch,
+and Python function call frames for each recursive step. Phase 3 eliminates
+this entirely for safe functions by compiling their Scheme AST to a **real
+Python function** using `compile()` + `exec()`.
+
+The compiled function runs at native Python speed with no Scheme interpreter
+overhead.
+
+---
+
+### How it works
+
+The Scheme compiler already annotates the AST with variable names inside
+`lexical-address-aexp` nodes:
+
+```
+(lexical-address-aexp depth offset name info)
+```
+
+`depth=0` means a local parameter; `depth>0` means a free variable from
+an outer frame. The name is stored at `exp.cdr.cdr.cdr.car`. This means
+no name-reconstruction is needed — we read names directly from the AST.
+
+`_jit_compile_proc(proc)` walks the AST and emits Python source strings:
+
+| AST node | Generated Python |
+|----------|-----------------|
+| `lit-aexp(v)` | `repr(v)` |
+| `lexical-address-aexp(0, _, name)` | `_j_name` (local param) |
+| `lexical-address-aexp(d, off, name)` | `_j_name` (captured free var) |
+| `if-aexp(test, then, else)` | `(then if (test) is not False else else)` |
+| `app-aexp(+, [a, b])` | `(a + b)` (inlined) |
+| `app-aexp(f, args)` | `f(args...)` |
+
+For `fib`, the generated source is:
 
 ```python
-def apply_proc():
-    if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
-            and proc_reg[1] is b_proc_1_d and proc_reg[5]):
-        bodies, formals, cenv = proc_reg[2], proc_reg[3], proc_reg[4]
-        _args, _k2, _fail = args_reg, k2_reg, fail_reg
-        try:
-            new_env = _extend_direct(cenv, formals, list(iter(_args)) if ... else ...)
-            result = _eval_sequence_direct(bodies, new_env)
-            GLOBALS['value2_reg'] = _fail
-            GLOBALS['value1_reg'] = result
-            GLOBALS['k_reg'] = _k2
-            GLOBALS['pc'] = apply_cont2
-            return
-        except _TrampolineFallback:
-            GLOBALS['args_reg'] = _args   # restore for trampoline fallback
-            GLOBALS['k2_reg']   = _k2
-            GLOBALS['fail_reg'] = _fail
-    proc_reg[1](*proc_reg[2:])            # trampoline path
+def _jit_fn(_j_n):
+    return (_j_n if ((_j_n < 2)) is not False else
+            (_j_fib((_j_n - 1)) + _j_fib((_j_n - 2))))
 ```
 
 ---
 
-### Call count comparison for `(fib 20)`
+### Inlined operators
 
-| Function | Before (trampoline) | After (direct eval) |
-|----------|--------------------|--------------------|
-| `trampoline` steps | ~6.4 M | ~330 K |
-| `m()` (main evaluator) | 273 K | ~0 (for fib body) |
-| `make_cont2` (alloc) | 558 K | ~0 (for fib body) |
-| `_eval_direct` | — | 252 K |
-| primitive calls via `_fast_prim_map` | — | 88 K |
-| `_extend_direct` / `make_frame` | 43 K | 22 K |
+Arithmetic and comparison operators are emitted as Python operators directly,
+avoiding any function call:
+
+```python
+_NARY  = {'+': '+', '-': '-', '*': '*'}   # n-ary, left-assoc
+_CMP   = {'<': '<', '>': '>', '<=': '<=', '>=': '>=', '=': '=='}
+_UNARY = {
+    'not': '({0} is False)',  'zero?': '({0} == 0)',
+    'even?': '({0} % 2 == 0)', 'odd?': '({0} % 2 != 0)',
+    'car': '({0}).car',  'cdr': '({0}).cdr',
+    'null?': '({0} is _j__empty)',  'pair?': 'isinstance({0}, _j__cons)',
+    'abs': 'abs({0})',
+}
+```
+
+---
+
+### Free variable capture
+
+Free variables (depth > 0) are looked up in the closure's captured
+environment at JIT compile time and stored in the `exec()` namespace:
+
+- **Self-recursive calls**: detected by identity (`val is self._proc`);
+  a forward-reference cell `_self_ref = [None]` is injected and patched
+  after compilation.
+- **Already-JIT-compiled siblings**: their compiled Python function is
+  captured directly.
+- **`_fast_prim_map` primitives**: wrapped as `lambda *a, _d=direct: _d(list(a))`
+  to adapt the list interface to positional args.
+- **Local parameters in operator position**: refused at compile time
+  (`_TrampolineFallback`) — can't know at compile time whether the arg
+  will be a Python callable or a Scheme proc tuple.
+
+---
+
+### JIT cache with GC-safe identity check
+
+The cache maps `id(proc)` to `(proc, compiled_fn)`. On lookup, the stored
+proc reference is checked for identity (`cached_proc is proc`) to detect
+`id()` reuse after garbage collection:
+
+```python
+def _jit_lookup(proc):
+    entry = _jit_cache.get(id(proc))
+    if entry is None:
+        return None
+    cached_proc, result = entry
+    if cached_proc is not proc:
+        del _jit_cache[id(proc)]   # stale entry — id reused after GC
+        return None
+    return result if result is not False else None
+```
+
+---
+
+### Fallback safety
+
+If JIT compilation fails for any reason (`_TrampolineFallback` or any
+exception), `_jit_cache[id(proc)] = (proc, False)` is stored and the
+function silently falls back to Phase 2's `_eval_sequence_direct`. No
+user-visible difference.
 
 ---
 
@@ -331,7 +393,13 @@ For reference, production Scheme systems use similar but deeper techniques:
 - **CHICKEN Scheme**: CPS-compiles to C (same architecture as Calysto Scheme), but uses the C call stack directly ("Cheney on the M.T.A.") — GC is triggered when the C stack fills, copying live frames to the heap and continuing.
 - **Guile**: compiles to a register-based bytecode VM with JIT.
 
-The direct-eval fast path in Calysto Scheme is the Python analogue of what CHICKEN does: use the host language's call stack for ordinary function calls, and only fall back to the explicit continuation machinery when needed.
+The Phase 2 direct-eval fast path is the Python analogue of what CHICKEN does:
+use the host language's call stack for ordinary function calls, and fall back
+to the explicit continuation machinery when needed.
+
+The Phase 3 JIT is analogous to what Guile and modern JavaScript engines do:
+compile hot functions to a lower-level representation (native code / Python
+bytecode) that runs without interpreter overhead.
 
 ---
 
@@ -339,7 +407,8 @@ The direct-eval fast path in Calysto Scheme is the Python analogue of what CHICK
 
 | Idea | Expected gain | Effort |
 |------|--------------|--------|
-| Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code | 1.5–3× | Low |
-| Extend `_fast_prim_map` with more primitives (`map`, `length`, `append`, …) | 10–30% | Low |
-| Handle `lambda_aexp` in `_eval_direct` (HOF-heavy code) | varies | Medium |
-| Run on PyPy | 5–20× additional | Zero code changes |
+| JIT: handle `lambda_aexp` (compile HOF-returning functions) | significant for HOF-heavy code | Medium |
+| JIT: handle `assign_aexp` with `nonlocal` declarations | enables `set!` in JIT | Medium |
+| JIT: tail-call via `while True` loop for self-recursive tail calls | eliminates Python stack frames | Medium |
+| Run on PyPy | 5–20× additional on top of existing gains | Zero code changes |
+| Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code | 1.5–3× for trampoline path | Low |
