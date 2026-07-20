@@ -660,7 +660,12 @@ def _eval_direct(exp, env):
         elif tag is symbol_lambda_aexp:
             return closure(exp.cdr.car, exp.cdr.cdr.car, env)
         elif tag is symbol_begin_aexp:
-            return _eval_sequence_direct(exp.cdr, env)
+            # Inline sequence: all but last for effect, last is tail (loop, no recursion).
+            cur = exp.cdr
+            while cur.cdr is not symbol_emptylist:
+                _eval_direct(cur.car, env)
+                cur = cur.cdr
+            exp = cur.car
         elif tag is symbol_app_aexp:
             op   = _eval_direct(exp.cdr.car, env)
             args = []
@@ -684,8 +689,17 @@ def _eval_direct(exp, env):
                         jit_fn = _jit_lookup(op)
                     if jit_fn:
                         return jit_fn(*args)
+                    # Tail call: reuse this Python frame instead of recursing —
+                    # this is what makes deep tail-recursive Scheme loops run in
+                    # O(1) Python stack instead of hitting RecursionError.
                     new_env = _extend_direct(op[4], op[3], args)
-                    return _eval_sequence_direct(op[2], new_env)
+                    bodies = op[2]
+                    while bodies.cdr is not symbol_emptylist:
+                        _eval_direct(bodies.car, new_env)
+                        bodies = bodies.cdr
+                    exp = bodies.car
+                    env = new_env
+                    continue
                 raise _TrampolineFallback()
             elif dlr_proc_q(op):
                 return dlr_apply(op, List(*args))
@@ -734,15 +748,21 @@ def _jit_compile_proc(proc):
     free = {}           # name → value captured into the exec() namespace
     try:
         jc = _JitCompiler(proc, params, cenv, free, self_ref)
-        body_srcs = []
+        body_list = []
         cur = bodies
         while isinstance(cur, cons):
-            body_srcs.append(jc.expr(cur.car))
+            body_list.append(cur.car)
             cur = cur.cdr
-        ps = ', '.join(_jit_mangle(p) for p in params)
+        stmt_lines = ['    ' + jc.expr(e) for e in body_list[:-1]]
+        tail_lines = jc.tail_stmts(body_list[-1], '    ')
+        ps = ', '.join(jc._params)
         lines = ['def _jit_fn(' + ps + '):']
-        for i, src in enumerate(body_srcs):
-            lines.append(('    return ' if i == len(body_srcs) - 1 else '    ') + src)
+        lines += stmt_lines
+        if jc._used_loop:
+            lines.append('    while True:')
+            lines += ['    ' + ln for ln in tail_lines]
+        else:
+            lines += tail_lines
         fn_src = '\n'.join(lines)
         ns = dict(free)
         ns['__builtins__'] = __builtins__
@@ -779,11 +799,13 @@ class _JitCompiler:
     }
 
     def __init__(self, self_proc, params, env, free, self_ref):
-        self._self  = self_proc
-        self._pset  = set(_jit_mangle(p) for p in params)
-        self._env   = env
-        self._free  = free
-        self._sref  = self_ref
+        self._self   = self_proc
+        self._params = [_jit_mangle(p) for p in params]
+        self._pset   = set(self._params)
+        self._env    = env
+        self._free   = free
+        self._sref   = self_ref
+        self._used_loop = False   # set True if a self-recursive tail call was compiled
 
     def expr(self, exp):
         if not isinstance(exp, cons):
@@ -922,6 +944,61 @@ class _JitCompiler:
             self._free[m] = val
             return
         raise _TrampolineFallback()
+
+    def _is_self_ref(self, op_exp):
+        """True iff op_exp resolves (by identity) to the proc being compiled —
+        i.e. this application is a self-recursive call."""
+        if not isinstance(op_exp, cons):
+            return False
+        if op_exp.car is symbol_lexical_address_aexp:
+            depth = op_exp.cdr.car
+            if depth == 0:
+                return False   # local parameter, can't be the enclosing proc
+            offset = op_exp.cdr.cdr.car
+            try:
+                frm = list_ref(frames(self._env), depth - 1)
+                val = binding_value(vector_ref(frame_bindings(frm), offset))
+            except Exception:
+                return False
+            return val is self._self
+        if op_exp.car is symbol_var_aexp:
+            b = search_env(self._env, op_exp.cdr.car)
+            if b is False:
+                return False
+            return binding_value(b) is self._self
+        return False
+
+    def tail_stmts(self, exp, indent):
+        """Compile exp in tail position to a list of already-indented Python
+        statement lines. A self-recursive tail call becomes a parameter
+        reassignment + `continue` instead of a return/call, so the enclosing
+        `while True:` loop (see _jit_compile_proc) reuses the same Python
+        frame across arbitrarily many tail iterations."""
+        if not isinstance(exp, cons):
+            raise _TrampolineFallback()
+        tag = exp.car
+        if tag is symbol_if_aexp:
+            test = self.expr(exp.cdr.car)
+            lines = [indent + f'if ({test}) is not False:']
+            lines += self.tail_stmts(exp.cdr.cdr.car, indent + '    ')
+            lines.append(indent + 'else:')
+            lines += self.tail_stmts(exp.cdr.cdr.cdr.car, indent + '    ')
+            return lines
+        if tag is symbol_app_aexp and self._is_self_ref(exp.cdr.car):
+            arg_srcs = []
+            cur = exp.cdr.cdr.car
+            while isinstance(cur, cons):
+                arg_srcs.append(self.expr(cur.car))
+                cur = cur.cdr
+            if len(arg_srcs) != len(self._params):
+                raise _TrampolineFallback()   # arity mismatch — be safe, don't JIT
+            self._used_loop = True
+            if not self._params:
+                return [indent + 'continue']
+            targets = ', '.join(self._params)
+            values  = ', '.join(arg_srcs)
+            return [indent + f'{targets} = {values}', indent + 'continue']
+        return [indent + 'return ' + self.expr(exp)]
 
 ## Fast prim map: proc[1] function -> Python callable.
 ## Built lazily on first use from the live toplevel environment.
