@@ -6387,7 +6387,8 @@
             (aparse (try-body^ adatum) senv handler fail
               (make-cont2 <cont2-12> adatum senv info handler k)))
            (else
-            (aparse-error "bad try syntax:" adatum handler fail))))
+            (aparse (car^ adatum) senv handler fail
+              (make-cont2 <cont2-6> adatum senv info handler k)))))
         ((raise?^ adatum)
          (aparse (cadr^ adatum) senv handler fail
            (make-cont2 <cont2-7> info k)))

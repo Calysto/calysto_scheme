@@ -7062,8 +7062,11 @@
                                                                                                                     (set! adatum_reg (try-body^ adatum_reg))
                                                                                                                     (set! pc aparse))
                                                                                                                   (begin
-                                                                                                                    (set! msg_reg "bad try syntax:")
-                                                                                                                    (set! pc aparse-error)))))
+                                                                                                                    (set! k_reg
+                                                                                                                      (make-cont2 <cont2-6> adatum_reg senv_reg info handler_reg
+                                                                                                                        k_reg))
+                                                                                                                    (set! adatum_reg (car^ adatum_reg))
+                                                                                                                    (set! pc aparse)))))
                                                                                                       (if (raise?^ adatum_reg)
                                                                                                           (begin
                                                                                                             (set! k_reg (make-cont2 <cont2-7> info k_reg))
