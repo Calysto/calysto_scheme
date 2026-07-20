@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+import io
 
 class Translator(object):
     def __init__(self, flags=None):
@@ -344,24 +345,52 @@ class PythonTranslator(Translator):
         if isinstance(expr[1], list):
             function_name = self.fix_name(expr[1][0])
             args = self.fix_name(expr[1][1])
+            raw_params = [expr[1][1]]
         else:
             function_name = self.fix_name(expr[1])
             if isinstance(expr[2][1], list):
                 args = ", ".join(map(self.fix_name, expr[2][1]))
+                raw_params = [p for p in expr[2][1] if p != "dot"]
             else:
                 args = "*%s" % self.fix_name(expr[2][1]) # var args
                 convert_args = "%s = List(*%s)" % (self.fix_name(expr[2][1]),
                                                    self.fix_name(expr[2][1]))
+                raw_params = [expr[2][1]]
         if ", dot, " in args:
             args = args.replace(", dot, ", ", *") # var args on end
             var_arg = args.rsplit("*", 1)[1]
             convert_args = "%s = List(*%s)" % (var_arg, var_arg)
-        self.Print(indent, "def %s(%s):" % (function_name, args))
+
+        # A formal parameter is a local, not a global register — even if the
+        # body does (set! param ...). Without this, check_global would treat
+        # such an assignment as a global write, and emitting `global param`
+        # for a name that's also a parameter is a Python SyntaxError (it was
+        # silently wrong before this pass: GLOBALS['param'] = ... created an
+        # unrelated same-named module global instead of touching the local).
+        body_locals = locals + raw_params
+
+        # Buffer the body so we know, once it's fully generated, which
+        # module-level registers it assigns to — then prepend a single
+        # `global ...` declaration and let those assignments be plain
+        # `name = value` instead of GLOBALS['name'] = value.
+        outer_fp = self.fp
+        outer_globals = self._current_function_globals
+        self.fp = io.StringIO()
+        self._current_function_globals = set()
         if convert_args:
             self.Print(indent + 4, convert_args)
         body = expr[2][2:]
         for statement in body:
-            self.process_statement(statement, locals, indent + 4)
+            self.process_statement(statement, body_locals, indent + 4)
+        body_src = self.fp.getvalue()
+        assigned = self._current_function_globals
+        self.fp = outer_fp
+        self._current_function_globals = outer_globals
+
+        self.Print(indent, "def %s(%s):" % (function_name, args))
+        if assigned:
+            self.Print(indent + 4, "global %s" % ", ".join(sorted(assigned)))
+        self.fp.write(body_src)
         self.Print(indent, "")
 
     def process_infix_op(self, expr, op):
@@ -441,10 +470,16 @@ class PythonTranslator(Translator):
         return expr[1]
 
     def check_global(self, name, locals):
+        fixed = self.fix_name(name)
         if name in locals:
-            return self.fix_name(name)
-        else:
-            return "GLOBALS['%s']" % self.fix_name(name)
+            return fixed
+        # Global register write: record it so the enclosing function can
+        # emit a `global` declaration and use a plain assignment (faster
+        # than GLOBALS['name'] = ..., a dict __setitem__ call, at every
+        # trampoline step).
+        if getattr(self, "_current_function_globals", None) is not None:
+            self._current_function_globals.add(fixed)
+        return fixed
 
     def process_assignment(self, expr, locals, indent):
         self.Print(indent, "%s = %s" % (self.check_global(expr[1], locals),
@@ -502,6 +537,7 @@ class PythonTranslator(Translator):
         return super(PythonTranslator, self).to_ignore() + ["highlight-expression"]
 
     def translate(self, filename):
+        self._current_function_globals = None
         with open('Scheme.py', 'rb') as fid:
             for line in fid:
                 line = line.decode('utf-8')

@@ -482,7 +482,7 @@ paths in `scheme.py` — not projected from the fib table.
 | ~~JIT: tail-call via `while True` loop for self-recursive tail calls~~ | **Done — see Phase 4 above.** Turned a crash (`RecursionError` past ~4,900–5,000 iterations) into O(1)-stack execution; 50,000,000 iterations now run in ~2.4s, within ~10% of hand-written Python | ~~Medium~~ |
 | JIT: handle `assign_aexp` with `nonlocal` (enables `set!` in JIT) | **~700×** — a `set!`-containing loop is barred from Phase 2 *and* Phase 3 today and always pays the full trampoline cost (~53 µs/call measured); JIT'd arithmetic of similar shape runs at ~0.07 µs/call | Medium |
 | JIT: handle `lambda_aexp` (compile HOF-returning functions) | **~400×** measured (bounded below — see methodology) — a function whose body creates a closure (e.g. `make-adder`) can never JIT-compile and pays interpreted Phase 2 cost (~209 µs/call) on every call, vs. negligible/JIT'd cost once no closure is involved | Medium |
-| Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code | **~1.2×** (20%) for the trampoline path — lower than the original 1.5–3× guess; a realistic 8-register trampoline step went from 0.68s → 0.56s per 3M steps in a microbenchmark | Low |
+| ~~Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code~~ | **Done.** Isolated microbenchmark suggested ~1.2× (20%); real end-to-end gain on the trampoline path is much smaller, **~2%** (34.4s → 33.7s on a 600K-iteration `set!` benchmark, consistent across repeats) — register writes turned out to be a small slice of per-step cost next to environment/continuation allocation. **Bonus:** the change surfaced and fixed a latent correctness bug (see below) | ~~Low~~ |
 | Run on PyPy | 5–20× additional on top of existing gains | Zero code changes |
 
 **Bonus finding, not in the original list:** `(use-stack-trace #f)` — an
@@ -530,4 +530,20 @@ today (see the tail-call finding), so benchmarks that can't use `map`/
   the gap to hand-written Python either.
 - **Register-write microbenchmark:** 3,000,000 iterations of an 8-register
   trampoline step (`GLOBALS['x'] = ...` ×8) vs. the equivalent with
-  `global x; x = ...`, in isolation from the rest of the interpreter.
+  `global x; x = ...`, in isolation from the rest of the interpreter. The
+  real-world gain from actually making this change (`translate_rm.py`) was
+  much smaller than this predicted — see the table.
+- **`global x` implementation note:** `translate_rm.py`'s codegen buffers
+  each generated function's body, tracks which module-level registers it
+  assigns via `set!` (`check_global`), and prepends one `global ...`
+  declaration instead of using `GLOBALS['name'] = ...` per write. Doing this
+  surfaced a **latent correctness bug**: the generator's `locals` tracking
+  never included a function's own formal parameters, so `(set! param ...)`
+  on a parameter was silently emitting a module-level global write — Python
+  allowed a same-named global dict entry and local parameter to coexist
+  without conflict, so the parameter's local value was silently never
+  updated by the `set!`. Declaring `global param` for a name that's also a
+  parameter is a Python `SyntaxError`, which is what surfaced it. Fixed by
+  seeding `locals` with the function's own parameter names before
+  processing its body (`process_function_definition` in `translate_rm.py`).
+  Full test suite (246 tests) passes after the fix.
