@@ -778,6 +778,26 @@ def _jit_compile_proc(proc):
         _jit_cache[pid] = (proc, False)
         return None
 
+def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
+    """Materialize a genuine Scheme closure for a lambda_aexp encountered
+    inside JIT'd code, by reconstructing — from live values — the frame the
+    closure would have captured had the enclosing function been evaluated
+    normally instead of JIT-compiled. Reuses the same frame/closure builders
+    the rest of the direct-eval path uses, so the result is a completely
+    ordinary Scheme proc tuple."""
+    frame_env = _extend_direct(parent_env, outer_formals, outer_values)
+    return closure(formals, bodies, frame_env)
+
+def _jit_call(op, args):
+    """Call `op` (a Python arg list) whether it's a native Python callable
+    (an already-JIT'd function, a wrapped primitive, or a self-reference) or
+    a Scheme proc tuple — e.g. one produced by _jit_make_closure, or an
+    un-JIT'd closure reached through a computed operator expression such as
+    ((make-adder n) 0) or an immediately-invoked lambda."""
+    if isinstance(op, tuple) and op[0] is symbol_procedure:
+        return _apply_direct(op, args, None)
+    return op(*args)
+
 class _JitCompiler:
     """Walks Scheme annotated-AST nodes and emits Python source strings."""
 
@@ -806,6 +826,7 @@ class _JitCompiler:
         self._free   = free
         self._sref   = self_ref
         self._used_loop = False   # set True if a self-recursive tail call was compiled
+        self._const_count = 0     # counter for generated constant-capture names
 
     def expr(self, exp):
         if not isinstance(exp, cons):
@@ -852,8 +873,58 @@ class _JitCompiler:
             # layout: (tag op args-list info)
             return self._app(exp.cdr.car, exp.cdr.cdr.car)
 
+        elif tag is symbol_lambda_aexp:
+            # layout: (tag formals bodies info)
+            return self._lambda(exp.cdr.car, exp.cdr.cdr.car)
+
         else:
             raise _TrampolineFallback()
+
+    def _capture_const(self, val):
+        """Stash an arbitrary Scheme object (AST fragment, environment, ...)
+        into the exec() namespace under a fresh name. Distinct '_jc_const_'
+        prefix so it can never collide with a _jit_mangle()'d Scheme name."""
+        name = '_jc_const_%d' % self._const_count
+        self._const_count += 1
+        self._free[name] = val
+        return name
+
+    def _lambda(self, formals, bodies):
+        """Compile a lambda_aexp encountered as a value (e.g. a function
+        whose body directly returns a closure, like
+        (define (make-adder k) (lambda (x) (+ x k)))).
+
+        JIT'd code represents this function's own parameters as plain
+        Python locals, but a real Scheme closure needs a proper environment
+        frame (so the classic interpreter, or a future JIT of the inner
+        lambda, can look it up by lexical address). So instead of compiling
+        the inner lambda's body inline, reconstruct — at runtime — the exact
+        frame this function's own parameters would occupy under normal
+        (non-JIT) evaluation, chain it onto the real captured environment
+        (self._env), and hand the result to the ordinary closure()
+        constructor. The inner lambda is then a completely normal Scheme
+        proc, independently eligible for its own JIT compilation later.
+
+        Only safe when this function's own formals are a plain (non-variadic)
+        list matching self._params 1:1 — _jit_make_closure rebuilds the frame
+        positionally from self._params's live values, so a rest parameter
+        (silently dropped from self._params — see _jit_compile_proc) would
+        misalign the frame.
+        """
+        cur = self._self[3]
+        count = 0
+        while isinstance(cur, cons):
+            count += 1
+            cur = cur.cdr
+        if cur is not symbol_emptylist or count != len(self._params):
+            raise _TrampolineFallback()
+        self._free['_jit_make_closure'] = _jit_make_closure
+        fm = self._capture_const(formals)
+        bd = self._capture_const(bodies)
+        ce = self._capture_const(self._env)
+        of = self._capture_const(self._self[3])
+        values = ", ".join(self._params)
+        return f'_jit_make_closure({fm}, {bd}, {ce}, {of}, [{values}])'
 
     def _sym_name(self, op_exp):
         """Extract the Scheme symbol name from a lex-addr or var operator node."""
@@ -903,6 +974,18 @@ class _JitCompiler:
                 op_exp.car is symbol_lexical_address_aexp and
                 op_exp.cdr.car == 0):
             raise _TrampolineFallback()
+
+        # Operator is itself a computed expression: a nested call, e.g.
+        # ((make-adder n) 0), or an immediately-invoked lambda (how
+        # `let`/`or`/`and` commonly desugar), e.g. ((lambda (x) ...) e).
+        # self.expr() on either can now yield a Scheme proc *tuple* (via
+        # _jit_make_closure, once lambda_aexp support exists), not a plain
+        # Python callable, so a bare op_src(...) call could try to call a
+        # tuple. Dispatch through a runtime helper that handles both.
+        if isinstance(op_exp, cons) and op_exp.car in (symbol_app_aexp, symbol_lambda_aexp):
+            op_src = self.expr(op_exp)
+            self._free['_jit_call'] = _jit_call
+            return f'_jit_call({op_src}, [{", ".join(args)}])'
 
         # General call: compile operator as expression and emit a call
         op_src = self.expr(op_exp)

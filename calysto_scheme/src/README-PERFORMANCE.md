@@ -453,6 +453,99 @@ changed the same way (its tail expression loops instead of recursing into
 
 ---
 
+## Phase 5 — JIT support for `lambda_aexp` (closures/HOF)
+
+### The gap
+
+`_JitCompiler.expr()` had no case for `lambda_aexp` — any function whose body
+directly evaluates to a `lambda` (the common factory/curry pattern, e.g.
+`(define (make-adder k) (lambda (x) (+ x k)))`) failed to JIT-compile
+*at all* and paid Phase 2's interpreted cost on every call, forever.
+
+### The fix
+
+JIT'd Python functions represent a Scheme function's parameters as plain
+Python locals (`_j_k`, ...); a real Scheme closure needs a proper
+environment frame (a chain of `cons(Vector(bindings), formals)` frames with
+a `_search_cache`) so the classic interpreter — or a future JIT of the
+*inner* lambda — can look up captured variables by lexical address. So
+`_JitCompiler` doesn't try to compile the inner lambda's body inline;
+instead, at the point the `lambda_aexp` executes, it reconstructs the exact
+frame the outer function's own parameters would occupy under normal
+(non-JIT) evaluation and hands it to the ordinary `closure()` constructor:
+
+```python
+def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
+    frame_env = _extend_direct(parent_env, outer_formals, outer_values)
+    return closure(formals, bodies, frame_env)
+```
+
+This reuses existing building blocks (`_extend_direct`, `closure()`)
+unchanged, so the result is a completely ordinary Scheme proc tuple —
+independently eligible for its own JIT compilation later, exactly like any
+other closure. Guarded by a compile-time check that the outer function's own
+formals are a plain (non-variadic) list matching its parameter count 1:1,
+since the frame is rebuilt positionally.
+
+### The bug this surfaced, and its fix
+
+Making `lambda_aexp` produce a value exposed a second, more general problem:
+an application whose *operator* is itself a computed expression —
+`((make-adder n) 0)`, or an immediately-invoked lambda like
+`((lambda (x) ...) e)` (how `let`/`or`/`and` commonly desugar) — could now
+evaluate to a Scheme proc *tuple* at runtime instead of a plain Python
+callable, and the existing "general call" codegen (`op_src(args...)`) tried
+to call it directly: `TypeError: 'tuple' object is not callable`. This was
+caught by the full test suite (`choose`/`require`/backtracking code in
+`test_all.ss` hit it, intermittently — `choose` is randomized, so the repro
+wasn't always reliable). Confirmed absent before this phase's change by
+running the suite against the prior commit.
+
+Fixed with a small runtime dispatcher, used only when the operator is itself
+an `app_aexp` or `lambda_aexp` (a plain variable/lexical-address operator
+reference was already guaranteed callable via the existing `_capture` logic,
+so that path is untouched):
+
+```python
+def _jit_call(op, args):
+    if isinstance(op, tuple) and op[0] is symbol_procedure:
+        return _apply_direct(op, args, None)
+    return op(*args)
+```
+
+### What this does and doesn't cover
+
+- Functions that directly return a closure over their own parameters
+  (`make-adder`-style) now JIT-compile. Measured on
+  `(define (run-loop n acc) (if (= n 0) acc (run-loop (- n 1) (+ acc ((make-adder n) 0)))))`,
+  4,500 iterations: 0.58s → 0.23s wall-clock (subtracting ~0.2s fixed
+  startup: ~0.38s → ~0.03s of actual work, roughly **12×**).
+- IIFE patterns (`let`, `or`, `and` desugaring) and calls through a computed
+  operator now also work correctly via the same `_jit_call` dispatch,
+  verified directly (`f`, `g`, `loop` in the test script below all
+  successfully JIT-compiled; only the value differs from before, not the
+  requirement that they be *called from within already-JIT-attempting
+  code* to trigger compilation at all — same pre-existing trigger rule as
+  everywhere else in the JIT).
+- Not covered (unchanged from before, and not part of this fix): closures
+  created via an *internal* `define`/`let` inside a larger function body —
+  `_JitCompiler` still has no support for internal lexical bindings at all,
+  so a function like the earlier `trial-hof` benchmark
+  (`(define add (make-adder k))` as an internal define, then calling `add`)
+  still falls back to Phase 2 entirely. That's a separate, larger piece of
+  work (teaching the compiler about local bindings generally).
+- Not covered: a local *parameter* used in operator position (e.g.
+  `(define (apply-twice f x) (f (f x)))`) still bails at compile time
+  (pre-existing, intentional — `_jit_call` could in principle lift this
+  too, since it handles both callable shapes at runtime, but that's a
+  distinct extension not attempted here).
+- Verified with the full test suite (10+ repeated runs, since `choose`'s
+  randomization made the bug intermittent) and targeted closure/IIFE/HOF
+  scripts, checked directly against `_jit_cache` to confirm JIT compilation
+  actually occurred rather than a silent, correct-by-luck Phase 2 fallback.
+
+---
+
 ## What real Scheme implementations do
 
 For reference, production Scheme systems use similar but deeper techniques:
@@ -481,7 +574,7 @@ paths in `scheme.py` — not projected from the fib table.
 |------|--------------|--------|
 | ~~JIT: tail-call via `while True` loop for self-recursive tail calls~~ | **Done — see Phase 4 above.** Turned a crash (`RecursionError` past ~4,900–5,000 iterations) into O(1)-stack execution; 50,000,000 iterations now run in ~2.4s, within ~10% of hand-written Python | ~~Medium~~ |
 | JIT: handle `assign_aexp` with `nonlocal` (enables `set!` in JIT) | **~700×** — a `set!`-containing loop is barred from Phase 2 *and* Phase 3 today and always pays the full trampoline cost (~53 µs/call measured); JIT'd arithmetic of similar shape runs at ~0.07 µs/call | Medium |
-| JIT: handle `lambda_aexp` (compile HOF-returning functions) | **~400×** measured (bounded below — see methodology) — a function whose body creates a closure (e.g. `make-adder`) can never JIT-compile and pays interpreted Phase 2 cost (~209 µs/call) on every call, vs. negligible/JIT'd cost once no closure is involved | Medium |
+| ~~JIT: handle `lambda_aexp` (compile HOF-returning functions)~~ | **Done — see Phase 5 above.** `make-adder`-shaped functions (body directly returns a closure over its own parameters) now JIT-compile; measured **~12×** on a 4,500-iteration benchmark once fixed startup cost is subtracted. Closures via internal `define`/`let` remain unsupported (separate, larger gap) | ~~Medium~~ |
 | ~~Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code~~ | **Done.** Isolated microbenchmark suggested ~1.2× (20%); real end-to-end gain on the trampoline path is much smaller, **~2%** (34.4s → 33.7s on a 600K-iteration `set!` benchmark, consistent across repeats) — register writes turned out to be a small slice of per-step cost next to environment/continuation allocation. **Bonus:** the change surfaced and fixed a latent correctness bug (see below) | ~~Low~~ |
 | Run on PyPy | 5–20× additional on top of existing gains | Zero code changes |
 
