@@ -487,10 +487,6 @@
 			     (k (mu-trace-lambda-aexp name (head formals) (last formals) bodies info) fail))))))))
 	((try?^ adatum)
 	 (cond
-	   ;; (try <body>) - removed because redefining try gave silent error
-	   ;; see: https://github.com/Calysto/calysto_scheme/issues/35
-	   ;; ((= (length^ adatum) 2)  (aparse (try-body^ adatum) senv handler fail k))
-
 	   ;; (try <body> (catch <var> <exp> ...))
 	   ((and (= (length^ adatum) 3) (catch?^ (caddr^ adatum)))
 	    (aparse (try-body^ adatum) senv handler fail
@@ -516,7 +512,16 @@
 		      (aparse-all (try-catch-finally-exps^ adatum) senv handler fail
 			(lambda-cont2 (fexps fail)
 			  (k (try-catch-finally-aexp body cvar cexps fexps info) fail)))))))))
-	   (else (aparse-error "bad try syntax:" adatum handler fail))))
+	   ;; not a valid try/catch/finally form -- treat 'try' as an
+	   ;; ordinary identifier being applied, e.g.
+	   ;; (define (try x) ...) (try 5)
+	   ;; see: https://github.com/Calysto/calysto_scheme/issues/35
+	   (else
+	    (aparse (car^ adatum) senv handler fail
+	      (lambda-cont2 (v1 fail)
+		(aparse-all (cdr^ adatum) senv handler fail
+		  (lambda-cont2 (v2 fail)
+		    (k (app-aexp v1 v2 info) fail))))))))
 	((raise?^ adatum)
 	 (aparse (cadr^ adatum) senv handler fail
 	   (lambda-cont2 (v fail)

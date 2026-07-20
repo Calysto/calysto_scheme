@@ -7701,8 +7701,9 @@ def aparse():
                                                                                                                 GLOBALS['adatum_reg'] = try_body_hat(adatum_reg)
                                                                                                                 GLOBALS['pc'] = aparse
                                                                                                             else:
-                                                                                                                GLOBALS['msg_reg'] = "bad try syntax:"
-                                                                                                                GLOBALS['pc'] = aparse_error
+                                                                                                                GLOBALS['k_reg'] = make_cont2(b_cont2_6_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                                GLOBALS['adatum_reg'] = car_hat(adatum_reg)
+                                                                                                                GLOBALS['pc'] = aparse
                                                                                                 else:
                                                                                                     if (raise_q_hat(adatum_reg) is not False):
                                                                                                         GLOBALS['k_reg'] = make_cont2(b_cont2_7_d, info, k_reg)
