@@ -744,10 +744,9 @@ def _jit_compile_proc(proc):
     while isinstance(cur, cons):
         params.append(cur.car.name)
         cur = cur.cdr
-    self_ref = [None]   # forward-reference cell for self-recursive calls
     free = {}           # name → value captured into the exec() namespace
     try:
-        jc = _JitCompiler(proc, params, cenv, free, self_ref)
+        jc = _JitCompiler(proc, params, cenv, free)
         body_list = []
         cur = bodies
         while isinstance(cur, cons):
@@ -768,7 +767,6 @@ def _jit_compile_proc(proc):
         ns['__builtins__'] = __builtins__
         exec(compile(fn_src, '<scheme-jit>', 'exec'), ns)
         fn = ns['_jit_fn']
-        self_ref[0] = fn
         _jit_cache[pid] = (proc, fn)
         return fn
     except _TrampolineFallback:
@@ -832,13 +830,12 @@ class _JitCompiler:
         'pair?': 'isinstance({0}, _j__cons)',
     }
 
-    def __init__(self, self_proc, params, env, free, self_ref):
+    def __init__(self, self_proc, params, env, free):
         self._self   = self_proc
         self._params = [_jit_mangle(p) for p in params]
         self._pset   = set(self._params)
         self._env    = env
         self._free   = free
-        self._sref   = self_ref
         self._used_loop = False   # set True if a self-recursive tail call was compiled
         self._const_count = 0     # counter for generated constant-capture names
 
@@ -870,6 +867,11 @@ class _JitCompiler:
                     val = binding_value(vector_ref(frame_bindings(frm), offset))
                 except Exception:
                     raise _TrampolineFallback()
+                if val is self._self:
+                    # Self-recursive (non-tail): call the generated function
+                    # by its own def name directly, instead of paying for a
+                    # wrapper-lambda indirection on every recursive call.
+                    return '_jit_fn'
                 self._capture(m, val)
             return m
 
@@ -1013,16 +1015,16 @@ class _JitCompiler:
         b = search_env(self._env, sym)
         if b is False:
             raise _TrampolineFallback()
-        self._capture(m, binding_value(b))
+        val = binding_value(b)
+        if val is self._self:
+            # Self-recursive (non-tail): call the generated function by its
+            # own def name directly — see the lexical_address_aexp case above.
+            return '_jit_fn'
+        self._capture(m, val)
         return m
 
     def _capture(self, m, val):
         """Add a free-variable value to self._free, or raise _TrampolineFallback."""
-        if val is self._self:
-            # Self-recursive: wrap the forward-ref cell as a callable
-            sref = self._sref
-            self._free[m] = lambda *a, _r=sref: _r[0](*a)
-            return
         if isinstance(val, tuple) and val[0] is symbol_procedure:
             pid = id(val)
             jit_fn = _jit_lookup(val)

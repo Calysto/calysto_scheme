@@ -16,9 +16,23 @@
 (define (round4 x)
   (float (/ (round (* x 10000)) 10000)))
 
+;; NOTE: `elapsed` deliberately sequences with `begin` + a top-level `set!`
+;; instead of `(let ((_bench_start (current-time))) ...)`. A `let` desugars
+;; to a closure call, and a closure call that raises `_TrampolineFallback`
+;; partway through its body (e.g. hits `current-time` or `printf`, neither
+;; of which is in `_fast_prim_map`) gets its *entire body* silently
+;; re-executed from scratch via the slow trampoline (see `apply_proc`'s
+;; fallback in Scheme.py) -- including whatever already ran successfully
+;; before the failure, such as `?exp` itself. That silently doubled every
+;; number this file reports (confirmed by an instrumented counter: `(fib
+;; 10)` inside `(let ((s (current-time))) (fib 10) (printf ...))` ran 354
+;; times, not 177). `begin` at top level is plain sequencing, not a
+;; closure call, so it isn't subject to that retry.
+(define _bench_start 0)
 (define-syntax elapsed
   [(elapsed ?exp)
-   (let ((_bench_start (current-time)))
+   (begin
+     (set! _bench_start (current-time))
      ?exp
      (round4 (- (current-time) _bench_start)))])
 

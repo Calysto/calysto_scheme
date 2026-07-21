@@ -13,9 +13,19 @@
 (define (round4 x)
   (float (/ (round (* x 10000)) 10000)))
 
+;; NOTE: `begin` + top-level `set!` here deliberately, not `let` -- see the
+;; matching comment in scripts/benchmark.ss. A `let`-based timer wraps the
+;; measured expression in a closure call; if any later statement in that
+;; same closure body hits a primitive outside `_fast_prim_map` (e.g.
+;; `current-time` itself), the whole call gets silently re-executed via
+;; the slow-trampoline fallback -- doubling the measured expression's
+;; actual work while under-reporting it, since the timer restarts on the
+;; retry. Confirmed via an instrumented call counter.
+(define _bench_start 0)
 (define-syntax elapsed
   [(elapsed ?exp)
-   (let ((_bench_start (current-time)))
+   (begin
+     (set! _bench_start (current-time))
      ?exp
      (round4 (- (current-time) _bench_start)))])
 

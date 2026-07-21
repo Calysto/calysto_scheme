@@ -20,9 +20,23 @@ python translate_rm.py source-rm.ss ../scheme.py
 | After Phase 1 (trampoline optimizations) | 1,540 ms | **4.8×** |
 | After Phase 2 (direct eval fast path) | 82 ms | **91×** |
 | After Phase 3 (JIT to Python) | 1.6 ms | **~4,500×** |
-| Python native | 0.48 ms | — |
+| After Phase 7 (drop self-recursion indirection) | 1.2 ms | **~6,200×** |
+| Python native | 1.0 ms | — |
 
-The JIT brings Scheme `fib(20)` to within **3.5× of native Python**.
+The JIT brings Scheme `fib(20)` to within **~1.2× of native Python** —
+i.e. close to parity, not the "~4×" this doc previously (and
+incorrectly) reported. See the "Benchmark-harness correctness bug"
+section below: every "measured" number in this document prior to that
+fix was silently computed by a benchmarking macro that **ran the
+timed expression twice** for any Phase-2/JIT-eligible closure whose
+body also called a primitive outside a small ~83-entry allow-list
+(`current-time` itself, needed to compute elapsed time, is one such
+primitive) — inflating every one of those numbers by roughly 2×
+without inflating the separately-measured "Python native" baseline.
+`fib(20)`'s honest **single-execution** numbers, measured with the
+fixed harness: 2.8 ms before Phase 7 → 1.2 ms after (**~2.3×**,
+consistent with the larger-scale Phase 7 measurements below), against
+1.0 ms native Python.
 
 ### Cross-version comparison
 
@@ -54,6 +68,18 @@ see).
 | tail loop, 6,000 iters | 1.1813s | **crash — `RecursionError`** | 0.0006s |
 | mutual recursion (`even?`/`odd?`), depth 2,000 | 0.2620s | 0.0825s | 0.0752s |
 
+**Caveat, added after the fact:** `scripts/cross_version_bench.ss`'s
+`elapsed` macro used the same `(let ((_bench_start (current-time))) ?exp
+...)` pattern later found to silently double-execute the measured
+expression for any shape that reaches Phase 2/JIT (see "Benchmark-harness
+correctness bug" below) — every column here except v1.4.8 (which predates
+Phase 2/JIT, so was never vulnerable) most likely carries close to a 2×
+inflation on the `fib(20)` and tail-loop rows. This wasn't caught or
+corrected retroactively (would require re-running v2.0.1/v2.0.2 from
+their own tags in a fresh `git worktree`, not done here) — treat the
+*shape* of these findings (v2.0.1's crash, the mutual-recursion gap) as
+solid, but not the precise multipliers.
+
 Two things this surfaces that the phase-by-phase fib table doesn't:
 
 - **v2.0.1 has a live correctness regression, not just missing speed.**
@@ -84,16 +110,53 @@ sizes that are only practical on 2.0.2, to show the ceiling the JIT and
 Phase 4 tail-call flattening enable now that both speed and correctness
 allow it. Same warmup/measured methodology as above; run on 2.0.2 only.
 
-| Benchmark | 2.0.2 |
-|---|---|
-| `fib(37)` — ~78.2M calls | 20.0313s |
-| tail loop, 3,000,000 iters | 0.2867s |
-| mutual recursion, depth 50,000 | 1.8510s |
+| Benchmark | 2.0.2 | 2.0.4 |
+|---|---|---|
+| `fib(37)` — ~78.2M calls | 20.0313s | 3.6685s |
+| tail loop, 3,000,000 iters | 0.2867s | 0.1449s |
+| mutual recursion, depth 50,000 | 1.8510s | 0.9111s |
+
+**Caveat on the 2.0.2 column:** these numbers were captured with the same
+`elapsed`-macro benchmark harness that turned out to have a measurement
+bug (see "Benchmark-harness correctness bug" below) — for shapes that hit
+Phase 2/JIT (all three rows here), the harness silently ran the timed
+expression twice and reported the second (retried) run's time, inflating
+every number by very close to 2×. 2.0.4's column above is measured with
+the *fixed* harness (`scripts/best_case_bench.ss`, current version), so
+this table is no longer apples-to-apples: roughly half of the 2.0.2 →
+2.0.4 drop in the tail-loop and mutual-recursion rows (which Phase 7
+doesn't touch at all) is just the harness fix, not a real 2.0.2 → 2.0.4
+speedup. Re-running 2.0.2 with the fixed harness (via `git worktree`,
+same method as the cross-version table above) would be needed for a
+trustworthy 2.0.2-vs-2.0.4 comparison; not done here.
+
+The `fib(37)` row *is* a real, additional Phase 7 speedup on top of that
+harness-fix effect — see the honest before/after (both measured with the
+fixed harness, same commit range) in the table below.
 
 These and other shapes (closures allocated per call, nested closures, HOF
 with a parameter in operator position, `map` over a JIT'd closure,
 `set!`-based loops) are covered by the broader benchmark suite at
-`scripts/benchmark.py` — run with `python3 scripts/benchmark.py`.
+`scripts/benchmark.py` — run with `python3 scripts/benchmark.py`. Only the
+naive-recursion (`fib`) shape moves under Phase 7; the rest are flat
+before/after (both measured with the harness fix already applied), within
+noise — confirming Phase 7 only affects self-recursive, non-tail calls:
+
+| Benchmark (`scripts/benchmark.py`) | Before Phase 7 | After Phase 7 |
+|---|---|---|
+| 1. `fib(30)`, naive recursion | 0.3463s | 0.125s |
+| 2. self tail-recursion, 3M iters | 0.1461s | 0.1477s |
+| 3. mutual tail-recursion, 50K | 0.9263s | 0.9356s |
+| 4. closures allocated per call, 20K | 0.8726s | 0.8382s |
+| 5. nested closures, 5K | 0.6223s | 0.596s |
+| 6. HOF, parameter in operator position, 5K | 0.1887s | 0.1822s |
+| 7. `map` + closure over a 20K-elt list | 0.2404s | 0.2343s |
+| 8. `set!`-based loop, 20K iters | 1.199s | 1.1964s |
+
+(Rows 4–8 above are re-measured with the fixed harness but are otherwise
+unaffected by Phase 7, included for completeness — item 8 in particular
+was never doubled in the first place, since `set!` already forces that
+closure onto the slow trampoline before Phase 2 is ever attempted.)
 
 ---
 
@@ -415,8 +478,9 @@ Free variables (depth > 0) are looked up in the closure's captured
 environment at JIT compile time and stored in the `exec()` namespace:
 
 - **Self-recursive calls**: detected by identity (`val is self._proc`);
-  a forward-reference cell `_self_ref = [None]` is injected and patched
-  after compilation.
+  compiled to a direct call by the generated function's own def name
+  (`_jit_fn`) rather than a captured free variable — see Phase 7 below
+  (superseding an earlier forward-reference-cell implementation).
 - **Already-JIT-compiled siblings**: their compiled Python function is
   captured directly.
 - **`_fast_prim_map` primitives**: wrapped as `lambda *a, _d=direct: _d(list(a))`
@@ -475,9 +539,9 @@ relies on to loop at all.
 **Phase 3 (JIT, `Scheme.py`):** `_JitCompiler` gained a `tail_stmts()` method
 used only for a compiled function's tail-position expression (through `if`
 branches). It detects **self-recursive** tail calls by identity
-(`_is_self_ref`, using the same `val is self._self` check `_capture` already
-used) and compiles them to a parameter reassignment + `continue` instead of
-a call:
+(`_is_self_ref`, using the same `val is self._self` identity check used
+elsewhere for self-recursion, see Phase 7) and compiles them to a
+parameter reassignment + `continue` instead of a call:
 
 ```python
 def _jit_fn(_j_n, _j_acc):
@@ -684,6 +748,219 @@ all actually compiled, not merely ran fast by chance.
 
 ---
 
+## Phase 7 — Drop the indirection cell for self-recursive (non-tail) calls
+
+### The gap
+
+Phase 4 already special-cases self-recursive **tail** calls (compiled to a
+parameter reassignment + `continue`, see above). But a self-recursive call
+in **non-tail** position — the common case for tree recursion like `fib`,
+where `(+ (fib (- n 1)) (fib (- n 2)))` can't be a tail call because both
+results feed into `+` — still went through `_capture`'s generic
+free-variable path, which treated "this call refers to the function's own
+proc tuple" as just another captured value:
+
+```python
+if val is self._self:
+    sref = self._sref            # sref[0] patched to the real fn after exec()
+    self._free[m] = lambda *a, _r=sref: _r[0](*a)
+```
+
+Every recursive `fib` call paid for an extra Python function call (the
+wrapper lambda) and a tuple indirection (`_r[0]`) on top of the real
+JIT'd call — profiling `fib(30)` showed this wrapper alone accounted for
+roughly a third of total runtime.
+
+### The fix
+
+The generated function is always emitted under the literal name `_jit_fn`
+(see `_jit_compile_proc`: `'def _jit_fn(' + ps + '):'`). A bare reference
+to that name inside the function's own body resolves at call time via a
+normal Python global lookup into the `exec()` namespace — which already
+holds the function under that name by the time any call actually happens,
+since `def` binds it immediately when the `exec()` runs, before the
+function is ever invoked. So a self-reference can just emit the token
+`_jit_fn` directly, with no forward-reference cell and no wrapper:
+
+```python
+if val is self._self:
+    return '_jit_fn'   # generated code calls itself by its own def name
+```
+
+checked in both places a variable can resolve to the enclosing proc
+(`expr()`'s `lexical_address_aexp` case, and `_var()`). This made the
+forward-reference cell (`self_ref = [None]` / `self._sref` /
+`self_ref[0] = fn`) entirely dead, so it was removed along with it.
+
+For `fib`, the generated source is unchanged in shape, just without the
+indirection:
+
+```python
+def _jit_fn(_j_n):
+    return (_j_n if ((_j_n < 2)) is not False else
+            (_jit_fn((_j_n - 1)) + _jit_fn((_j_n - 2))))
+```
+
+### Measured impact
+
+Both numbers below hold the same shape (self-recursive, non-tail) across
+three different scales; tail-recursive, mutual-recursive, closure, HOF,
+`map`, and `set!` benchmarks are flat before/after (see tables above) —
+consistent with the fix only touching the self-recursive non-tail path.
+
+All numbers below are measured with the harness fix described in
+"Benchmark-harness correctness bug" (below) already applied to both the
+"before" and "after" run, so — unlike an earlier version of this
+document — these are honest, single-execution numbers, not doubled ones:
+
+| Benchmark | Before | After | Speedup |
+|---|---|---|---|
+| `fib(20)` — 21,891 calls | 2.8ms | 1.2ms | **~2.3×** |
+| `fib(30)` (`scripts/benchmark.py` #1) | 0.3463s | 0.125s | **~2.8×** |
+| `fib(37)` — ~78.2M calls (`scripts/best_case_bench.py`) | 9.9s | 3.6352s | **~2.7×** |
+
+Also reflected in `time python scheme.py fib.ss` for `(fib 35)`: **3.95s →
+~1.55s** wall-clock (this one *is* a real single execution — bare
+top-level calls aren't subject to the harness bug, see below), bringing
+it to within ~1.1–1.2× of a hand-written recursive `fib.py` (~1.29s on
+the same machine) instead of ~3× slower than it.
+
+### What this does and doesn't cover
+
+- Any self-recursive, non-tail call now compiles to a direct call by
+  name — no change in *which* functions are JIT-eligible, only how a
+  self-call within an already-JIT-eligible function is compiled.
+- Semantics are unchanged from before this fix: a self-recursive JIT'd
+  call was already bound to the *specific compiled closure instance* at
+  compile time (via the now-removed `sref` cell), not re-resolved
+  dynamically against the current value of the function's name in the
+  environment — e.g. a `set!` that reassigns the function's name after
+  the closure was compiled was never observed by its own recursive calls,
+  before or after this change. This matches the existing design intent
+  documented in Phase 3/4, just implemented without the extra indirection.
+- Verified with the full test suite (`pytest tests/test_all.py`, 271
+  tests) and `scripts/benchmark.py` / `scripts/best_case_bench.py`
+  end-to-end, both before (via `git stash`) and after the change, on the
+  same machine, for a clean paired comparison.
+
+---
+
+## Benchmark-harness correctness bug (found while validating Phase 7)
+
+### The symptom
+
+Re-measuring `fib(20)` to sanity-check Phase 7's numbers gave a wall-clock
+`time python scheme.py fib.ss` result (`(fib 35)`: ~1.55s total, close to
+hand-written `fib.py`'s ~1.29s) that flatly contradicted this document's
+own `elapsed`-macro-based numbers, which put the same JIT'd `fib` at
+~4× native Python. Both couldn't be right for the same code.
+
+### Root cause
+
+`scripts/benchmark.ss` (and `best_case_bench.ss`, `cross_version_bench.ss`)
+all time a benchmark with this pattern:
+
+```scheme
+(define-syntax elapsed
+  [(elapsed ?exp)
+   (let ((_bench_start (current-time)))
+     ?exp
+     (round4 (- (current-time) _bench_start)))])
+```
+
+`(let ...)` desugars to a closure call (an immediately-invoked lambda).
+Phase 2's `apply_proc` wraps every closure call in a try/except: attempt
+`_eval_direct`/JIT first, and if it raises `_TrampolineFallback`
+*anywhere in the closure's body*, discard that attempt entirely and
+re-run the **whole closure call** from scratch via the slow trampoline
+(see Phase 2's "Safety analysis" above — this is the documented,
+intentional fallback mechanism). `current-time` is not one of the ~83
+primitives in `_fast_prim_map`, so the *second* statement in this `let`'s
+body — computing elapsed time, which calls `current-time` again — always
+raises `_TrampolineFallback`. By that point `?exp` (the thing actually
+being measured) has already run to completion once, successfully, via
+Phase 2/JIT. The fallback then re-runs the entire `let` body, including
+`?exp`, a second time via the trampoline — and only the *second* run's
+duration ends up in the reported time, since the timer (`_bench_start`)
+is itself inside the same retried body and gets reset.
+
+Net effect: every "measured" number in this document that exercised
+Phase 2/JIT was the time to run the benchmark **twice**, silently, while
+the separately-measured "Python native" baseline was never doubled —
+making the JIT look roughly 2× slower relative to native Python than it
+actually is.
+
+Confirmed directly, not just inferred, with an instrumented call counter
+(a closure that increments a vector slot on every call — `vector-set!`
+isn't `set!`, so it doesn't disable Phase 2 the way `(set! ...)` would):
+
+```scheme
+(let ((start (current-time)))
+  (fib 10)                    ; 177 calls for fib(10), naive recursion
+  (printf "done~%"))          ; not in _fast_prim_map -> triggers fallback
+;; counter reads 354 afterward, not 177 -- fib(10) ran twice.
+```
+
+Bare top-level statements and a top-level `(begin ...)` are **not**
+vulnerable — confirmed the same way, counter reads 177 in both cases.
+Neither is a closure call, so neither goes through `apply_proc`'s
+catch-and-retry at all; only an actual closure/`let`/lambda invocation is.
+
+### Why this is more than a benchmarking nuisance
+
+The trigger has nothing to do with timing code specifically. **Any**
+Phase-2/JIT-eligible closure (any closure not containing `set!` — see
+`_is_direct_eval_safe`) whose body does real work and *then* calls
+**any** primitive outside the small `_fast_prim_map` allow-list — which
+includes `display`, `printf`, `current-time`, `float`, string/vector
+constructors not in the list, host interop calls, and more — will have
+its **entire body silently re-executed** the moment that later call is
+reached. For a pure function this just wastes time (as here). For a
+function with real side effects — writing output, mutating a vector or
+box, a `python-exec` call, appending to a file — those side effects
+happen **twice**, silently, with no error and no test-suite signal
+(`pytest tests/test_all.py` passes throughout, since none of its
+assertions happen to be sensitive to this shape). This is a genuine,
+still-open interpreter correctness gap, not just a measurement artifact —
+tracked as its own row in "Potential further improvements" below rather
+than fixed here, since a proper fix (resuming the trampoline from the
+failure point instead of restarting the whole closure call, or widening
+`_fast_prim_map`, or something else) needs the same level of scrutiny the
+abandoned `set!`/JIT work below got, to avoid trading a performance bug
+for a silent-wrong-answers one.
+
+### The fix applied here
+
+Scoped narrowly to the benchmark scripts, to make this document's numbers
+trustworthy again — not a fix to the interpreter itself. `elapsed` in
+`scripts/benchmark.ss` and `scripts/best_case_bench.ss` was rewritten to
+sequence with `begin` and a top-level `set!` instead of a `let`:
+
+```scheme
+(define _bench_start 0)
+(define-syntax elapsed
+  [(elapsed ?exp)
+   (begin
+     (set! _bench_start (current-time))
+     ?exp
+     (round4 (- (current-time) _bench_start)))])
+```
+
+`begin` is plain sequencing, not a closure call, so it's never wrapped in
+`apply_proc`'s catch-and-retry — confirmed with the same instrumented
+counter (reads 177, not 354, with this version). `scripts/cross_version_bench.ss`
+was intentionally left as-is: it's checked out fresh from each historical
+tag via `git worktree` for the "Cross-version comparison" table above, so
+editing today's copy wouldn't change what actually ran to produce those
+numbers; see the caveat added to that table's section instead.
+
+Every number in this document that could be affected (the top summary
+table, "Best case", the `scripts/benchmark.py` table, and Phase 7's
+"Measured impact") was re-measured with the fixed harness and corrected
+in place, rather than left as a mix of doubled and honest figures.
+
+---
+
 ## What real Scheme implementations do
 
 For reference, production Scheme systems use similar but deeper techniques:
@@ -715,6 +992,8 @@ paths in `scheme.py` — not projected from the fib table.
 | ~~JIT: handle `lambda_aexp` (compile HOF-returning functions)~~ | **Done — see Phase 5 above.** `make-adder`-shaped functions (body directly returns a closure over its own parameters) now JIT-compile; measured **~12×** on a 4,500-iteration benchmark once fixed startup cost is subtracted. Closures via internal `define`/`let` remain unsupported (separate, larger gap) | ~~Medium~~ |
 | ~~Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code~~ | **Done.** Isolated microbenchmark suggested ~1.2× (20%); real end-to-end gain on the trampoline path is much smaller, **~2%** (34.4s → 33.7s on a 600K-iteration `set!` benchmark, consistent across repeats) — register writes turned out to be a small slice of per-step cost next to environment/continuation allocation. **Bonus:** the change surfaced and fixed a latent correctness bug (see below) | ~~Low~~ |
 | ~~JIT: allow a parameter used in operator position~~ | **Done — see Phase 6 above.** `(define (apply-twice f x) (f (f x)))`-shaped functions now JIT-compile; ~0.39s → ~0.19s on a 4,800-call benchmark (work time drops to immeasurably small, consistent with other JIT gains here). Surfaced and fixed a related missed-optimization bug in `_jit_call` itself | ~~Low~~ |
+| ~~JIT: drop the forward-ref-cell indirection for self-recursive (non-tail) calls~~ | **Done — see Phase 7 above.** `fib`-shaped naive recursion **~2.3–2.8×** across three scales (`fib(20)`, `fib(30)`, `fib(37)`); tail/mutual-recursion/closure/HOF/`map`/`set!` benchmarks unaffected, as expected | ~~Low~~ |
+| **Interpreter: Phase 2's fallback re-executes a closure's entire body, including already-completed side effects, instead of resuming or staying on the trampoline from the point of failure** | Not fixed. Found while validating Phase 7's numbers — see "Benchmark-harness correctness bug" below. Worked around in the benchmark scripts (avoid the trigger); the underlying interpreter behavior is unchanged and can still silently double real side effects (I/O, mutation) in ordinary user code, not just benchmarks | Medium–High (same risk class as the abandoned `set!`/JIT work below: getting this wrong means silent double-execution, not a crash) |
 | Run on PyPy | 5–20× additional on top of existing gains (measured ~2.5×–10× on real workloads) — a user/deployment decision, not pursued further here | Zero code changes |
 
 **Bonus finding, not in the original list:** `(use-stack-trace #f)` — an
