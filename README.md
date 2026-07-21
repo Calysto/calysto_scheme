@@ -140,4 +140,4 @@ Planned:
 
 Limitations:
 
-* Runs slow on CPython; try PyPy
+* Runs faster on PyPy
