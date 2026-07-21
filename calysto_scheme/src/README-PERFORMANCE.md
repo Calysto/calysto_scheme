@@ -94,10 +94,22 @@ Two things this surfaces that the phase-by-phase fib table doesn't:
   0.08s). `even?`/`odd?` calling each other in tail position never gets
   JIT-compiled at all: when `even?` is first invoked, `odd?` hasn't been
   JIT'd yet, so `even?`'s own compile attempt can't resolve `odd?` to a
-  compiled Python function, raises `_TrampolineFallback`, and gets
-  permanently cached as "don't JIT" (`_jit_cache[pid] = (proc, False)`,
-  never retried). This pattern is stuck near Phase-1 trampoline speed even
-  on 2.0.2 — a known gap, not yet fixed.
+  compiled Python function and raises `_TrampolineFallback`.
+
+  **Correction (found while auditing `_jit_lookup` for the JIT cleanup
+  work — see "Phase 9" below):** this document previously claimed the
+  failed attempt gets "permanently cached as 'don't JIT'... never
+  retried." That's wrong. `_jit_lookup` deliberately reports a cached
+  failed-compile verdict the same as "not yet attempted"
+  (`return None if value is _CACHE_MISS or value is False else value`),
+  so every call site (`_eval_direct`, `_jit_call`) re-invokes
+  `_jit_compile_proc` on **every single call** to `even?`/`odd?`, forever
+  — a wasted, repeated compile attempt each time, not a one-time miss.
+  This is why the pattern is stuck near Phase-1 trampoline speed even on
+  2.0.2 (the retry cost adds on top of the trampoline cost, not instead of
+  it) — a known gap, not yet fixed. Collapsing this into a true
+  one-time-failure cache was considered during the Phase 9 cleanup and
+  deliberately deferred — see Phase 9's notes below for why.
 
 ### Best case
 
@@ -365,16 +377,20 @@ Common primitives are stored in the environment as Scheme procedure tuples
 `(symbol_procedure, b_proc_XX_d)`. Going through the register-machine wrapper
 would defeat the purpose of the fast path.
 
-Instead, a dict is built **lazily on first use** mapping each `b_proc_XX_d`
-function to a Python callable that takes a plain Python list of args:
+Instead, `_FAST_PRIM_SPECS` (a module-level dict, hoisted out of
+`_build_fast_prim_map` during the Phase 9 cleanup so it can be inspected/
+tested directly — see below) maps each primitive's Scheme name to a Python
+callable taking a plain Python list of args; `_build_fast_prim_map` resolves
+each name **lazily, on first use**, to the matching `b_proc_XX_d` function
+found in the live toplevel environment:
 
 ```python
 '+':  lambda args: plus(*args),
 '<':  lambda args: LessThan(*args),
 'car': lambda args: args[0].car,
 'length': lambda args: length(args[0]),
-'map': _direct_map,   # uses _apply_direct internally
-# ... 83 total entries covering arithmetic, predicates,
+'map': _fast_prim_direct_map,   # uses _apply_direct internally
+# ... ~80 total entries covering arithmetic, predicates,
 #     list/vector/string ops, char ops, HOF (map, for-each)
 ```
 
@@ -732,8 +748,9 @@ all actually compiled, not merely ran fast by chance.
   is now JIT-eligible.
 - **Related, separate, still-open gap found along the way (not fixed
   here):** `_apply_direct` — used by `_fast_prim_map`'s `map`/`for-each`
-  wrappers (`_direct_map`, `_direct_for_each`, etc.), not just `_jit_call`
-  — has the exact same "never attempts JIT compilation" limitation. A
+  wrappers (`_fast_prim_direct_map`, `_fast_prim_direct_for_each`, etc.),
+  not just `_jit_call` — has the exact same "never attempts JIT
+  compilation" limitation. A
   function invoked *only* through `map`/`for-each` (e.g. a `lambda` passed
   inline) stays at Phase 2 speed indefinitely, regardless of this fix.
   Confirmed directly: timing `(for-each (lambda (n) (apply-twice add1 n)) (range N))`
@@ -1113,6 +1130,190 @@ recursion — the shapes most code actually hits — are unaffected.
   the `scripts/benchmark.py` table is unaffected in practice, since
   `map`'s own trampoline-driven iteration is already reasonably fast —
   see Phase 1).
+
+---
+
+## Phase 9 — Reduce duplication across the JIT/Phase-2 machinery (no behavior change)
+
+### Motivation
+
+Not a performance phase — a cleanup one. By Phase 8, `Scheme.py` had grown
+**three** independently hand-maintained recursive walks over the same
+annotated-AST node tags (`lit`, `lexical-address`, `var`, `if`, `lambda`,
+`begin`, `app`): `_eval_direct` (executes), `_JitCompiler` (compiles to
+Python source), and `_is_phase2_safe`/`_phase2_safe_walk` (statically
+classifies safety). This is exactly the shape of duplication that caused
+real bugs earlier in this document — Phase 6 found `_jit_call` missing a
+JIT-attempt step that `_eval_direct` already had; Phase 8 itself exists
+because `_is_phase2_safe` didn't exist yet and nothing checked whether
+Phase 2's optimistic fallback matched real `_eval_direct` behavior. A
+dedicated audit (four ranked, independently-verified changes, each
+regenerated and re-tested before the next) addressed the most
+mechanically-safe duplication without touching the three walkers'
+actual per-tag semantics, which stayed deliberately un-merged — see "What
+this does and doesn't cover" below for why.
+
+### 1. Unified the two identity caches
+
+`_jit_cache`/`_jit_lookup` and `_phase2_safe_cache`/`_phase2_safe_lookup`
+were two hand-copied `dict[id(x)] -> (x, verdict)` implementations, each
+with its own copy of the GC-id-reuse guard (Python can reuse a
+garbage-collected object's `id()`, so a lookup must check the cached key
+`is` the object asked about, not just that `id()` matches). Both now wrap
+one shared `_IdentityCache` class. The two caches' *behavior* was
+deliberately **not** unified — see the mutual-recursion correction above:
+`_jit_lookup` still reports a cached failed-compile verdict as "not yet
+attempted" (so JIT compilation is retried every call), while
+`_phase2_safe_lookup` still reports a cached `False` as final. Collapsing
+that difference is a real behavior/performance change, not a dedup, and
+was explicitly left alone.
+
+### 2. Unified operator-resolution logic
+
+Four places independently re-derived "does this operator expression
+statically resolve to a value, given `depth`/`offset` or a `var-aexp`
+name" — `_JitCompiler.expr()`'s `lexical-address-aexp` case, `_var()`,
+`_is_self_ref()`, and `_phase2_safe_walk_call()`. Extracted into
+`_resolve_lexical_address(depth, offset, env)`, `_resolve_var(sym, env)`,
+and a combining `_resolve_operator(op_exp, env)`, each returning a tagged
+`('local', None)` / `('unresolved', None)` / `('value', v)` result and
+never raising — callers keep applying their own existing policy on top
+(e.g. `expr()` raises `_TrampolineFallback` on `'unresolved'`;
+`_is_self_ref()` just returns `False`). `_is_self_ref()` shrank from ~20
+lines to `return kind == 'value' and val is self._self`.
+`_phase2_safe_walk_call`'s `lit-aexp`-as-operator special case (which no
+JIT-side caller has ever needed) was kept local rather than folded into
+the shared helper, to avoid silently expanding what the JIT accepts.
+
+Added `tests/test_jit_self_recursion.py`: two pinned regression tests for
+the single most safety-critical invariant this logic guards (Phase 7's
+identity-based self-recursion binding) — including one that redefines a
+JIT'd function's name after compilation and confirms the *original*
+compiled closure's own recursive calls are unaffected.
+
+### 3. Primitive tables: hoisted, not merged
+
+`_fast_prim_map`'s source dict (renamed `_FAST_PRIM_SPECS`) was local to
+`_build_fast_prim_map`; hoisted to module level (along with its four
+helper closures, renamed `_fast_prim_direct_map` /
+`_fast_prim_direct_for_each` / `_fast_prim_set_car` / `_fast_prim_set_cdr`)
+so it can be inspected and tested directly — no behavior change.
+`_JitCompiler._NARY`/`_CMP`/`_UNARY` (the ~9-entry compile-time inlining
+templates) were deliberately **not** merged into it: they serve a
+different role (syntactic Python-operator inlining vs. generic runtime
+dispatch), and forcing one data structure to serve both would conflate
+"any callable" with "safely inlineable as a raw Python operator," a
+narrower property. Added `tests/test_jit_prim_tables.py` instead, which
+asserts every name `_NARY`/`_CMP`/`_UNARY` inlines is still a
+`_fast_prim_map` entry — turning "must be kept in sync by hand" into an
+automated check.
+
+### 4. Expanded the differential-test harness — done first, as a safety net
+
+`tests/test_phase2_safety.py` already ran `test_all.ss` twice (trampoline-
+only vs. Phase 2+JIT) via `tests/_phase2_diff_runner.py`, diffing every
+assertion's pass/fail result. Added a third mode, `"phase2only"`
+(`_jit_compile_proc` monkeypatched to a no-op, so every Phase-2-eligible
+closure runs through `_eval_direct` alone, JIT never engaging), and diff
+all three modes pairwise. This isolates `_eval_direct`'s own correctness
+from `_JitCompiler`'s specifically — the exact class of cross-walker
+divergence this file's bug history (Phases 6–8) keeps finding — and was
+deliberately done *before* the other three changes, so it could catch any
+regression they introduced.
+
+### What this does and doesn't cover
+
+- Explicitly **not attempted**: merging `_eval_direct`, `_JitCompiler`,
+  and `_phase2_safe_walk` into one shared AST-visitor abstraction. They
+  differ in return type (value / Python-source-string / bool), side-effect
+  profile (real execution / none / none), and control-flow shape (Phase
+  4's tail-position `while True` loop exists in `_eval_direct` and,
+  separately, in `_JitCompiler.tail_stmts()`, with no analog in
+  `_phase2_safe_walk` at all). A generic visitor would have to thread
+  three incompatible shapes through one piece of plumbing — likely as
+  risky as the duplication it would remove, in code with a specific
+  documented history of exactly this class of bug. The flat `if`/`elif`
+  chain in each walker is itself a debugging asset today: auditing "did a
+  new AST case get added to all three" is a `grep` and an eyeball diff;
+  a handler-dispatch abstraction would make that harder, not easier.
+- Also not attempted: narrowing `_jit_compile_proc`'s broad
+  `except Exception` (it's exactly what guarantees any compile failure
+  falls back silently and safely — no correctness upside to narrowing
+  it), and reconciling `_phase2_safe_walk`'s deliberate
+  `mu-lambda-aexp` divergence from `_is_direct_eval_safe` (already an
+  intentional asymmetry guarding against a case `_eval_direct` can't even
+  handle — see Phase 8's discussion above).
+- A separate idea investigated in parallel — moving the JIT compiler's
+  *implementation* into hand-written Scheme (in `interpreter-cps.ss`),
+  flowing through the existing `cps → ds → rm → translate_rm.py` pipeline
+  like the rest of the interpreter — was spiked and confirmed technically
+  *possible* (the pipeline can carry new hand-written CPS Scheme through
+  correctly), but produces register-machine/trampolined Python at the
+  output, not readable code, which undermines the elegance goal. Not
+  pursued.
+
+### Verified
+
+- Full suite: 292 → 297 passing (5 new tests: 3 in the expanded
+  `test_phase2_safety.py`, 2 in `test_jit_self_recursion.py`, 1 in
+  `test_jit_prim_tables.py`), regenerating `../scheme.py` from `Scheme.py`
+  and re-running after each of the four changes individually, not just at
+  the end.
+- `scripts/benchmark.py` and `scripts/best_case_bench.py`: every row flat
+  across all four changes, within normal run-to-run noise (~2–5%, no
+  systematic direction) — consistent with a behavior-preserving refactor.
+
+### Addendum — AST field-accessor functions: tried, measured, reverted
+
+A natural next abstraction was considered: `_eval_direct`, `_JitCompiler`,
+and `_phase2_safe_walk*` all pull fields out of aexp cons-nodes with raw
+chains like `exp.cdr.cdr.cdr.car`, each re-deriving (and re-commenting)
+the same layout inline. Wrapping each tag's field extraction in a small
+named accessor (`_if_parts(exp) -> (test, then, else)`, etc.) and an
+`_iter_aexp_list` generator to replace the repeated arg-list
+`while isinstance(cur, cons): ...` loops looked like a clean win —
+implemented and initially verified (297/297 tests passing) — but
+benchmarking caught a real, reproducible regression before it shipped:
+
+| Benchmark | Before | After accessors | Why |
+|---|---|---|---|
+| `fib(30)`, tail loops (compile once, run native) | flat | flat | one-time cost, amortized over unlimited later calls |
+| Mutual recursion (`even?`/`odd?`, never JIT-compiles) | 0.924s | 1.10s (**+19%**) | `_jit_compile_proc` retries the *entire* failed compile attempt on every call (see the mutual-recursion correction above) — every accessor call's overhead is paid every single call, with no amortization at all |
+| Fresh closure allocated every iteration | 1.711s | 1.81s (**+6%**) | a *new* closure every call defeats both `_jit_cache` and `_phase2_safe_cache` — same "no amortization" problem, smaller because only one (successful) compile attempt is paid per call, not a failed one plus a full `_eval_direct` re-execution |
+
+Root cause, confirmed with an isolated microbenchmark (not just inferred):
+a plain attribute chain (`exp.cdr.cdr.car`) took ~101 ns; the same
+extraction via a one-line accessor function returning a tuple took ~139 ns
+(**+38%**, from Python's function-call and tuple-pack/unpack overhead);
+the arg-list generator took ~355 ns against a raw `while`-loop's ~227 ns
+(**+56%**, from the `yield`/`next()` suspend-resume protocol). Individually
+tiny, but multiplied across every AST node visited in a hot, uncached
+retry loop, these add up to exactly the regression measured above. A
+non-generator, list-returning variant of the arg-list helper was also
+measured (~9% over raw, versus the generator's ~56%) as a cheaper
+middle ground — not used, since *any* non-zero per-call cost was ruled
+out for this code, not just minimized.
+
+**Resolution:** reverted every accessor/generator call in `_eval_direct`,
+`_JitCompiler`, and `_phase2_safe_walk*` back to raw inline field access
+— confirmed by benchmark to fully recover all three regressed rows to
+baseline. The accessor *functions* themselves were removed (they had zero
+remaining callers), replaced with a single comment block (directly above
+`_is_direct_eval_safe` in `Scheme.py`) documenting each aexp tag's
+`(tag field1 field2 ... info)` cons-cell layout once, in prose, with zero
+runtime cost — the readability goal without the speed cost. Full test
+suite still 297/297 after reverting; every benchmark row back within
+normal noise of the Phase 8 baseline.
+
+The general lesson, consistent with this file's existing design
+principle: in `_eval_direct` and `_JitCompiler` specifically, *any*
+closure that either never successfully JIT-compiles or is freshly
+allocated on every call gets zero benefit from either cache, so these two
+code paths should be treated as always-hot and always-uncached when
+weighing a readability abstraction against its runtime cost — unlike
+`_phase2_safe_cache`-gated or `_jit_cache`-gated code reached only through
+a closure that's called many times *after* its first (cached) attempt,
+where the same kind of wrapper is normally free.
 
 ---
 
