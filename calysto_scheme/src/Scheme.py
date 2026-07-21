@@ -793,8 +793,22 @@ def _jit_call(op, args):
     (an already-JIT'd function, a wrapped primitive, or a self-reference) or
     a Scheme proc tuple — e.g. one produced by _jit_make_closure, or an
     un-JIT'd closure reached through a computed operator expression such as
-    ((make-adder n) 0) or an immediately-invoked lambda."""
+    ((make-adder n) 0), an immediately-invoked lambda, or a parameter used
+    in operator position (e.g. (define (apply-twice f x) (f (f x))))."""
     if isinstance(op, tuple) and op[0] is symbol_procedure:
+        fn = op[1]
+        if len(op) == 6 and fn is b_proc_1_d and op[5]:
+            # Mirror _eval_direct's app_aexp dispatch: give this proc a
+            # chance to JIT-compile instead of always falling to Phase 2
+            # via _apply_direct — otherwise a function reached *only*
+            # through _jit_call (e.g. always passed as a parameter, never
+            # called by name) would never get its own JIT attempt.
+            jit_fn = _jit_lookup(op)
+            if jit_fn is None:
+                _jit_compile_proc(op)
+                jit_fn = _jit_lookup(op)
+            if jit_fn:
+                return jit_fn(*args)
         return _apply_direct(op, args, None)
     return op(*args)
 
@@ -967,22 +981,22 @@ class _JitCompiler:
                     self._free['_j__cons'] = cons
                 return self._UNARY[sym].format(args[0])
 
-        # If the operator is a local parameter (depth=0), we can't know at
-        # compile time whether it'll be a Python callable or a Scheme proc
-        # tuple — refuse to JIT this function.
-        if (isinstance(op_exp, cons) and
-                op_exp.car is symbol_lexical_address_aexp and
-                op_exp.cdr.car == 0):
-            raise _TrampolineFallback()
-
-        # Operator is itself a computed expression: a nested call, e.g.
-        # ((make-adder n) 0), or an immediately-invoked lambda (how
-        # `let`/`or`/`and` commonly desugar), e.g. ((lambda (x) ...) e).
-        # self.expr() on either can now yield a Scheme proc *tuple* (via
-        # _jit_make_closure, once lambda_aexp support exists), not a plain
-        # Python callable, so a bare op_src(...) call could try to call a
-        # tuple. Dispatch through a runtime helper that handles both.
-        if isinstance(op_exp, cons) and op_exp.car in (symbol_app_aexp, symbol_lambda_aexp):
+        # Operator shapes that can't be proven, at compile time, to yield a
+        # plain Python callable:
+        #  - a local parameter (depth=0) — its value is whatever the caller
+        #    passed: could be a native callable or a Scheme proc tuple
+        #    (e.g. (define (apply-twice f x) (f (f x))))
+        #  - a nested call, e.g. ((make-adder n) 0)
+        #  - an immediately-invoked lambda (how `let`/`or`/`and` commonly
+        #    desugar), e.g. ((lambda (x) ...) e)
+        # self.expr() on any of these can yield a Scheme proc *tuple* (via
+        # _jit_make_closure, or simply an un-JIT'd proc passed through as an
+        # argument), not a plain Python callable, so a bare op_src(...) call
+        # could try to call a tuple. Dispatch through a runtime helper that
+        # handles both.
+        if isinstance(op_exp, cons) and (
+                op_exp.car in (symbol_app_aexp, symbol_lambda_aexp) or
+                (op_exp.car is symbol_lexical_address_aexp and op_exp.cdr.car == 0)):
             op_src = self.expr(op_exp)
             self._free['_jit_call'] = _jit_call
             return f'_jit_call({op_src}, [{", ".join(args)}])'
