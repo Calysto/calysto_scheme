@@ -919,15 +919,16 @@ reached. For a pure function this just wastes time (as here). For a
 function with real side effects — writing output, mutating a vector or
 box, a `python-exec` call, appending to a file — those side effects
 happen **twice**, silently, with no error and no test-suite signal
-(`pytest tests/test_all.py` passes throughout, since none of its
-assertions happen to be sensitive to this shape). This is a genuine,
-still-open interpreter correctness gap, not just a measurement artifact —
-tracked as its own row in "Potential further improvements" below rather
-than fixed here, since a proper fix (resuming the trampoline from the
-failure point instead of restarting the whole closure call, or widening
-`_fast_prim_map`, or something else) needs the same level of scrutiny the
+(`pytest tests/test_all.py` passes throughout at the time this was
+written, since none of its assertions happened to be sensitive to this
+shape — two regression tests were added in Phase 8, below).
+This is a genuine interpreter correctness gap, not just a measurement
+artifact — at the time this section was written it was tracked as an
+open row in "Potential further improvements" rather than fixed
+immediately, since a proper fix needs the same level of scrutiny the
 abandoned `set!`/JIT work below got, to avoid trading a performance bug
-for a silent-wrong-answers one.
+for a silent-wrong-answers one. It was fixed shortly after, once that
+scrutiny was done — see Phase 8, immediately below.
 
 ### The fix applied here
 
@@ -958,6 +959,160 @@ Every number in this document that could be affected (the top summary
 table, "Best case", the `scripts/benchmark.py` table, and Phase 7's
 "Measured impact") was re-measured with the fixed harness and corrected
 in place, rather than left as a mix of doubled and honest figures.
+
+---
+
+## Phase 8 — Fix the underlying double-execution bug, not just its benchmark symptom
+
+### The bug, restated
+
+The previous section fixed the *symptom* (the benchmark harness) but
+left the actual interpreter behavior unchanged: `apply_proc` attempts
+Phase 2 (`_eval_sequence_direct`) for the whole of any `set!`-free
+closure body, and if `_TrampolineFallback` is raised *anywhere* in that
+body — a call to a primitive outside `_fast_prim_map`, or to a closure
+that itself contains `set!` — the old code discarded the attempt and
+re-ran the **entire body** via the slow trampoline, including whatever
+side effects already ran before the failure. This isn't limited to a
+single closure's own statements: `_eval_direct` inlines calls to other
+safe-but-not-yet-JIT'd closures into the same Python call chain (the
+"reuse this Python frame" mechanism from Phase 4), so the one shared
+catch point at the outermost `apply_proc` can sit *several logical
+closures* away from where the failure actually happens. Confirmed with
+an instrumented vector-counter closure `O` that does its own work, then
+calls a nested closure `H` which does its own work and then fails:
+before this fix, `O`'s counter read 2 and `H`'s read 3 for what should
+have been exactly one call each — not just doubling, but compounding,
+since a retry can itself retry.
+
+This is a real correctness bug, not a performance one: any Phase-2-
+eligible closure that does real work (I/O, mutation, anything with an
+observable side effect) and then calls something outside the small
+`_fast_prim_map` allow-list, or a `set!`-using helper, could silently
+re-run that work.
+
+### The fix
+
+`_is_phase2_safe(proc)` (`Scheme.py`, near `_is_direct_eval_safe`): a
+static, side-effect-free walk that mirrors `_eval_direct`'s own dispatch
+— same AST node cases, same call-inlining behavior for nested closures —
+but only *classifies*, the same way a failed JIT compile attempt
+(`_jit_compile_proc`) never executes anything either. It transitively
+certifies that every call reachable from a closure's body (without
+crossing an inner-lambda boundary) resolves, statically, to either a
+known-pure `_fast_prim_map` primitive or another closure that is itself
+already certified safe. Self- and mutually-recursive references are
+handled by optimistically assuming a proc already being checked is safe
+(sound: the overall walk still ANDs in every other reachable expression,
+so real unsafety anywhere in a cycle is still found); only the outermost
+call's verdict is cached, by identity, mirroring `_jit_cache`'s pattern
+including its GC-id-reuse guard.
+
+`apply_proc` now requires `_is_phase2_safe(proc_reg)` before attempting
+Phase 2 at all — not just the pre-existing `set!`-free check:
+
+```python
+if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
+        and proc_reg[1] is b_proc_1_d and proc_reg[5]
+        and _is_phase2_safe(proc_reg)):
+    ...
+```
+
+Deliberately conservative: anything the walk can't prove safe — a call
+through a parameter or other computed/dynamic operator (e.g.
+`((make-adder n) 0)`, or a parameter used in operator position), a call
+to a `set!`-using closure, an unresolved/forward-referenced name,
+`map`/`for-each`'s callback argument (its safety depends on a runtime
+value the walk doesn't try to verify) — is marked unsafe, so that
+closure's Phase-2 attempt is never even started; it runs via the
+always-correct slow trampoline instead. Being too conservative only
+costs speed; the risk this closes off (silently re-executing side
+effects) only existed on the "too permissive" side, so every tie is
+broken toward unsafe, matching the same asymmetric-risk principle
+documented for the abandoned `set!`/JIT idea below.
+
+The old silent "catch `_TrampolineFallback`, discard, retry everything"
+behavior around the body evaluation itself is gone. The arity check
+(which runs *before* any body statement executes, so nothing has
+happened yet) is still safely retriable. But `_eval_sequence_direct`'s
+own call is no longer wrapped in a catch: if a closure `_is_phase2_safe`
+already certified somehow still raises `_TrampolineFallback`, that means
+the checker has a soundness gap, and the exception is now left to
+propagate — a loud, reportable crash instead of a silent wrong answer.
+
+### Verified
+
+- Two new regression tests in `calysto_scheme/modules/test_all.ss`
+  (`jit-edge-cases` group, cases 62–63), using a vector-based call
+  counter (not `set!`, so the counting closure itself stays Phase-2/JIT-
+  eligible) to make double-execution directly observable as a wrong
+  number rather than something that has to be inferred from timing.
+  Confirmed both **fail** against the pre-fix interpreter (177→354, and
+  the compounding (1,1)→(2,3) case) before merging the fix, then pass
+  after — run automatically by `pytest tests/` in CI.
+- Full suite: 282/282 passing (271 pre-existing + the 2 new above +
+  Phase 7's own additions along the way).
+- The original, unfixed `scripts/benchmark.ss`-style `elapsed` macro
+  (the `let`-based one from the previous section, not the `begin`-based
+  fix) now also produces the correct, non-doubled count when re-tested
+  directly — `apply_proc` simply declines to attempt Phase 2 for that
+  closure at all now (it calls `current-time`, not in
+  `_fast_prim_map`), so it's slow but correct, independent of the
+  benchmark-script-level fix.
+- Broader stress tests, all correct: `map` with a side-effecting
+  callback that itself hits an unmapped primitive; `sort` with a custom
+  comparator; a closure doing its own work and then calling a `set!`-
+  using helper.
+
+### Measured cost
+
+Isolated, paired before/after (same machine, clean process per run, not
+sequential-benchmark-suite numbers, which proved noisy enough in Phase 7
+to be misleading — see that section):
+
+| Shape | Before | After | Ratio |
+|---|---|---|---|
+| `fib(35)` wall-clock (naive/tree recursion) | 1.55s | 1.57s | unchanged |
+| tail loops, mutual recursion, `map`, `set!` loops | — | — | unchanged |
+| Phase 5: closures allocated per call, `((make-adder n) 0)`, 20K iters | 1.09s | 2.02s | **~1.85× slower** |
+| Phase 5: nested closures, depth-2 capture, 5K iters | 0.67s | 0.74s | ~1.1× slower |
+| Phase 6: HOF, parameter used as operator, 5K iters | 0.43s | 0.77s | **~1.8× slower** |
+
+The regression is real and specific: it hits exactly the shapes that
+route through a statically-unresolvable operator (Phase 5's computed-
+closure-factory pattern, Phase 6's HOF pattern) — those closures no
+longer get *any* Phase-2/JIT treatment at their own `apply_proc` entry
+point, falling back to the slow trampoline for their own iteration
+mechanism. That trampoline is still Phase 1-optimized (tuples for
+continuations, dict-cached environment frames), not 2018-era slow, which
+is why the regression is ~1.1–1.85×, not the 90×+ gap those phases
+originally closed. Naive/tree recursion, tail loops, and mutual
+recursion — the shapes most code actually hits — are unaffected.
+
+### What this does and doesn't cover
+
+- Closes the double-execution bug for every shape this document's
+  benchmark suite and stress tests exercise, using a conservative,
+  easy-to-reason-about static check rather than a more invasive runtime
+  mechanism.
+- Does not attempt to recover Phase 5/6's lost speed for
+  dynamic-dispatch shapes. A sound way to do that — e.g. certifying a
+  dynamically-resolved callee *at the call site, at the moment its
+  actual value becomes available*, and running just that one call via a
+  synchronous, non-retrying path, rather than gating the whole closure
+  upfront — was considered and looks promising, but requires reasoning
+  carefully about `call/cc`/`amb`/`choose` interaction (the same class
+  of subtlety that made the `set!`/JIT idea below not worth shipping
+  half-verified) and is deliberately left as future work rather than
+  bundled into a correctness fix.
+- `map`/`for-each` are conservatively treated as always phase2-unsafe
+  (not attempting to verify their callback argument specifically), even
+  though many real calls (e.g. a directly-written `lambda` literal
+  argument) could in principle be proven safe. Same trade-off: simpler
+  and easier to verify now, at a measurable but bounded cost (item 7 in
+  the `scripts/benchmark.py` table is unaffected in practice, since
+  `map`'s own trampoline-driven iteration is already reasonably fast —
+  see Phase 1).
 
 ---
 
@@ -993,7 +1148,7 @@ paths in `scheme.py` — not projected from the fib table.
 | ~~Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code~~ | **Done.** Isolated microbenchmark suggested ~1.2× (20%); real end-to-end gain on the trampoline path is much smaller, **~2%** (34.4s → 33.7s on a 600K-iteration `set!` benchmark, consistent across repeats) — register writes turned out to be a small slice of per-step cost next to environment/continuation allocation. **Bonus:** the change surfaced and fixed a latent correctness bug (see below) | ~~Low~~ |
 | ~~JIT: allow a parameter used in operator position~~ | **Done — see Phase 6 above.** `(define (apply-twice f x) (f (f x)))`-shaped functions now JIT-compile; ~0.39s → ~0.19s on a 4,800-call benchmark (work time drops to immeasurably small, consistent with other JIT gains here). Surfaced and fixed a related missed-optimization bug in `_jit_call` itself | ~~Low~~ |
 | ~~JIT: drop the forward-ref-cell indirection for self-recursive (non-tail) calls~~ | **Done — see Phase 7 above.** `fib`-shaped naive recursion **~2.3–2.8×** across three scales (`fib(20)`, `fib(30)`, `fib(37)`); tail/mutual-recursion/closure/HOF/`map`/`set!` benchmarks unaffected, as expected | ~~Low~~ |
-| **Interpreter: Phase 2's fallback re-executes a closure's entire body, including already-completed side effects, instead of resuming or staying on the trampoline from the point of failure** | Not fixed. Found while validating Phase 7's numbers — see "Benchmark-harness correctness bug" below. Worked around in the benchmark scripts (avoid the trigger); the underlying interpreter behavior is unchanged and can still silently double real side effects (I/O, mutation) in ordinary user code, not just benchmarks | Medium–High (same risk class as the abandoned `set!`/JIT work below: getting this wrong means silent double-execution, not a crash) |
+| ~~Interpreter: Phase 2's fallback re-executes a closure's entire body, including already-completed side effects, instead of resuming or staying on the trampoline from the point of failure~~ | **Done — see Phase 8 above.** `_is_phase2_safe` gates `apply_proc`'s Phase-2 attempt on a static, transitive proof of safety instead of discovering failure mid-execution; the old silent retry is gone (a soundness gap in the checker would now crash loudly instead). Costs Phase 5/6's speedup for dynamic-dispatch shapes (~1.1–1.85× slower, measured); naive/tail/mutual recursion unaffected. Recovering that speed safely is tracked as a separate follow-up, not bundled with the correctness fix | ~~Medium–High~~ |
 | Run on PyPy | 5–20× additional on top of existing gains (measured ~2.5×–10× on real workloads) — a user/deployment decision, not pursued further here | Zero code changes |
 
 **Bonus finding, not in the original list:** `(use-stack-trace #f)` — an

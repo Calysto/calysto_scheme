@@ -1389,6 +1389,57 @@
 	  43
 	  (+ 1 (call/cc (lambda (k) (jit-call-it k 42) 999)))
 	  "case 61")
+
+  ;; Correctness regression: a Phase-2/JIT-eligible closure whose body does
+  ;; real work and *then* calls something outside the fast-path allow-list
+  ;; (here, a nested closure that uses set!, which is not JIT/Phase-2
+  ;; eligible) must not silently re-execute that work. apply_proc's
+  ;; fallback catches _TrampolineFallback around the *whole* closure body
+  ;; and re-runs it entirely via the slow trampoline on any mid-body
+  ;; failure -- including work that already ran and had real (observable)
+  ;; side effects. jit-dbl-fib-1 counts its own calls via a vector (not
+  ;; set!, so it stays Phase-2/JIT-eligible itself); naive recursion to
+  ;; n=10 makes exactly 177 calls. Before this was fixed, the trailing
+  ;; call to jit-dbl-trigger (unrelated to the count, added only to
+  ;; provoke the fallback) caused the entire body -- including the fib
+  ;; computation that had already finished -- to run a second time via the
+  ;; slow trampoline, doubling the counter to 354.
+  (define jit-dbl-counter-1 (vector 0))
+  (define (jit-dbl-trigger) (let ((x 0)) (set! x (+ x 1)) x))
+  (define (jit-dbl-fib-1 n)
+    (vector-set! jit-dbl-counter-1 0 (+ (vector-ref jit-dbl-counter-1 0) 1))
+    (if (< n 2) 1 (+ (jit-dbl-fib-1 (- n 1)) (jit-dbl-fib-1 (- n 2)))))
+  (let ((jit-dbl-start 0))
+    (jit-dbl-fib-1 10)
+    (jit-dbl-trigger))
+  (assert equal?
+	  177
+	  (vector-ref jit-dbl-counter-1 0)
+	  "case 62")
+
+  ;; Correctness regression, one level of nesting deeper: an OUTER closure
+  ;; does its own work, then calls a HELPER closure whose own body does
+  ;; work and then triggers the same fallback. Before the fix this could
+  ;; even compound rather than just double (observed 2x on the outer
+  ;; closure's own counter and 3x on the inner one in manual testing),
+  ;; since a mid-body failure inside a non-tail nested call unwinds past
+  ;; *multiple* logical closures to the one shared fallback point at the
+  ;; outermost apply_proc -- not just the closure whose body actually
+  ;; failed.
+  (define jit-dbl-counter-o (vector 0))
+  (define jit-dbl-counter-h (vector 0))
+  (define (jit-dbl-h n)
+    (vector-set! jit-dbl-counter-h 0 (+ (vector-ref jit-dbl-counter-h 0) 1))
+    (jit-dbl-trigger)
+    n)
+  (define (jit-dbl-o n)
+    (vector-set! jit-dbl-counter-o 0 (+ (vector-ref jit-dbl-counter-o 0) 1))
+    (+ n (jit-dbl-h n)))
+  (jit-dbl-o 5)
+  (assert equal?
+	  (list 1 1)
+	  (list (vector-ref jit-dbl-counter-o 0) (vector-ref jit-dbl-counter-h 0))
+	  "case 63")
   )
 
 (run-tests)
