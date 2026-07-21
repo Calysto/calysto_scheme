@@ -36,7 +36,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.0.0"
+__version__ = "2.0.2"
 
 #############################################################
 # Python implementation notes:
@@ -660,7 +660,12 @@ def _eval_direct(exp, env):
         elif tag is symbol_lambda_aexp:
             return closure(exp.cdr.car, exp.cdr.cdr.car, env)
         elif tag is symbol_begin_aexp:
-            return _eval_sequence_direct(exp.cdr, env)
+            # Inline sequence: all but last for effect, last is tail (loop, no recursion).
+            cur = exp.cdr
+            while cur.cdr is not symbol_emptylist:
+                _eval_direct(cur.car, env)
+                cur = cur.cdr
+            exp = cur.car
         elif tag is symbol_app_aexp:
             op   = _eval_direct(exp.cdr.car, env)
             args = []
@@ -684,8 +689,17 @@ def _eval_direct(exp, env):
                         jit_fn = _jit_lookup(op)
                     if jit_fn:
                         return jit_fn(*args)
+                    # Tail call: reuse this Python frame instead of recursing —
+                    # this is what makes deep tail-recursive Scheme loops run in
+                    # O(1) Python stack instead of hitting RecursionError.
                     new_env = _extend_direct(op[4], op[3], args)
-                    return _eval_sequence_direct(op[2], new_env)
+                    bodies = op[2]
+                    while bodies.cdr is not symbol_emptylist:
+                        _eval_direct(bodies.car, new_env)
+                        bodies = bodies.cdr
+                    exp = bodies.car
+                    env = new_env
+                    continue
                 raise _TrampolineFallback()
             elif dlr_proc_q(op):
                 return dlr_apply(op, List(*args))
@@ -734,15 +748,21 @@ def _jit_compile_proc(proc):
     free = {}           # name → value captured into the exec() namespace
     try:
         jc = _JitCompiler(proc, params, cenv, free, self_ref)
-        body_srcs = []
+        body_list = []
         cur = bodies
         while isinstance(cur, cons):
-            body_srcs.append(jc.expr(cur.car))
+            body_list.append(cur.car)
             cur = cur.cdr
-        ps = ', '.join(_jit_mangle(p) for p in params)
+        stmt_lines = ['    ' + jc.expr(e) for e in body_list[:-1]]
+        tail_lines = jc.tail_stmts(body_list[-1], '    ')
+        ps = ', '.join(jc._params)
         lines = ['def _jit_fn(' + ps + '):']
-        for i, src in enumerate(body_srcs):
-            lines.append(('    return ' if i == len(body_srcs) - 1 else '    ') + src)
+        lines += stmt_lines
+        if jc._used_loop:
+            lines.append('    while True:')
+            lines += ['    ' + ln for ln in tail_lines]
+        else:
+            lines += tail_lines
         fn_src = '\n'.join(lines)
         ns = dict(free)
         ns['__builtins__'] = __builtins__
@@ -757,6 +777,40 @@ def _jit_compile_proc(proc):
     except Exception:
         _jit_cache[pid] = (proc, False)
         return None
+
+def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
+    """Materialize a genuine Scheme closure for a lambda_aexp encountered
+    inside JIT'd code, by reconstructing — from live values — the frame the
+    closure would have captured had the enclosing function been evaluated
+    normally instead of JIT-compiled. Reuses the same frame/closure builders
+    the rest of the direct-eval path uses, so the result is a completely
+    ordinary Scheme proc tuple."""
+    frame_env = _extend_direct(parent_env, outer_formals, outer_values)
+    return closure(formals, bodies, frame_env)
+
+def _jit_call(op, args):
+    """Call `op` (a Python arg list) whether it's a native Python callable
+    (an already-JIT'd function, a wrapped primitive, or a self-reference) or
+    a Scheme proc tuple — e.g. one produced by _jit_make_closure, or an
+    un-JIT'd closure reached through a computed operator expression such as
+    ((make-adder n) 0), an immediately-invoked lambda, or a parameter used
+    in operator position (e.g. (define (apply-twice f x) (f (f x))))."""
+    if isinstance(op, tuple) and op[0] is symbol_procedure:
+        fn = op[1]
+        if len(op) == 6 and fn is b_proc_1_d and op[5]:
+            # Mirror _eval_direct's app_aexp dispatch: give this proc a
+            # chance to JIT-compile instead of always falling to Phase 2
+            # via _apply_direct — otherwise a function reached *only*
+            # through _jit_call (e.g. always passed as a parameter, never
+            # called by name) would never get its own JIT attempt.
+            jit_fn = _jit_lookup(op)
+            if jit_fn is None:
+                _jit_compile_proc(op)
+                jit_fn = _jit_lookup(op)
+            if jit_fn:
+                return jit_fn(*args)
+        return _apply_direct(op, args, None)
+    return op(*args)
 
 class _JitCompiler:
     """Walks Scheme annotated-AST nodes and emits Python source strings."""
@@ -779,11 +833,14 @@ class _JitCompiler:
     }
 
     def __init__(self, self_proc, params, env, free, self_ref):
-        self._self  = self_proc
-        self._pset  = set(_jit_mangle(p) for p in params)
-        self._env   = env
-        self._free  = free
-        self._sref  = self_ref
+        self._self   = self_proc
+        self._params = [_jit_mangle(p) for p in params]
+        self._pset   = set(self._params)
+        self._env    = env
+        self._free   = free
+        self._sref   = self_ref
+        self._used_loop = False   # set True if a self-recursive tail call was compiled
+        self._const_count = 0     # counter for generated constant-capture names
 
     def expr(self, exp):
         if not isinstance(exp, cons):
@@ -830,8 +887,58 @@ class _JitCompiler:
             # layout: (tag op args-list info)
             return self._app(exp.cdr.car, exp.cdr.cdr.car)
 
+        elif tag is symbol_lambda_aexp:
+            # layout: (tag formals bodies info)
+            return self._lambda(exp.cdr.car, exp.cdr.cdr.car)
+
         else:
             raise _TrampolineFallback()
+
+    def _capture_const(self, val):
+        """Stash an arbitrary Scheme object (AST fragment, environment, ...)
+        into the exec() namespace under a fresh name. Distinct '_jc_const_'
+        prefix so it can never collide with a _jit_mangle()'d Scheme name."""
+        name = '_jc_const_%d' % self._const_count
+        self._const_count += 1
+        self._free[name] = val
+        return name
+
+    def _lambda(self, formals, bodies):
+        """Compile a lambda_aexp encountered as a value (e.g. a function
+        whose body directly returns a closure, like
+        (define (make-adder k) (lambda (x) (+ x k)))).
+
+        JIT'd code represents this function's own parameters as plain
+        Python locals, but a real Scheme closure needs a proper environment
+        frame (so the classic interpreter, or a future JIT of the inner
+        lambda, can look it up by lexical address). So instead of compiling
+        the inner lambda's body inline, reconstruct — at runtime — the exact
+        frame this function's own parameters would occupy under normal
+        (non-JIT) evaluation, chain it onto the real captured environment
+        (self._env), and hand the result to the ordinary closure()
+        constructor. The inner lambda is then a completely normal Scheme
+        proc, independently eligible for its own JIT compilation later.
+
+        Only safe when this function's own formals are a plain (non-variadic)
+        list matching self._params 1:1 — _jit_make_closure rebuilds the frame
+        positionally from self._params's live values, so a rest parameter
+        (silently dropped from self._params — see _jit_compile_proc) would
+        misalign the frame.
+        """
+        cur = self._self[3]
+        count = 0
+        while isinstance(cur, cons):
+            count += 1
+            cur = cur.cdr
+        if cur is not symbol_emptylist or count != len(self._params):
+            raise _TrampolineFallback()
+        self._free['_jit_make_closure'] = _jit_make_closure
+        fm = self._capture_const(formals)
+        bd = self._capture_const(bodies)
+        ce = self._capture_const(self._env)
+        of = self._capture_const(self._self[3])
+        values = ", ".join(self._params)
+        return f'_jit_make_closure({fm}, {bd}, {ce}, {of}, [{values}])'
 
     def _sym_name(self, op_exp):
         """Extract the Scheme symbol name from a lex-addr or var operator node."""
@@ -874,13 +981,25 @@ class _JitCompiler:
                     self._free['_j__cons'] = cons
                 return self._UNARY[sym].format(args[0])
 
-        # If the operator is a local parameter (depth=0), we can't know at
-        # compile time whether it'll be a Python callable or a Scheme proc
-        # tuple — refuse to JIT this function.
-        if (isinstance(op_exp, cons) and
-                op_exp.car is symbol_lexical_address_aexp and
-                op_exp.cdr.car == 0):
-            raise _TrampolineFallback()
+        # Operator shapes that can't be proven, at compile time, to yield a
+        # plain Python callable:
+        #  - a local parameter (depth=0) — its value is whatever the caller
+        #    passed: could be a native callable or a Scheme proc tuple
+        #    (e.g. (define (apply-twice f x) (f (f x))))
+        #  - a nested call, e.g. ((make-adder n) 0)
+        #  - an immediately-invoked lambda (how `let`/`or`/`and` commonly
+        #    desugar), e.g. ((lambda (x) ...) e)
+        # self.expr() on any of these can yield a Scheme proc *tuple* (via
+        # _jit_make_closure, or simply an un-JIT'd proc passed through as an
+        # argument), not a plain Python callable, so a bare op_src(...) call
+        # could try to call a tuple. Dispatch through a runtime helper that
+        # handles both.
+        if isinstance(op_exp, cons) and (
+                op_exp.car in (symbol_app_aexp, symbol_lambda_aexp) or
+                (op_exp.car is symbol_lexical_address_aexp and op_exp.cdr.car == 0)):
+            op_src = self.expr(op_exp)
+            self._free['_jit_call'] = _jit_call
+            return f'_jit_call({op_src}, [{", ".join(args)}])'
 
         # General call: compile operator as expression and emit a call
         op_src = self.expr(op_exp)
@@ -922,6 +1041,61 @@ class _JitCompiler:
             self._free[m] = val
             return
         raise _TrampolineFallback()
+
+    def _is_self_ref(self, op_exp):
+        """True iff op_exp resolves (by identity) to the proc being compiled —
+        i.e. this application is a self-recursive call."""
+        if not isinstance(op_exp, cons):
+            return False
+        if op_exp.car is symbol_lexical_address_aexp:
+            depth = op_exp.cdr.car
+            if depth == 0:
+                return False   # local parameter, can't be the enclosing proc
+            offset = op_exp.cdr.cdr.car
+            try:
+                frm = list_ref(frames(self._env), depth - 1)
+                val = binding_value(vector_ref(frame_bindings(frm), offset))
+            except Exception:
+                return False
+            return val is self._self
+        if op_exp.car is symbol_var_aexp:
+            b = search_env(self._env, op_exp.cdr.car)
+            if b is False:
+                return False
+            return binding_value(b) is self._self
+        return False
+
+    def tail_stmts(self, exp, indent):
+        """Compile exp in tail position to a list of already-indented Python
+        statement lines. A self-recursive tail call becomes a parameter
+        reassignment + `continue` instead of a return/call, so the enclosing
+        `while True:` loop (see _jit_compile_proc) reuses the same Python
+        frame across arbitrarily many tail iterations."""
+        if not isinstance(exp, cons):
+            raise _TrampolineFallback()
+        tag = exp.car
+        if tag is symbol_if_aexp:
+            test = self.expr(exp.cdr.car)
+            lines = [indent + f'if ({test}) is not False:']
+            lines += self.tail_stmts(exp.cdr.cdr.car, indent + '    ')
+            lines.append(indent + 'else:')
+            lines += self.tail_stmts(exp.cdr.cdr.cdr.car, indent + '    ')
+            return lines
+        if tag is symbol_app_aexp and self._is_self_ref(exp.cdr.car):
+            arg_srcs = []
+            cur = exp.cdr.cdr.car
+            while isinstance(cur, cons):
+                arg_srcs.append(self.expr(cur.car))
+                cur = cur.cdr
+            if len(arg_srcs) != len(self._params):
+                raise _TrampolineFallback()   # arity mismatch — be safe, don't JIT
+            self._used_loop = True
+            if not self._params:
+                return [indent + 'continue']
+            targets = ', '.join(self._params)
+            values  = ', '.join(arg_srcs)
+            return [indent + f'{targets} = {values}', indent + 'continue']
+        return [indent + 'return ' + self.expr(exp)]
 
 ## Fast prim map: proc[1] function -> Python callable.
 ## Built lazily on first use from the live toplevel environment.

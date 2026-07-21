@@ -1308,5 +1308,87 @@
    (rator lc-exp?)
    (rand lc-exp?)))
 
+(define-tests jit-edge-cases
+  ;; Phase 4: tail-call flattening -- guards against RecursionError past
+  ;; ~4,900-5,000 iterations (fixed by flattening self-recursive tail calls
+  ;; in the JIT and Phase 2 direct-eval interpreter)
+  (define (jit-count-loop n acc) (if (= n 0) acc (jit-count-loop (- n 1) (+ acc 1))))
+  (assert equal?
+	  200000
+	  (jit-count-loop 200000 0)
+	  "case 53")
+
+  ;; Phase 4: mutual tail recursion (each side's JIT compilation depends on
+  ;; the other, so both safely fall back to the flattened Phase 2 path)
+  (define (jit-even? n) (if (= n 0) #t (jit-odd? (- n 1))))
+  (define (jit-odd? n) (if (= n 0) #f (jit-even? (- n 1))))
+  (assert equal?
+	  #t
+	  (jit-even? 50000)
+	  "case 54")
+
+  ;; Phase 5: closures over a function's own parameter, called repeatedly
+  ;; so make-adder gets a chance to JIT-compile -- and each closure keeps
+  ;; independent captured state
+  (define (jit-make-adder k) (lambda (x) (+ x k)))
+  (define (jit-adder-driver n acc)
+    (if (= n 0) acc (jit-adder-driver (- n 1) (+ acc ((jit-make-adder n) 0)))))
+  (assert equal?
+	  5050
+	  (jit-adder-driver 100 0)
+	  "case 55")
+  (define jit-add5 (jit-make-adder 5))
+  (define jit-add10 (jit-make-adder 10))
+  (assert equal?
+	  (list 15 20 6)
+	  (list (jit-add5 10) (jit-add10 10) (jit-add5 1))
+	  "case 56")
+
+  ;; Phase 5: nested closures -- the innermost lambda captures a variable
+  ;; two lexical levels out, not just its immediately enclosing frame
+  (define (jit-make-adder2 a) (lambda (b) (lambda (c) (+ a b c))))
+  (define (jit-adder2-driver n acc)
+    (if (= n 0) acc (jit-adder2-driver (- n 1) (+ acc (((jit-make-adder2 n) 2) 3)))))
+  (assert equal?
+	  5550
+	  (jit-adder2-driver 100 0)
+	  "case 57")
+
+  ;; Phase 5: immediately-invoked lambda under JIT, e.g. ((lambda (x) ...) e)
+  ;; -- regression test for the "'tuple' object is not callable" bug caused
+  ;; by let/or/and desugaring to this shape
+  (define (jit-iife k) ((lambda (x) (+ x k)) 100))
+  (define (jit-run-iife n acc) (if (= n 0) acc (jit-run-iife (- n 1) (+ acc (jit-iife n)))))
+  (assert equal?
+	  15050
+	  (jit-run-iife 100 0)
+	  "case 58")
+
+  ;; Phase 6: a parameter used in operator position, called with a closure
+  (define (jit-apply-twice f x) (f (f x)))
+  (define (jit-apply-twice-driver n acc)
+    (if (= n 0) acc (jit-apply-twice-driver (- n 1) (+ acc (jit-apply-twice (jit-make-adder 3) n)))))
+  (assert equal?
+	  5650
+	  (jit-apply-twice-driver 100 0)
+	  "case 59")
+
+  ;; Phase 6: a parameter used in operator position, called with a
+  ;; first-class primitive
+  (define (jit-call-with f a b) (f a b))
+  (define (jit-run-prim n acc) (if (= n 0) acc (jit-run-prim (- n 1) (+ acc (if (jit-call-with < n 999999) 1 0)))))
+  (assert equal?
+	  100
+	  (jit-run-prim 100 0)
+	  "case 60")
+
+  ;; Phase 6: a parameter used in operator position, called with a captured
+  ;; continuation from call/cc
+  (define (jit-call-it f x) (f x))
+  (assert equal?
+	  43
+	  (+ 1 (call/cc (lambda (k) (jit-call-it k 42) 999)))
+	  "case 61")
+  )
 
 (run-tests)

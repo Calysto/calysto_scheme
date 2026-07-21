@@ -385,6 +385,234 @@ user-visible difference.
 
 ---
 
+## Phase 4 — Tail-call flattening (fixes the crash, not just speed)
+
+### The bug
+
+Ordinary tail-recursive Scheme loops — the idiomatic way to iterate, e.g.
+`(define (loop n acc) (if (= n 0) acc (loop (- n 1) (+ acc 1))))` — used to
+crash with `RecursionError` past ~4,900–5,000 iterations. Neither the Phase 2
+direct-eval interpreter nor the Phase 3 JIT did anything special for a
+function call in **tail position**: both compiled/evaluated it as an
+ordinary call that recurses through the Python call stack, so a tail loop of
+N iterations consumed N Python stack frames — a correctness bug, not just a
+missed optimization, since this is exactly the pattern real Scheme code
+relies on to loop at all.
+
+### The fix
+
+**Phase 3 (JIT, `Scheme.py`):** `_JitCompiler` gained a `tail_stmts()` method
+used only for a compiled function's tail-position expression (through `if`
+branches). It detects **self-recursive** tail calls by identity
+(`_is_self_ref`, using the same `val is self._self` check `_capture` already
+used) and compiles them to a parameter reassignment + `continue` instead of
+a call:
+
+```python
+def _jit_fn(_j_n, _j_acc):
+    while True:
+        if ((_j_n == 0)) is not False:
+            return _j_acc
+        else:
+            _j_n, _j_acc = (_j_n - 1), (_j_acc + 1)
+            continue
+```
+
+The `while True:` wrapper is only emitted when a self-tail-call was actually
+found (`jc._used_loop`); ordinary functions like `fib` are unaffected since
+their recursive calls aren't in tail position.
+
+**Phase 2 (`_eval_direct`, `Scheme.py`):** the `app_aexp` branch previously
+did `return _eval_sequence_direct(op[2], new_env)` for a tail call — a real
+Python call. It now reassigns `exp`/`env` to the callee's body/environment
+and `continue`s the enclosing `while True:` loop instead, for **any**
+tail-called user closure, not just self-recursive ones. `begin_aexp` was
+changed the same way (its tail expression loops instead of recursing into
+`_eval_sequence_direct`).
+
+### What this does and doesn't cover
+
+- Self-recursive tail loops (by far the common case — `loop`/named-let-style
+  iteration) now run at JIT speed with **O(1) Python stack**, tested up to
+  50,000,000 iterations in ~2.4s (within ~10% of a hand-written Python
+  `while` loop).
+- Mutual tail recursion (`is-even?`/`is-odd?` calling each other) is also
+  covered in practice: compiling either function's JIT requires resolving
+  the other, which isn't compiled yet, so JIT compilation for **both**
+  fails and they permanently fall back to Phase 2 — which, with this fix,
+  flattens the mutual tail-call chain in the interpreter instead of
+  recursing. Verified to 1,000,000 iterations, both cold and pre-warmed.
+- Not covered: a tail-call cycle between two functions that **each**
+  independently JIT-compile successfully without referencing each other at
+  compile time (a narrow, contrived case — genuine two-function cycles hit
+  the circular-dependency case above and safely fall back). This residual
+  gap would require a general cross-function trampoline, out of scope here.
+- Verified with the full test suite (`pytest tests/test_all.py`, 246 tests)
+  and by forcibly disabling JIT to exercise the Phase 2 fallback path in
+  isolation — both pass.
+
+---
+
+## Phase 5 — JIT support for `lambda_aexp` (closures/HOF)
+
+### The gap
+
+`_JitCompiler.expr()` had no case for `lambda_aexp` — any function whose body
+directly evaluates to a `lambda` (the common factory/curry pattern, e.g.
+`(define (make-adder k) (lambda (x) (+ x k)))`) failed to JIT-compile
+*at all* and paid Phase 2's interpreted cost on every call, forever.
+
+### The fix
+
+JIT'd Python functions represent a Scheme function's parameters as plain
+Python locals (`_j_k`, ...); a real Scheme closure needs a proper
+environment frame (a chain of `cons(Vector(bindings), formals)` frames with
+a `_search_cache`) so the classic interpreter — or a future JIT of the
+*inner* lambda — can look up captured variables by lexical address. So
+`_JitCompiler` doesn't try to compile the inner lambda's body inline;
+instead, at the point the `lambda_aexp` executes, it reconstructs the exact
+frame the outer function's own parameters would occupy under normal
+(non-JIT) evaluation and hands it to the ordinary `closure()` constructor:
+
+```python
+def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
+    frame_env = _extend_direct(parent_env, outer_formals, outer_values)
+    return closure(formals, bodies, frame_env)
+```
+
+This reuses existing building blocks (`_extend_direct`, `closure()`)
+unchanged, so the result is a completely ordinary Scheme proc tuple —
+independently eligible for its own JIT compilation later, exactly like any
+other closure. Guarded by a compile-time check that the outer function's own
+formals are a plain (non-variadic) list matching its parameter count 1:1,
+since the frame is rebuilt positionally.
+
+### The bug this surfaced, and its fix
+
+Making `lambda_aexp` produce a value exposed a second, more general problem:
+an application whose *operator* is itself a computed expression —
+`((make-adder n) 0)`, or an immediately-invoked lambda like
+`((lambda (x) ...) e)` (how `let`/`or`/`and` commonly desugar) — could now
+evaluate to a Scheme proc *tuple* at runtime instead of a plain Python
+callable, and the existing "general call" codegen (`op_src(args...)`) tried
+to call it directly: `TypeError: 'tuple' object is not callable`. This was
+caught by the full test suite (`choose`/`require`/backtracking code in
+`test_all.ss` hit it, intermittently — `choose` is randomized, so the repro
+wasn't always reliable). Confirmed absent before this phase's change by
+running the suite against the prior commit.
+
+Fixed with a small runtime dispatcher, used only when the operator is itself
+an `app_aexp` or `lambda_aexp` (a plain variable/lexical-address operator
+reference was already guaranteed callable via the existing `_capture` logic,
+so that path is untouched):
+
+```python
+def _jit_call(op, args):
+    if isinstance(op, tuple) and op[0] is symbol_procedure:
+        return _apply_direct(op, args, None)
+    return op(*args)
+```
+
+### What this does and doesn't cover
+
+- Functions that directly return a closure over their own parameters
+  (`make-adder`-style) now JIT-compile. Measured on
+  `(define (run-loop n acc) (if (= n 0) acc (run-loop (- n 1) (+ acc ((make-adder n) 0)))))`,
+  4,500 iterations: 0.58s → 0.23s wall-clock (subtracting ~0.2s fixed
+  startup: ~0.38s → ~0.03s of actual work, roughly **12×**).
+- IIFE patterns (`let`, `or`, `and` desugaring) and calls through a computed
+  operator now also work correctly via the same `_jit_call` dispatch,
+  verified directly (`f`, `g`, `loop` in the test script below all
+  successfully JIT-compiled; only the value differs from before, not the
+  requirement that they be *called from within already-JIT-attempting
+  code* to trigger compilation at all — same pre-existing trigger rule as
+  everywhere else in the JIT).
+- Not covered (unchanged from before, and not part of this fix): closures
+  created via an *internal* `define`/`let` inside a larger function body —
+  `_JitCompiler` still has no support for internal lexical bindings at all,
+  so a function like the earlier `trial-hof` benchmark
+  (`(define add (make-adder k))` as an internal define, then calling `add`)
+  still falls back to Phase 2 entirely. That's a separate, larger piece of
+  work (teaching the compiler about local bindings generally).
+- A local *parameter* used in operator position (e.g.
+  `(define (apply-twice f x) (f (f x)))`) bailed at compile time when this
+  phase shipped — lifted in **Phase 6**, below.
+- Verified with the full test suite (10+ repeated runs, since `choose`'s
+  randomization made the bug intermittent) and targeted closure/IIFE/HOF
+  scripts, checked directly against `_jit_cache` to confirm JIT compilation
+  actually occurred rather than a silent, correct-by-luck Phase 2 fallback.
+
+---
+
+## Phase 6 — JIT support for a parameter used in operator position
+
+### The gap
+
+`_app()` refused to JIT-compile any function that called one of its own
+*parameters* as if it were a function — e.g.
+`(define (apply-twice f x) (f (f x)))` — because at compile time there was
+no way to know whether `f`'s value would be a native Python callable or a
+Scheme proc tuple. Phase 5's `_jit_call` dispatcher (built for
+`lambda_aexp` support) already resolves exactly that ambiguity at runtime,
+so this restriction could simply be folded into the same dispatch instead
+of bailing: the depth-0 (local parameter) operator case now routes through
+`_jit_call` alongside the nested-call and immediately-invoked-lambda cases
+from Phase 5.
+
+### The bug this surfaced
+
+Fixing this exposed a second gap, in `_jit_call` itself (introduced in
+Phase 5, latent until this change gave it a reason to matter): it checked
+`_fast_prim_map` and otherwise called `_apply_direct`, which interprets the
+callee via Phase 2 but **never attempts to JIT-compile it** — unlike
+`_eval_direct`'s own app_aexp dispatch, which always gives an uncompiled
+proc a shot at JIT first. The practical effect: any function reached
+*only* through `_jit_call` (e.g. a function passed solely as a parameter,
+never called by name anywhere else) would silently and permanently stay
+at Phase 2 speed, and — worse — could cascade: a caller capturing that
+never-compiled function as a free variable would itself fail to JIT too
+(`_capture` only accepts an already-compiled or primitive proc). Caught by
+benchmarking, not by the test suite: correctness was never at risk (this
+was a missed-optimization bug, not a wrong-answer one), but the very first
+before/after measurement showed almost no improvement, which didn't match
+the fix's own logic — tracing why led straight to `_jit_call` never having
+attempted compilation at all. Fixed by mirroring `_eval_direct`'s
+attempt-then-fallback logic inside `_jit_call`.
+
+### Measured impact
+
+`(define (apply-twice f x) (f (f x)))` called by a non-tail-recursive
+driver (`drive`, `fib`-shaped, so Phase 4's tail-loop optimization can't
+mask the difference) for 4,800 calls: 0.39s → 0.19s wall-clock. Subtracting
+~0.2s fixed startup, that's ~0.19s of real work → immeasurably small,
+consistent with the other JIT-speed measurements in this document (roughly
+the same "AST-walk vs compiled-Python" gap as everywhere else, not a new
+one) — confirmed via `_jit_cache` that `apply-twice`, `add1`, and `drive`
+all actually compiled, not merely ran fast by chance.
+
+### What this does and doesn't cover
+
+- A parameter called directly in operator position (custom comparators,
+  predicates, callbacks invoked by hand rather than via `map`/`for-each`)
+  is now JIT-eligible.
+- **Related, separate, still-open gap found along the way (not fixed
+  here):** `_apply_direct` — used by `_fast_prim_map`'s `map`/`for-each`
+  wrappers (`_direct_map`, `_direct_for_each`, etc.), not just `_jit_call`
+  — has the exact same "never attempts JIT compilation" limitation. A
+  function invoked *only* through `map`/`for-each` (e.g. a `lambda` passed
+  inline) stays at Phase 2 speed indefinitely, regardless of this fix.
+  Confirmed directly: timing `(for-each (lambda (n) (apply-twice add1 n)) (range N))`
+  showed no improvement, because the outer lambda is always dispatched via
+  `_apply_direct`. The same fix applied to `_jit_call` here (attempt
+  `_jit_compile_proc` before falling back) would apply directly to
+  `_apply_direct` too — a small, separate, mechanically similar follow-on.
+- Verified with the full test suite (8+ repeated runs) and targeted
+  scripts combining this with Phase 5's closure support, checked against
+  `_jit_cache` to confirm real compilation rather than a fast-by-luck
+  fallback.
+
+---
+
 ## What real Scheme implementations do
 
 For reference, production Scheme systems use similar but deeper techniques:
@@ -405,10 +633,111 @@ bytecode) that runs without interpreter overhead.
 
 ## Potential further improvements
 
-| Idea | Expected gain | Effort |
+Measured (not estimated) on this machine, see methodology after the table.
+"PyPy" aside, all numbers below were obtained by exercising the actual code
+paths in `scheme.py` — not projected from the fib table.
+
+| Idea | Measured gain | Effort |
 |------|--------------|--------|
-| JIT: handle `lambda_aexp` (compile HOF-returning functions) | significant for HOF-heavy code | Medium |
-| JIT: handle `assign_aexp` with `nonlocal` declarations | enables `set!` in JIT | Medium |
-| JIT: tail-call via `while True` loop for self-recursive tail calls | eliminates Python stack frames | Medium |
-| Run on PyPy | 5–20× additional on top of existing gains | Zero code changes |
-| Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code | 1.5–3× for trampoline path | Low |
+| ~~JIT: tail-call via `while True` loop for self-recursive tail calls~~ | **Done — see Phase 4 above.** Turned a crash (`RecursionError` past ~4,900–5,000 iterations) into O(1)-stack execution; 50,000,000 iterations now run in ~2.4s, within ~10% of hand-written Python | ~~Medium~~ |
+| ~~JIT: handle `assign_aexp` with `nonlocal` (enables `set!` in JIT)~~ | **Abandoned — see below.** ~700× potential measured, but `set!` in this interpreter is entangled with `amb`/`choose` backtracking in a way that can't be made safe without real risk of silent wrong answers | ~~Medium~~ |
+| ~~JIT: handle `lambda_aexp` (compile HOF-returning functions)~~ | **Done — see Phase 5 above.** `make-adder`-shaped functions (body directly returns a closure over its own parameters) now JIT-compile; measured **~12×** on a 4,500-iteration benchmark once fixed startup cost is subtracted. Closures via internal `define`/`let` remain unsupported (separate, larger gap) | ~~Medium~~ |
+| ~~Replace `GLOBALS['x'] = val` with `global x; x = val` in generated code~~ | **Done.** Isolated microbenchmark suggested ~1.2× (20%); real end-to-end gain on the trampoline path is much smaller, **~2%** (34.4s → 33.7s on a 600K-iteration `set!` benchmark, consistent across repeats) — register writes turned out to be a small slice of per-step cost next to environment/continuation allocation. **Bonus:** the change surfaced and fixed a latent correctness bug (see below) | ~~Low~~ |
+| ~~JIT: allow a parameter used in operator position~~ | **Done — see Phase 6 above.** `(define (apply-twice f x) (f (f x)))`-shaped functions now JIT-compile; ~0.39s → ~0.19s on a 4,800-call benchmark (work time drops to immeasurably small, consistent with other JIT gains here). Surfaced and fixed a related missed-optimization bug in `_jit_call` itself | ~~Low~~ |
+| Run on PyPy | 5–20× additional on top of existing gains (measured ~2.5×–10× on real workloads) — a user/deployment decision, not pursued further here | Zero code changes |
+
+**Bonus finding, not in the original list:** `(use-stack-trace #f)` — an
+*already-shipped*, zero-code-change toggle — gives **~10–13%** wall-clock and
+**~25–45%** memory reduction on the trampoline (Phase 1) path, because the
+default `*use-stack-trace* = #t` (`interpreter-cps.ss:372`) wraps every
+non-JIT/non-Phase-2 call's continuation in an extra pop-frame
+(`b_cont2_63_d`/`b_cont2_62_d` in `scheme.py`), adding a heap-allocated
+continuation *and* an extra trampoline step per call. It has **no effect**
+on the JIT/Phase-2 crash above — confirmed by testing directly (see below).
+Worth defaulting off, or documenting as a perf knob for hot trampoline-bound
+code (functions using `set!`, `call/cc`, etc.).
+
+### Abandoned: `set!` support in Phase 2/JIT
+
+Investigated but deliberately **not implemented**, despite a real measured
+~700× potential (`_is_direct_eval_safe` in `Scheme.py` currently bars *any*
+function containing `set!` from Phase 2 and Phase 3 entirely, forcing the
+full trampoline).
+
+The blocker: `set!` in this interpreter isn't a plain mutation. Every
+assignment pushes a fail-continuation that **undoes** it on backtrack
+(`interpreter-cps.ss`'s `assign-aexp` handling — `(lambda-fail () (set-binding-value! binding old-value) (fail))`), because `set!` must be
+undoable across `amb`/`choose` backtracking. Confirmed this is live,
+observable behavior today: a `choose`/`require` search that calls a
+`set!`-mutating helper on each attempt ends with the mutation counter
+reflecting only the *winning* branch, not the cumulative count across all
+backtracked attempts — proving the undo genuinely fires.
+
+The problem for a fast path: a function can be running "inside" an active
+backtracking search without any `choose`/`amb` appearing anywhere in its own
+text — the risk comes from the *caller's* dynamic context, not the callee's
+code, so a static, per-function safety check can't rule it out. A more
+robust option was floated (check the live `fail_reg` register — already
+threaded through the whole interpreter, including into `apply_proc`'s
+Phase-2 attempt — against the one well-known "no backtracking possible"
+base value, rather than hand-instrumenting every `choose`/`amb` entry/exit
+point), but even that still needed verifying it holds through nested
+Phase 2/JIT calls and closures, not just the direct case tested. Given the
+two failure modes are asymmetric — too conservative just costs a missed
+optimization, too permissive means **silent wrong answers** under
+backtracking — and there's no way to fully rule out the second without
+substantially more implementation and verification work than the tail-call
+and `lambda_aexp` fixes required, this was judged not worth the risk.
+Closed out here rather than shipped partially-verified.
+
+### Methodology
+
+All Scheme timings run via `python scheme.py <file>.ss`; ~0.19–0.2s of that
+is fixed interpreter startup, subtracted where noted. Recursion depth for
+non-tail and tail self-recursive Scheme calls is capped at ~4,900–5,000
+today (see the tail-call finding), so benchmarks that can't use `map`/
+`for-each` (which loop in Python, not Scheme) are capped at n≈4,500–4,900.
+
+- **Tail-call crash boundary:** `(define (loop n acc) (if (= n 0) acc (loop (- n 1) (+ acc 1))))`
+  called as `(loop N 0)` — `N=4900` returns; `N=5000` raises
+  `RecursionError`, reproducibly, with or without `use-stack-trace`. Despite
+  `sys.setrecursionlimit(10000)` (`scheme.py:37`), only about half the
+  budget is left for the recursive loop once CLI/REPL/load frames are
+  accounted for — and each JIT-compiled tail call keeps consuming a real
+  Python stack frame (no tail-call flattening happens in `_JitCompiler` or
+  `_eval_direct` today, only `if`-branches loop in Python).
+- **`set!`/JIT-nonlocal estimate:** same `loop`, but with `(set! n n)` added
+  in the body — this taints the whole closure `unsafe` (`_is_direct_eval_safe`
+  in `Scheme.py`), forcing the full register-machine trampoline for every
+  call. `(loop 4900 0)`: 0.46s measured vs ~0.20s startup ⇒ ~53 µs/call,
+  vs. ~0.073 µs/call for JIT'd `fib` (1.6ms / 21,891 calls from the table
+  above) ⇒ ~726×. A native Python equivalent of the same loop runs in
+  0.0002s (4900 calls) for reference.
+- **`lambda_aexp`/HOF estimate:** `(define (make-adder k) (lambda (x) (+ x k)))`
+  vs. an equivalent using only inline arithmetic, both invoked 4,500 times
+  from a driver loop. Closure version: 1.13s (≈0.94s work ⇒ ~209 µs/call,
+  permanently stuck in Phase 2 because `_JitCompiler.expr()` has no case for
+  `lambda_aexp`). No-closure version: 0.19s (≈0s measurable work — JIT'd
+  after its first call). Native Python: 0.0022s for the same 4,500 calls.
+  The "~400×" above is the ratio of the closure version to native Python;
+  it's a lower bound on the JIT gain since a real JIT wouldn't fully close
+  the gap to hand-written Python either.
+- **Register-write microbenchmark:** 3,000,000 iterations of an 8-register
+  trampoline step (`GLOBALS['x'] = ...` ×8) vs. the equivalent with
+  `global x; x = ...`, in isolation from the rest of the interpreter. The
+  real-world gain from actually making this change (`translate_rm.py`) was
+  much smaller than this predicted — see the table.
+- **`global x` implementation note:** `translate_rm.py`'s codegen buffers
+  each generated function's body, tracks which module-level registers it
+  assigns via `set!` (`check_global`), and prepends one `global ...`
+  declaration instead of using `GLOBALS['name'] = ...` per write. Doing this
+  surfaced a **latent correctness bug**: the generator's `locals` tracking
+  never included a function's own formal parameters, so `(set! param ...)`
+  on a parameter was silently emitting a module-level global write — Python
+  allowed a same-named global dict entry and local parameter to coexist
+  without conflict, so the parameter's local value was silently never
+  updated by the `set!`. Declaring `global param` for a name that's also a
+  parameter is a Python `SyntaxError`, which is what surfaced it. Fixed by
+  seeding `locals` with the function's own parameter names before
+  processing its body (`process_function_definition` in `translate_rm.py`).
+  Full test suite (246 tests) passes after the fix.
