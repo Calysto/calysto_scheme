@@ -24,6 +24,77 @@ python translate_rm.py source-rm.ss ../scheme.py
 
 The JIT brings Scheme `fib(20)` to within **3.5× of native Python**.
 
+### Cross-version comparison
+
+The table above compares phases within a single session. This one instead
+runs the same benchmarks, unmodified, against the actual tagged releases —
+`v1.4.8` (2018, pre-optimization), `v2.0.1` (Phase 1–3: trampoline +
+direct-eval + JIT, but not yet Phase 4), and 2.0.2 (adds Phase 4
+tail-call flattening plus Phase 5/6 closure and HOF JIT support). Each
+version was checked out into its own `git worktree` and run via
+`scripts/cross_version_bench.ss` (`python3 scheme.py
+scripts/cross_version_bench.ss`).
+
+That script, not a wall-clock `time python3 scheme.py ...` invocation, is
+what makes the numbers comparable: every benchmark runs twice inside the
+*same already-running interpreter*, timed with the `current-time`
+primitive rather than the OS — a small **warmup** input first (discarded),
+then the real **measured** input timed after warmup. This keeps two
+things out of the reported number that would otherwise distort it:
+Python/interpreter start-up (never measured at all, since timing starts
+after the process is already up), and one-time JIT-compile cost (paid
+during warmup, not during the measured run, so what's reported is
+steady-state speed — the number a long-running program would actually
+see).
+
+| Benchmark | v1.4.8 | v2.0.1 | v2.0.2 |
+|---|---|---|---|
+| `fib(20)` — 21,891 calls | 3.6582s | 0.0056s | 0.0056s |
+| tail loop, 3,000 iters | 0.5892s | 0.0022s | 0.0004s |
+| tail loop, 6,000 iters | 1.1813s | **crash — `RecursionError`** | 0.0006s |
+| mutual recursion (`even?`/`odd?`), depth 2,000 | 0.2620s | 0.0825s | 0.0752s |
+
+Two things this surfaces that the phase-by-phase fib table doesn't:
+
+- **v2.0.1 has a live correctness regression, not just missing speed.**
+  Its Phase 1–3 JIT/direct-eval path uses real Python recursion for tail
+  calls with no flattening, so any tail-recursive loop over ~5,000
+  iterations crashes with `RecursionError` (confirmed directly above at
+  6,000 iterations) — v1.4.8's plain trampoline never had this problem,
+  since it never grows the Python call stack for a tail call. 2.0.2's
+  Phase 4 (see below) restores that correctness guarantee while keeping
+  the Phase 1–3 speed.
+- **Mutual recursion barely improves across any version** (0.26s → 0.08s →
+  0.08s). `even?`/`odd?` calling each other in tail position never gets
+  JIT-compiled at all: when `even?` is first invoked, `odd?` hasn't been
+  JIT'd yet, so `even?`'s own compile attempt can't resolve `odd?` to a
+  compiled Python function, raises `_TrampolineFallback`, and gets
+  permanently cached as "don't JIT" (`_jit_cache[pid] = (proc, False)`,
+  never retried). This pattern is stuck near Phase-1 trampoline speed even
+  on 2.0.2 — a known gap, not yet fixed.
+
+### Best case
+
+The table above deliberately caps its inputs at sizes every version can
+run: v2.0.1 crashes on tail loops past ~5,000 iterations, and v1.4.8 is
+slow enough that matching 2.0.2's larger inputs would take
+minutes-to-hours. `scripts/best_case_bench.ss` (`python3 scheme.py
+scripts/best_case_bench.ss`) instead scales the same three shapes up to
+sizes that are only practical on 2.0.2, to show the ceiling the JIT and
+Phase 4 tail-call flattening enable now that both speed and correctness
+allow it. Same warmup/measured methodology as above; run on 2.0.2 only.
+
+| Benchmark | 2.0.2 |
+|---|---|
+| `fib(37)` — ~78.2M calls | 20.0313s |
+| tail loop, 3,000,000 iters | 0.2867s |
+| mutual recursion, depth 50,000 | 1.8510s |
+
+These and other shapes (closures allocated per call, nested closures, HOF
+with a parameter in operator position, `map` over a JIT'd closure,
+`set!`-based loops) are covered by the broader benchmark suite at
+`scripts/benchmark.py` — run with `python3 scripts/benchmark.py`.
+
 ---
 
 ## Architecture background

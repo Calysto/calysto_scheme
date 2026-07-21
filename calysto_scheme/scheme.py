@@ -44,7 +44,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 
 #############################################################
 # Python implementation notes:
@@ -1117,7 +1117,7 @@ def _build_fast_prim_map():
         f, lst = args[0], args[1]
         items = []
         while isinstance(lst, cons):
-            items.append(_apply_direct(f, [lst.car]))
+            items.append(_apply_direct(f, [lst.car], None))
             lst = lst.cdr
         out = symbol_emptylist
         for v in reversed(items):
@@ -1127,7 +1127,7 @@ def _build_fast_prim_map():
     def _direct_for_each(args):
         f, lst = args[0], args[1]
         while isinstance(lst, cons):
-            _apply_direct(f, [lst.car])
+            _apply_direct(f, [lst.car], None)
             lst = lst.cdr
         return void_value
 
@@ -10405,7 +10405,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 2.0.2')
+    print('Calysto Scheme, version 2.0.3')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
