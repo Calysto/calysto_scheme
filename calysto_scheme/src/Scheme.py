@@ -613,7 +613,7 @@ def apply_proc():
         try:
             result = _eval_sequence_direct(bodies, new_env)
         except _TrampolineFallback:
-            _phase2_safe_cache[id(proc_reg)] = (proc_reg, False)
+            _phase2_safe_cache.set(proc_reg, False)
             raise
         GLOBALS['value2_reg'] = _fail
         GLOBALS['value1_reg'] = result
@@ -655,20 +655,36 @@ def _is_direct_eval_safe(bodies):
         cur = cur.cdr
     return True
 
-_phase2_safe_cache = {}   # id(proc) -> (proc, True/False)
+_CACHE_MISS = object()   # sentinel distinct from any real cached value (incl. False/None)
+
+class _IdentityCache:
+    """Maps id(key) -> (key, value). A lookup whose stored key isn't `is`
+    the object asked about is a miss, not a hit for the wrong object --
+    guards against Python reusing a garbage-collected object's id()."""
+    __slots__ = ("_entries",)
+
+    def __init__(self):
+        self._entries = {}
+
+    def get(self, key):
+        entry = self._entries.get(id(key))
+        if entry is None:
+            return _CACHE_MISS
+        cached_key, value = entry
+        if cached_key is not key:
+            del self._entries[id(key)]   # stale -- id() reused after GC
+            return _CACHE_MISS
+        return value
+
+    def set(self, key, value):
+        self._entries[id(key)] = (key, value)
+
+_phase2_safe_cache = _IdentityCache()   # proc -> True/False
 
 def _phase2_safe_lookup(proc):
-    """Return the cached verdict for proc, or None if not yet computed.
-    Validates identity the same way _jit_lookup does, to detect a stale
-    entry whose id() was reused after GC."""
-    entry = _phase2_safe_cache.get(id(proc))
-    if entry is None:
-        return None
-    cached_proc, result = entry
-    if cached_proc is not proc:
-        del _phase2_safe_cache[id(proc)]
-        return None
-    return result
+    """Return the cached verdict for proc, or None if not yet computed."""
+    value = _phase2_safe_cache.get(proc)
+    return None if value is _CACHE_MISS else value
 
 def _is_phase2_safe(proc, _visiting=None):
     """Conservatively certify that invoking `proc` via apply_proc's Phase-2
@@ -734,7 +750,7 @@ def _is_phase2_safe(proc, _visiting=None):
     finally:
         _visiting.discard(pid)
     if outermost:
-        _phase2_safe_cache[pid] = (proc, safe)
+        _phase2_safe_cache.set(proc, safe)
     return safe
 
 def _phase2_safe_walk_seq(bodies, env, visiting):
@@ -787,6 +803,47 @@ def _phase2_safe_walk(exp, env, visiting):
     else:
         return False
 
+def _resolve_lexical_address(depth, offset, env):
+    """Classify a lexical-address reference against env, without executing
+    or raising: ('local', None) for a depth-0 local parameter (a
+    runtime-supplied value -- can't resolve statically); ('value', v) if
+    the outer-frame binding resolves; ('unresolved', None) if the frame
+    walk fails (e.g. env doesn't actually have that many enclosing
+    frames yet -- a forward reference)."""
+    if depth == 0:
+        return ('local', None)
+    try:
+        frm = list_ref(frames(env), depth - 1)
+        return ('value', binding_value(vector_ref(frame_bindings(frm), offset)))
+    except Exception:
+        return ('unresolved', None)
+
+def _resolve_var(sym, env):
+    """Classify a var-aexp reference by name against env, without executing
+    or raising: ('value', v) if bound, ('unresolved', None) if not."""
+    b = search_env(env, sym)
+    if b is False:
+        return ('unresolved', None)
+    return ('value', binding_value(b))
+
+def _resolve_operator(op_exp, env):
+    """Statically classify an application's operator expression against
+    env: ('local', None) for a depth-0 lexical address (a runtime-supplied
+    parameter); ('unresolved', None) for anything else that can't be
+    resolved without executing (a computed/nested operator such as
+    app-aexp/lambda-aexp, an unbound name, a failed frame lookup); or
+    ('value', v) when a concrete value is found. Never raises or executes
+    anything -- callers apply their own policy (propagate as a compile
+    failure, treat as "not provably safe", etc.) on top of the tag."""
+    if not isinstance(op_exp, cons):
+        return ('unresolved', None)
+    tag = op_exp.car
+    if tag is symbol_lexical_address_aexp:
+        return _resolve_lexical_address(op_exp.cdr.car, op_exp.cdr.cdr.car, env)
+    if tag is symbol_var_aexp:
+        return _resolve_var(op_exp.cdr.car, env)
+    return ('unresolved', None)
+
 def _phase2_safe_walk_call(op_exp, env, visiting):
     """Statically resolve op_exp, if possible, and certify that calling it
     is safe: a known-pure _fast_prim_map primitive (excluding map/
@@ -797,26 +854,15 @@ def _phase2_safe_walk_call(op_exp, env, visiting):
     computed expression used in operator position, an unbound name --
     can't be proven safe, so is treated as unsafe."""
     global _fast_prim_map
-    if not isinstance(op_exp, cons):
-        return False
-    if op_exp.car is symbol_lit_aexp:
+    # A literal in operator position has no analog in the JIT compiler
+    # (which never accepts one either), so this stays a local special case
+    # rather than folding into _resolve_operator's shared contract.
+    if isinstance(op_exp, cons) and op_exp.car is symbol_lit_aexp:
         op = op_exp.cdr.car
-    elif op_exp.car is symbol_lexical_address_aexp:
-        depth, offset = op_exp.cdr.car, op_exp.cdr.cdr.car
-        if depth == 0:
-            return False   # local parameter — runtime value, can't prove
-        try:
-            frm = list_ref(frames(env), depth - 1)
-            op = binding_value(vector_ref(frame_bindings(frm), offset))
-        except Exception:
-            return False
-    elif op_exp.car is symbol_var_aexp:
-        b = search_env(env, op_exp.cdr.car)
-        if b is False:
-            return False
-        op = binding_value(b)
     else:
-        return False   # computed operator (nested app/lambda) — can't prove
+        kind, op = _resolve_operator(op_exp, env)
+        if kind != 'value':
+            return False   # local param, computed operator, or unresolved — can't prove
     if isinstance(op, tuple) and op[0] is symbol_procedure:
         fn = op[1]
         if _fast_prim_map is None:
@@ -926,24 +972,25 @@ def _jit_mangle(sym):
         s = '_' + s
     return '_j_' + s
 
-_jit_cache = {}   # id(proc_tuple) → (proc, compiled_fn) or (proc, False)
+_jit_cache = _IdentityCache()   # proc -> compiled_fn or False
 
 def _jit_lookup(proc):
-    """Return the cached compiled function for proc, or None if not compiled/failed.
-    Validates that the cached id wasn't reused after GC."""
-    entry = _jit_cache.get(id(proc))
-    if entry is None:
-        return None           # not yet attempted
-    cached_proc, result = entry
-    if cached_proc is not proc:
-        del _jit_cache[id(proc)]  # stale — id was reused after GC
+    """Return the cached compiled function for proc, or None if not yet
+    compiled OR if a previous compile attempt failed -- a cached failure
+    is deliberately reported the same as "not yet attempted" (not a
+    permanent verdict), so a call site retries compilation on every call.
+    That retry cost is real (see README-PERFORMANCE.md's mutual-recursion
+    discussion) but preserved here unchanged from the prior implementation,
+    since collapsing it into a permanent failure cache is a behavior change,
+    not a refactor."""
+    value = _jit_cache.get(proc)
+    if value is _CACHE_MISS or value is False:
         return None
-    return result if result is not False else None
+    return value
 
 def _jit_compile_proc(proc):
     """Try to JIT-compile a safe Scheme closure.
-    Sets _jit_cache[id(proc)] and returns the compiled fn or None."""
-    pid = id(proc)
+    Sets _jit_cache[proc] and returns the compiled fn or None."""
     formals, bodies, cenv = proc[3], proc[2], proc[4]
     params = []
     cur = formals
@@ -973,13 +1020,13 @@ def _jit_compile_proc(proc):
         ns['__builtins__'] = __builtins__
         exec(compile(fn_src, '<scheme-jit>', 'exec'), ns)
         fn = ns['_jit_fn']
-        _jit_cache[pid] = (proc, fn)
+        _jit_cache.set(proc, fn)
         return fn
     except _TrampolineFallback:
-        _jit_cache[pid] = (proc, False)
+        _jit_cache.set(proc, False)
         return None
     except Exception:
-        _jit_cache[pid] = (proc, False)
+        _jit_cache.set(proc, False)
         return None
 
 def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
@@ -1065,13 +1112,13 @@ class _JitCompiler:
             m = _jit_mangle(name)
             if depth == 0:
                 return m   # local parameter — already in function signature
-            # Outer frame: look up actual value and capture into free
+            # Outer frame: look up actual value and capture into free.
+            # Guarded by `m not in self._free` so an already-captured free
+            # variable referenced again later in the same body skips the
+            # frame walk entirely, not just the capture.
             if m not in self._free:
-                try:
-                    # depth 1 → frames(cenv)[0], depth 2 → frames(cenv)[1], …
-                    frm = list_ref(frames(self._env), depth - 1)
-                    val = binding_value(vector_ref(frame_bindings(frm), offset))
-                except Exception:
+                kind, val = _resolve_lexical_address(depth, offset, self._env)
+                if kind != 'value':
                     raise _TrampolineFallback()
                 if val is self._self:
                     # Self-recursive (non-tail): call the generated function
@@ -1218,10 +1265,9 @@ class _JitCompiler:
         m = _jit_mangle(sym)
         if m in self._pset or m in self._free:
             return m
-        b = search_env(self._env, sym)
-        if b is False:
+        kind, val = _resolve_var(sym, self._env)
+        if kind != 'value':
             raise _TrampolineFallback()
-        val = binding_value(b)
         if val is self._self:
             # Self-recursive (non-tail): call the generated function by its
             # own def name directly — see the lexical_address_aexp case above.
@@ -1253,25 +1299,8 @@ class _JitCompiler:
     def _is_self_ref(self, op_exp):
         """True iff op_exp resolves (by identity) to the proc being compiled —
         i.e. this application is a self-recursive call."""
-        if not isinstance(op_exp, cons):
-            return False
-        if op_exp.car is symbol_lexical_address_aexp:
-            depth = op_exp.cdr.car
-            if depth == 0:
-                return False   # local parameter, can't be the enclosing proc
-            offset = op_exp.cdr.cdr.car
-            try:
-                frm = list_ref(frames(self._env), depth - 1)
-                val = binding_value(vector_ref(frame_bindings(frm), offset))
-            except Exception:
-                return False
-            return val is self._self
-        if op_exp.car is symbol_var_aexp:
-            b = search_env(self._env, op_exp.cdr.car)
-            if b is False:
-                return False
-            return binding_value(b) is self._self
-        return False
+        kind, val = _resolve_operator(op_exp, self._env)
+        return kind == 'value' and val is self._self
 
     def tail_stmts(self, exp, indent):
         """Compile exp in tail position to a list of already-indented Python
@@ -1315,135 +1344,141 @@ _fast_prim_map = None
 ## also verify the callback argument -- see its docstring.
 _fast_prim_hof_fns = set()
 
+def _fast_prim_direct_map(args):
+    f, lst = args[0], args[1]
+    items = []
+    while isinstance(lst, cons):
+        items.append(_apply_direct(f, [lst.car], None))
+        lst = lst.cdr
+    out = symbol_emptylist
+    for v in reversed(items):
+        out = cons(v, out)
+    return out
+
+def _fast_prim_direct_for_each(args):
+    f, lst = args[0], args[1]
+    while isinstance(lst, cons):
+        _apply_direct(f, [lst.car], None)
+        lst = lst.cdr
+    return void_value
+
+def _fast_prim_set_car(args):
+    args[0].car = args[1]
+    return void_value
+
+def _fast_prim_set_cdr(args):
+    args[0].cdr = args[1]
+    return void_value
+
+## Source of truth for Phase 2's fast primitive dispatch: Scheme name ->
+## a Python callable taking a plain Python list of args. Module-level (not
+## built lazily inside _build_fast_prim_map) so it can be inspected/tested
+## directly -- e.g. to check that _JitCompiler's _NARY/_CMP/_UNARY inlining
+## templates (which cover a syntactic subset of these) never reference a
+## name that isn't also fast-dispatchable here.
+_FAST_PRIM_SPECS = {
+    # Arithmetic
+    '+':     lambda args: plus(*args),
+    '-':     lambda args: minus(*args),
+    '*':     lambda args: multiply(*args),
+    '/':     lambda args: divide(*args),
+    # Numeric comparisons
+    '<':     lambda args: LessThan(*args),
+    '>':     lambda args: GreaterThan(*args),
+    '<=':    lambda args: LessThanEqual(*args),
+    '>=':    lambda args: GreaterThanEqual(*args),
+    '=':     lambda args: numeric_equal(*args),
+    # Logic
+    'not':   lambda args: (args[0] is False),
+    # Numeric predicates / math
+    'zero?':     lambda args: (args[0] == 0),
+    'even?':     lambda args: even_q(args[0]),
+    'odd?':      lambda args: odd_q(args[0]),
+    'abs':       lambda args: abs(args[0]),
+    'min':       lambda args: min(*args),
+    'max':       lambda args: max(*args),
+    'modulo':    lambda args: modulo(args[0], args[1]),
+    'remainder': lambda args: remainder(args[0], args[1]),
+    'quotient':  lambda args: quotient(args[0], args[1]),
+    'expt':      lambda args: expt_native(args[0], args[1]),
+    'sqrt':      lambda args: sqrt(args[0]),
+    'round':     lambda args: round(args[0]),
+    # Type predicates
+    'null?':      lambda args: (args[0] is symbol_emptylist),
+    'pair?':      lambda args: pair_q(args[0]),
+    'number?':    lambda args: number_q(args[0]),
+    'string?':    lambda args: string_q(args[0]),
+    'symbol?':    lambda args: symbol_q(args[0]),
+    'char?':      lambda args: char_q(args[0]),
+    'boolean?':   lambda args: boolean_q(args[0]),
+    'vector?':    lambda args: vector_q(args[0]),
+    'list?':      lambda args: list_q(args[0]),
+    'procedure?': lambda args: procedure_q(args[0]),
+    # Equality
+    'eq?':    lambda args: eq_q(args[0], args[1]),
+    'eqv?':   lambda args: eqv_q(args[0], args[1]),
+    'equal?': lambda args: equal_q(args[0], args[1]),
+    # Pair / list construction and access
+    'car':    lambda args: args[0].car,
+    'cdr':    lambda args: args[0].cdr,
+    'cons':   lambda args: cons(args[0], args[1]),
+    'set-car!': _fast_prim_set_car,
+    'set-cdr!': _fast_prim_set_cdr,
+    'caar':   lambda args: args[0].car.car,
+    'cadr':   lambda args: args[0].cdr.car,
+    'cdar':   lambda args: args[0].car.cdr,
+    'cddr':   lambda args: args[0].cdr.cdr,
+    'cadar':  lambda args: args[0].car.cdr.car,
+    'caddr':  lambda args: args[0].cdr.cdr.car,
+    'cdddr':  lambda args: args[0].cdr.cdr.cdr,
+    'cadddr': lambda args: args[0].cdr.cdr.cdr.car,
+    # List operations
+    'list':      lambda args: List(*args),
+    'length':    lambda args: length(args[0]),
+    'reverse':   lambda args: reverse(args[0]),
+    'append':    lambda args: append(*args),
+    'list-ref':  lambda args: list_ref(args[0], args[1]),
+    # Search
+    'memq':   lambda args: memq(args[0], args[1]),
+    'memv':   lambda args: memv(args[0], args[1]),
+    'member': lambda args: member(args[0], args[1]),
+    'assq':   lambda args: assq(args[0], args[1]),
+    'assv':   lambda args: assv(args[0], args[1]),
+    # Vector operations
+    'make-vector':   lambda args: make_vector(args[0]),
+    'vector-ref':    lambda args: vector_ref(args[0], args[1]),
+    'vector-set!':   lambda args: (vector_set_b(args[0], args[1], args[2]), void_value)[1],
+    'vector-length': lambda args: vector_length(args[0]),
+    'vector->list':  lambda args: vector_to_list(args[0]),
+    'list->vector':  lambda args: list_to_vector(args[0]),
+    # String operations
+    'string-length':  lambda args: string_length(args[0]),
+    'string-ref':     lambda args: string_ref(args[0], args[1]),
+    'string-append':  lambda args: string_append(*args),
+    'substring':      lambda args: substring(args[0], args[1], args[2]),
+    'string->list':   lambda args: string_to_list(args[0]),
+    'list->string':   lambda args: list_to_string(args[0]),
+    'string->number': lambda args: string_to_number(args[0]),
+    'number->string': lambda args: number_to_string(args[0]),
+    'string=?':       lambda args: string_is__q(args[0], args[1]),
+    'string<?':       lambda args: stringLessThan_q(args[0], args[1]),
+    # Symbol / char operations
+    'symbol->string':  lambda args: symbol_to_string(args[0]),
+    'string->symbol':  lambda args: string_to_symbol(args[0]),
+    'char->integer':   lambda args: char_to_integer(args[0]),
+    'integer->char':   lambda args: integer_to_char(args[0]),
+    'char-alphabetic?': lambda args: char_alphabetic_q(args[0]),
+    'char-numeric?':    lambda args: char_numeric_q(args[0]),
+    'char-whitespace?': lambda args: char_whitespace_q(args[0]),
+    # Higher-order (propagate _TrampolineFallback if proc not directly evaluable)
+    'map':      _fast_prim_direct_map,
+    'for-each': _fast_prim_direct_for_each,
+}
+
 def _build_fast_prim_map():
     """Populate the fast prim map by resolving known symbol names in toplevel_env."""
     result = {}
-
-    def _direct_map(args):
-        f, lst = args[0], args[1]
-        items = []
-        while isinstance(lst, cons):
-            items.append(_apply_direct(f, [lst.car], None))
-            lst = lst.cdr
-        out = symbol_emptylist
-        for v in reversed(items):
-            out = cons(v, out)
-        return out
-
-    def _direct_for_each(args):
-        f, lst = args[0], args[1]
-        while isinstance(lst, cons):
-            _apply_direct(f, [lst.car], None)
-            lst = lst.cdr
-        return void_value
-
-    def _set_car(args):
-        args[0].car = args[1]
-        return void_value
-
-    def _set_cdr(args):
-        args[0].cdr = args[1]
-        return void_value
-
-    name_to_direct = {
-        # Arithmetic
-        '+':     lambda args: plus(*args),
-        '-':     lambda args: minus(*args),
-        '*':     lambda args: multiply(*args),
-        '/':     lambda args: divide(*args),
-        # Numeric comparisons
-        '<':     lambda args: LessThan(*args),
-        '>':     lambda args: GreaterThan(*args),
-        '<=':    lambda args: LessThanEqual(*args),
-        '>=':    lambda args: GreaterThanEqual(*args),
-        '=':     lambda args: numeric_equal(*args),
-        # Logic
-        'not':   lambda args: (args[0] is False),
-        # Numeric predicates / math
-        'zero?':     lambda args: (args[0] == 0),
-        'even?':     lambda args: even_q(args[0]),
-        'odd?':      lambda args: odd_q(args[0]),
-        'abs':       lambda args: abs(args[0]),
-        'min':       lambda args: min(*args),
-        'max':       lambda args: max(*args),
-        'modulo':    lambda args: modulo(args[0], args[1]),
-        'remainder': lambda args: remainder(args[0], args[1]),
-        'quotient':  lambda args: quotient(args[0], args[1]),
-        'expt':      lambda args: expt_native(args[0], args[1]),
-        'sqrt':      lambda args: sqrt(args[0]),
-        'round':     lambda args: round(args[0]),
-        # Type predicates
-        'null?':      lambda args: (args[0] is symbol_emptylist),
-        'pair?':      lambda args: pair_q(args[0]),
-        'number?':    lambda args: number_q(args[0]),
-        'string?':    lambda args: string_q(args[0]),
-        'symbol?':    lambda args: symbol_q(args[0]),
-        'char?':      lambda args: char_q(args[0]),
-        'boolean?':   lambda args: boolean_q(args[0]),
-        'vector?':    lambda args: vector_q(args[0]),
-        'list?':      lambda args: list_q(args[0]),
-        'procedure?': lambda args: procedure_q(args[0]),
-        # Equality
-        'eq?':    lambda args: eq_q(args[0], args[1]),
-        'eqv?':   lambda args: eqv_q(args[0], args[1]),
-        'equal?': lambda args: equal_q(args[0], args[1]),
-        # Pair / list construction and access
-        'car':    lambda args: args[0].car,
-        'cdr':    lambda args: args[0].cdr,
-        'cons':   lambda args: cons(args[0], args[1]),
-        'set-car!': _set_car,
-        'set-cdr!': _set_cdr,
-        'caar':   lambda args: args[0].car.car,
-        'cadr':   lambda args: args[0].cdr.car,
-        'cdar':   lambda args: args[0].car.cdr,
-        'cddr':   lambda args: args[0].cdr.cdr,
-        'cadar':  lambda args: args[0].car.cdr.car,
-        'caddr':  lambda args: args[0].cdr.cdr.car,
-        'cdddr':  lambda args: args[0].cdr.cdr.cdr,
-        'cadddr': lambda args: args[0].cdr.cdr.cdr.car,
-        # List operations
-        'list':      lambda args: List(*args),
-        'length':    lambda args: length(args[0]),
-        'reverse':   lambda args: reverse(args[0]),
-        'append':    lambda args: append(*args),
-        'list-ref':  lambda args: list_ref(args[0], args[1]),
-        # Search
-        'memq':   lambda args: memq(args[0], args[1]),
-        'memv':   lambda args: memv(args[0], args[1]),
-        'member': lambda args: member(args[0], args[1]),
-        'assq':   lambda args: assq(args[0], args[1]),
-        'assv':   lambda args: assv(args[0], args[1]),
-        # Vector operations
-        'make-vector':   lambda args: make_vector(args[0]),
-        'vector-ref':    lambda args: vector_ref(args[0], args[1]),
-        'vector-set!':   lambda args: (vector_set_b(args[0], args[1], args[2]), void_value)[1],
-        'vector-length': lambda args: vector_length(args[0]),
-        'vector->list':  lambda args: vector_to_list(args[0]),
-        'list->vector':  lambda args: list_to_vector(args[0]),
-        # String operations
-        'string-length':  lambda args: string_length(args[0]),
-        'string-ref':     lambda args: string_ref(args[0], args[1]),
-        'string-append':  lambda args: string_append(*args),
-        'substring':      lambda args: substring(args[0], args[1], args[2]),
-        'string->list':   lambda args: string_to_list(args[0]),
-        'list->string':   lambda args: list_to_string(args[0]),
-        'string->number': lambda args: string_to_number(args[0]),
-        'number->string': lambda args: number_to_string(args[0]),
-        'string=?':       lambda args: string_is__q(args[0], args[1]),
-        'string<?':       lambda args: stringLessThan_q(args[0], args[1]),
-        # Symbol / char operations
-        'symbol->string':  lambda args: symbol_to_string(args[0]),
-        'string->symbol':  lambda args: string_to_symbol(args[0]),
-        'char->integer':   lambda args: char_to_integer(args[0]),
-        'integer->char':   lambda args: integer_to_char(args[0]),
-        'char-alphabetic?': lambda args: char_alphabetic_q(args[0]),
-        'char-numeric?':    lambda args: char_numeric_q(args[0]),
-        'char-whitespace?': lambda args: char_whitespace_q(args[0]),
-        # Higher-order (propagate _TrampolineFallback if proc not directly evaluable)
-        'map':      _direct_map,
-        'for-each': _direct_for_each,
-    }
-    for sym_name, direct_fn in name_to_direct.items():
+    for sym_name, direct_fn in _FAST_PRIM_SPECS.items():
         b = search_env(toplevel_env, make_symbol(sym_name))
         if b is not False:
             proc = binding_value(b)
