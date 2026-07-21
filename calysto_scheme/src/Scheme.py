@@ -36,7 +36,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 
 #############################################################
 # Python implementation notes:
@@ -584,19 +584,37 @@ def apply_proc():
             GLOBALS['fail_reg'] = _fail
             proc_reg[1](*proc_reg[2:])
             return
-        # Deliberately NOT wrapped in try/except _TrampolineFallback: this
-        # closure was certified by _is_phase2_safe as fully representable
-        # by Phase 2, so _eval_sequence_direct must run to completion. If
-        # it somehow still raises _TrampolineFallback, that means
-        # _is_phase2_safe has a soundness gap. The old behavior here was
-        # to silently discard this attempt and re-run the whole closure
-        # body via the trampoline -- which re-executes any side effects
-        # (mutation, I/O, ...) from statements that already completed
-        # before the failure (see README-PERFORMANCE.md's "Benchmark-
-        # harness correctness bug" section). Letting the exception
-        # propagate instead turns a silent wrong answer into a loud,
-        # reportable failure.
-        result = _eval_sequence_direct(bodies, new_env)
+        # This closure was certified by _is_phase2_safe as fully
+        # representable by Phase 2, so _eval_sequence_direct must run to
+        # completion. If it somehow still raises _TrampolineFallback,
+        # that means _is_phase2_safe has a soundness gap. The old
+        # behavior here was to silently discard this attempt and re-run
+        # the whole closure body via the trampoline -- which re-executes
+        # any side effects (mutation, I/O, ...) from statements that
+        # already completed before the failure (see
+        # README-PERFORMANCE.md's "Benchmark-harness correctness bug"
+        # section). Letting the exception propagate instead turns a
+        # silent wrong answer into a loud, reportable failure -- BUT
+        # trampoline()'s own top-level `except Exception` catches any
+        # propagating Python exception (including this one) and converts
+        # it into an ordinary Scheme exception object, dispatched through
+        # the normal handler_reg chain, not a process crash. Some Scheme-
+        # level handlers -- notably run-unit-test-cases in
+        # interpreter-cps.ss, which re-evaluates a failed assertion's
+        # sub-expressions to build a diagnostic report -- can then
+        # immediately re-invoke the very same (wrongly-certified) proc,
+        # which would hit the identical failure again, forever, since the
+        # wrong verdict stays cached. Invalidating the cache entry here,
+        # before re-raising, means any later attempt on this exact proc
+        # (including such an immediate diagnostic re-evaluation) takes
+        # the always-correct slow path instead of repeating the same
+        # failure -- the first failure still propagates and stays fully
+        # visible, but it can't loop.
+        try:
+            result = _eval_sequence_direct(bodies, new_env)
+        except _TrampolineFallback:
+            _phase2_safe_cache[id(proc_reg)] = (proc_reg, False)
+            raise
         GLOBALS['value2_reg'] = _fail
         GLOBALS['value1_reg'] = result
         GLOBALS['k_reg'] = _k2
@@ -743,11 +761,19 @@ def _phase2_safe_walk(exp, env, visiting):
         return (_phase2_safe_walk(exp.cdr.car, env, visiting) and
                 _phase2_safe_walk(exp.cdr.cdr.car, env, visiting) and
                 _phase2_safe_walk(exp.cdr.cdr.cdr.car, env, visiting))
-    elif tag is symbol_lambda_aexp or tag is symbol_mu_lambda_aexp:
+    elif tag is symbol_lambda_aexp:
         # Creating a closure has no side effects and doesn't call
         # anything; its own body gets its own independent, lazy check
         # if/when IT is ever itself invoked via apply_proc.
         return True
+        # NOTE: symbol_mu_lambda_aexp (a lambda with dotted/rest formals,
+        # e.g. (lambda (a . rest) ...)) is deliberately NOT included above
+        # despite being grouped with symbol_lambda_aexp in
+        # _is_direct_eval_safe's lambda-boundary check. _eval_direct has
+        # no case for symbol_mu_lambda_aexp at all -- it falls through to
+        # `else: raise _TrampolineFallback()` -- so treating it as safe
+        # here would certify a closure Phase 2 cannot actually evaluate.
+        # Falls through to the final `else: return False` below.
     elif tag is symbol_begin_aexp:
         return _phase2_safe_walk_seq(exp.cdr, env, visiting)
     elif tag is symbol_app_aexp:

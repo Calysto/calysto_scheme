@@ -868,9 +868,13 @@
 	  (unparse (parse '(+ 1 2)))
 	  '(+ 1 2)
 	  "unparse")
+  ;; Default changed to #f: *use-stack-trace* wraps every non-JIT/
+  ;; non-Phase-2 call's continuation in an extra pop-frame -- ~10-13%
+  ;; wall-clock and ~25-45% memory reduction on the trampoline path with
+  ;; it off (see interpreter-cps.ss and README-PERFORMANCE.md).
   (assert eq?
 	  (use-stack-trace)
-	  #t
+	  #f
 	  "use-stack-trace")
   (assert eq?
 	  (use-tracing)
@@ -1440,6 +1444,58 @@
 	  (list 1 1)
 	  (list (vector-ref jit-dbl-counter-o 0) (vector-ref jit-dbl-counter-h 0))
 	  "case 63")
+
+  ;; Correctness regression, a specific gap found (and fixed) during
+  ;; development of _is_phase2_safe itself: a closure that does work and
+  ;; then *returns* a dotted-formals lambda (lambda (a . rest) ...) as a
+  ;; plain value -- NOT calling it, just creating it. _eval_direct has no
+  ;; case for mu-lambda-aexp at all (only plain lambda-aexp), so
+  ;; evaluating this always falls to its `else: raise
+  ;; _TrampolineFallback()`. The existing mu-lambda test group above only
+  ;; exercises dotted-formals lambdas in IMMEDIATELY-CALLED (IIFE)
+  ;; position, e.g. ((lambda (a . z) ...) args...) -- which is already
+  ;; excluded from Phase 2 for an unrelated reason (a computed/nested
+  ;; operator can't be statically proven safe), so it never exercised
+  ;; this specific "returned as a value" shape. _is_phase2_safe initially
+  ;; (wrongly) treated mu-lambda-aexp as safe by copying
+  ;; _is_direct_eval_safe's lambda-boundary pattern without checking it
+  ;; against _eval_direct's actual cases -- certifying a closure Phase 2
+  ;; could not actually evaluate, which crashed instead of silently
+  ;; double-executing (apply_proc no longer catches a fallback from a
+  ;; certified-safe closure -- see README-PERFORMANCE.md's "Phase 8") but
+  ;; still broke previously-working code. Confirms both that the counter
+  ;; isn't doubled AND that the call doesn't crash.
+  (define jit-dbl-counter-mu (vector 0))
+  (define (jit-dbl-make-variadic n)
+    (vector-set! jit-dbl-counter-mu 0 (+ (vector-ref jit-dbl-counter-mu 0) 1))
+    (lambda (a . rest) (+ n a (length rest))))
+  (define jit-dbl-variadic-fn (jit-dbl-make-variadic 100))
+  (assert equal?
+	  (list 1 103)
+	  (list (vector-ref jit-dbl-counter-mu 0) (jit-dbl-variadic-fn 1 2 3))
+	  "case 64")
+
+  ;; Correctness regression: a pre-existing instance of the same bug
+  ;; class, unrelated to mu-lambda, found while auditing which AST node
+  ;; types _is_direct_eval_safe's set!-only check (the OLD, still-used
+  ;; gate for whether a closure is JIT/Phase-2-*eligible* at all) fails
+  ;; to exclude. _eval_direct has no case for try-catch-aexp either, so a
+  ;; closure using (try ... (catch ...)) after doing other work was
+  ;; already double-executing that work on the original, unmodified
+  ;; interpreter (confirmed directly against the pre-Phase-8 commit) --
+  ;; _is_phase2_safe's default-deny design (only 7 explicitly-recognized
+  ;; node types are ever treated as safe; everything else, including
+  ;; try/catch, raise, and choose, falls through to "unsafe") closes this
+  ;; as a side effect, without having been specifically designed for it.
+  (define jit-dbl-counter-try (vector 0))
+  (define (jit-dbl-work-then-try n)
+    (vector-set! jit-dbl-counter-try 0 (+ (vector-ref jit-dbl-counter-try 0) 1))
+    (try (/ 1 0) (catch e "caught")))
+  (jit-dbl-work-then-try 5)
+  (assert equal?
+	  1
+	  (vector-ref jit-dbl-counter-try 0)
+	  "case 65")
   )
 
 (run-tests)

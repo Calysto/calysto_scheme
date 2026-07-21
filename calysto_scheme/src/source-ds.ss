@@ -1678,11 +1678,15 @@
           (test-name (list-ref fields 6))
           (traceback (list-ref fields 7))
           (verbose (list-ref fields 8))
-          (wrong (list-ref fields 9))
-          (env (list-ref fields 10))
-          (handler (list-ref fields 11))
-          (k (list-ref fields 12)))
-      (m test-aexp env handler value2
+          (where (list-ref fields 9))
+          (wrong (list-ref fields 10))
+          (env (list-ref fields 11))
+          (handler (list-ref fields 12))
+          (k (list-ref fields 13)))
+      (m test-aexp env
+         (make-handler2 <handler2-4> assertions msg right test-name
+           verbose where wrong env handler k)
+         value2
          (make-cont2 <cont2-88> assertions msg proc-exp value1 right
            test-exp test-name traceback verbose wrong env handler
            k)))))
@@ -2366,6 +2370,22 @@
   <handler2-4>
   (lambda (exception fail fields)
     (let ((assertions (car fields))
+          (msg (cadr fields))
+          (right (caddr fields))
+          (test-name (cadddr fields))
+          (verbose (list-ref fields 4))
+          (where (list-ref fields 5))
+          (wrong (list-ref fields 6))
+          (env (list-ref fields 7))
+          (handler (list-ref fields 8))
+          (k (list-ref fields 9)))
+      (report-unit-test-diagnostic-fallback msg where test-name assertions verbose right wrong env
+        handler fail k))))
+
+(define+
+  <handler2-5>
+  (lambda (exception fail fields)
+    (let ((assertions (car fields))
           (right (cadr fields))
           (test-name (caddr fields))
           (verbose (cadddr fields))
@@ -2376,27 +2396,41 @@
       (let* ((msg (get-exception-message exception))
              (where (get-exception-info exception))
              (assert-exp (car assertions))
-             (proc-exp (aunparse (car (cdr^ assert-exp))))
-             (test-aexp (cadr (cdr^ assert-exp)))
-             (test-exp (aunparse test-aexp))
-             (result-exp (caddr (cdr^ assert-exp)))
-             (traceback (get-traceback-string
-                          (list 'exception exception))))
-        (if (> (string-length msg) 0)
-            (if (eq? where 'none)
-                (printf "  Error: ~a \"~a\"\n" test-name msg)
-                (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
-            (if (eq? where 'none)
-                (printf "  Error: ~a\n" test-name)
-                (printf "  Error: ~a at ~a\n" test-name where)))
-        (initialize-stack-trace!)
-        (m result-exp env handler fail
-           (make-cont2 <cont2-89> assertions msg proc-exp right
-             test-aexp test-exp test-name traceback verbose wrong env
-             handler k))))))
+             (assert-shaped? (and (pair? assert-exp)
+                                  (pair? (cdr^ assert-exp))
+                                  (pair? (cdr (cdr^ assert-exp)))
+                                  (pair? (cddr (cdr^ assert-exp))))))
+        (if (not assert-shaped?)
+            (report-unit-test-diagnostic-fallback msg where test-name assertions verbose right wrong env
+              handler fail k)
+            (let* ((proc-exp (aunparse (car (cdr^ assert-exp))))
+                   (test-aexp (cadr (cdr^ assert-exp)))
+                   (test-exp (aunparse test-aexp))
+                   (result-exp (caddr (cdr^ assert-exp)))
+                   (traceback (get-traceback-string
+                                (list 'exception exception))))
+              (if (> (string-length msg) 0)
+                  (if (eq? where 'none)
+                      (printf "  Error: ~a \"~a\"\n" test-name msg)
+                      (printf
+                        "  Error: ~a \"~a\" at ~a\n"
+                        test-name
+                        msg
+                        where))
+                  (if (eq? where 'none)
+                      (printf "  Error: ~a\n" test-name)
+                      (printf "  Error: ~a at ~a\n" test-name where)))
+              (initialize-stack-trace!)
+              (m result-exp env
+                 (make-handler2 <handler2-4> assertions msg right test-name
+                   verbose where wrong env handler k)
+                 fail
+                 (make-cont2 <cont2-89> assertions msg proc-exp right test-aexp
+                   test-exp test-name traceback verbose where wrong env
+                   handler k))))))))
 
 (define+
-  <handler2-5>
+  <handler2-6>
   (lambda (exception fail fields)
     (let ((cexps (car fields))
           (cvar (cadr fields))
@@ -2411,7 +2445,7 @@
         (eval-sequence cexps new-env handler fail k)))))
 
 (define+
-  <handler2-6>
+  <handler2-7>
   (lambda (exception fail fields)
     (let ((fexps (car fields))
           (env (cadr fields))
@@ -2420,7 +2454,7 @@
         (make-cont2 <cont2-93> exception handler)))))
 
 (define+
-  <handler2-7>
+  <handler2-8>
   (lambda (exception fail fields)
     (let ((cexps (car fields))
           (cvar (cadr fields))
@@ -7387,12 +7421,27 @@
              (string=? exception-type "UnhandledException")))))
 
 (define*
+  report-unit-test-diagnostic-fallback
+  (lambda (msg where test-name assertions verbose right wrong
+           env handler fail k)
+    (if (> (string-length msg) 0)
+        (if (eq? where 'none)
+            (printf "  Error: ~a \"~a\"\n" test-name msg)
+            (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+        (if (eq? where 'none)
+            (printf "  Error: ~a\n" test-name)
+            (printf "  Error: ~a at ~a\n" test-name where)))
+    (make-test-callback test-name msg #f "" "" "" "")
+    (run-unit-test-cases test-name (cdr assertions) verbose
+      right (+ wrong 1) env handler fail k)))
+
+(define*
   run-unit-test-cases
   (lambda (test-name assertions verbose right wrong env
            handler fail k)
     (if (null? assertions)
         (apply-cont2 k (list right wrong) fail)
-        (let ((test-case-handler (make-handler2 <handler2-4> assertions right test-name
+        (let ((test-case-handler (make-handler2 <handler2-5> assertions right test-name
                                    verbose wrong env handler k)))
           (initialize-stack-trace!)
           (m (car assertions) env test-case-handler fail
@@ -7507,15 +7556,15 @@
 
 (define try-catch-handler
   (lambda (cvar cexps env handler k)
-    (make-handler2 <handler2-5> cexps cvar env handler k)))
+    (make-handler2 <handler2-6> cexps cvar env handler k)))
 
 (define try-finally-handler
   (lambda (fexps env handler)
-    (make-handler2 <handler2-6> fexps env handler)))
+    (make-handler2 <handler2-7> fexps env handler)))
 
 (define try-catch-finally-handler
   (lambda (cvar cexps fexps env handler k)
-    (make-handler2 <handler2-7> cexps cvar fexps env handler
+    (make-handler2 <handler2-8> cexps cvar fexps env handler
       k)))
 
 (define*
@@ -9125,7 +9174,7 @@
 
 (define *stack-trace* '(()))
 
-(define *use-stack-trace* #t)
+(define *use-stack-trace* #f)
 
 (define-native
   make-safe-continuation

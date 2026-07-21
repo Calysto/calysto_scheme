@@ -44,7 +44,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 
 #############################################################
 # Python implementation notes:
@@ -592,19 +592,37 @@ def apply_proc():
             GLOBALS['fail_reg'] = _fail
             proc_reg[1](*proc_reg[2:])
             return
-        # Deliberately NOT wrapped in try/except _TrampolineFallback: this
-        # closure was certified by _is_phase2_safe as fully representable
-        # by Phase 2, so _eval_sequence_direct must run to completion. If
-        # it somehow still raises _TrampolineFallback, that means
-        # _is_phase2_safe has a soundness gap. The old behavior here was
-        # to silently discard this attempt and re-run the whole closure
-        # body via the trampoline -- which re-executes any side effects
-        # (mutation, I/O, ...) from statements that already completed
-        # before the failure (see README-PERFORMANCE.md's "Benchmark-
-        # harness correctness bug" section). Letting the exception
-        # propagate instead turns a silent wrong answer into a loud,
-        # reportable failure.
-        result = _eval_sequence_direct(bodies, new_env)
+        # This closure was certified by _is_phase2_safe as fully
+        # representable by Phase 2, so _eval_sequence_direct must run to
+        # completion. If it somehow still raises _TrampolineFallback,
+        # that means _is_phase2_safe has a soundness gap. The old
+        # behavior here was to silently discard this attempt and re-run
+        # the whole closure body via the trampoline -- which re-executes
+        # any side effects (mutation, I/O, ...) from statements that
+        # already completed before the failure (see
+        # README-PERFORMANCE.md's "Benchmark-harness correctness bug"
+        # section). Letting the exception propagate instead turns a
+        # silent wrong answer into a loud, reportable failure -- BUT
+        # trampoline()'s own top-level `except Exception` catches any
+        # propagating Python exception (including this one) and converts
+        # it into an ordinary Scheme exception object, dispatched through
+        # the normal handler_reg chain, not a process crash. Some Scheme-
+        # level handlers -- notably run-unit-test-cases in
+        # interpreter-cps.ss, which re-evaluates a failed assertion's
+        # sub-expressions to build a diagnostic report -- can then
+        # immediately re-invoke the very same (wrongly-certified) proc,
+        # which would hit the identical failure again, forever, since the
+        # wrong verdict stays cached. Invalidating the cache entry here,
+        # before re-raising, means any later attempt on this exact proc
+        # (including such an immediate diagnostic re-evaluation) takes
+        # the always-correct slow path instead of repeating the same
+        # failure -- the first failure still propagates and stays fully
+        # visible, but it can't loop.
+        try:
+            result = _eval_sequence_direct(bodies, new_env)
+        except _TrampolineFallback:
+            _phase2_safe_cache[id(proc_reg)] = (proc_reg, False)
+            raise
         GLOBALS['value2_reg'] = _fail
         GLOBALS['value1_reg'] = result
         GLOBALS['k_reg'] = _k2
@@ -751,11 +769,19 @@ def _phase2_safe_walk(exp, env, visiting):
         return (_phase2_safe_walk(exp.cdr.car, env, visiting) and
                 _phase2_safe_walk(exp.cdr.cdr.car, env, visiting) and
                 _phase2_safe_walk(exp.cdr.cdr.cdr.car, env, visiting))
-    elif tag is symbol_lambda_aexp or tag is symbol_mu_lambda_aexp:
+    elif tag is symbol_lambda_aexp:
         # Creating a closure has no side effects and doesn't call
         # anything; its own body gets its own independent, lazy check
         # if/when IT is ever itself invoked via apply_proc.
         return True
+        # NOTE: symbol_mu_lambda_aexp (a lambda with dotted/rest formals,
+        # e.g. (lambda (a . rest) ...)) is deliberately NOT included above
+        # despite being grouped with symbol_lambda_aexp in
+        # _is_direct_eval_safe's lambda-boundary check. _eval_direct has
+        # no case for symbol_mu_lambda_aexp at all -- it falls through to
+        # `else: raise _TrampolineFallback()` -- so treating it as safe
+        # here would certify a closure Phase 2 cannot actually evaluate.
+        # Falls through to the final `else: return False` below.
     elif tag is symbol_begin_aexp:
         return _phase2_safe_walk_seq(exp.cdr, env, visiting)
     elif tag is symbol_app_aexp:
@@ -2905,6 +2931,7 @@ variant_reg = symbol_undefined
 variants_reg = symbol_undefined
 vars_reg = symbol_undefined
 verbose_reg = symbol_undefined
+where_reg = symbol_undefined
 wrong_reg = symbol_undefined
 x_reg = symbol_undefined
 y_reg = symbol_undefined
@@ -4164,11 +4191,11 @@ def b_cont2_88_d(assertions, msg, proc_exp, result_val, right, test_exp, test_na
     test_name_reg = test_name
     pc = run_unit_test_cases
 
-def b_cont2_89_d(assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
+def b_cont2_89_d(assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
     k_reg = make_cont2(b_cont2_88_d, assertions, msg, proc_exp, value1_reg, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
     fail_reg = value2_reg
-    handler_reg = handler
+    handler_reg = make_handler2(b_handler2_4_d, assertions, msg, right, test_name, verbose, where, wrong, env, handler, k)
     env_reg = env
     exp_reg = test_aexp
     pc = m
@@ -4765,34 +4792,62 @@ def b_handler2_3_d():
     final_reg = False
     pc = pc_halt_signal
 
-def b_handler2_4_d(assertions, right, test_name, verbose, wrong, env, handler, k):
-    global env_reg, exp_reg, handler_reg, k_reg, pc
+def b_handler2_4_d(assertions, msg, right, test_name, verbose, where, wrong, env, handler, k):
+    global assertions_reg, env_reg, handler_reg, k_reg, msg_reg, pc, right_reg, test_name_reg, verbose_reg, where_reg, wrong_reg
+    k_reg = k
+    handler_reg = handler
+    env_reg = env
+    wrong_reg = wrong
+    right_reg = right
+    verbose_reg = verbose
+    assertions_reg = assertions
+    test_name_reg = test_name
+    where_reg = where
+    msg_reg = msg
+    pc = report_unit_test_diagnostic_fallback
+
+def b_handler2_5_d(assertions, right, test_name, verbose, wrong, env, handler, k):
+    global assertions_reg, env_reg, exp_reg, handler_reg, k_reg, msg_reg, pc, right_reg, test_name_reg, verbose_reg, where_reg, wrong_reg
     msg = get_exception_message(exception_reg)
     where = get_exception_info(exception_reg)
     assert_exp = (assertions).car
-    proc_exp = aunparse((cdr_hat(assert_exp)).car)
-    test_aexp = (cdr_hat(assert_exp)).cdr.car
-    test_exp = aunparse(test_aexp)
-    result_exp = (cdr_hat(assert_exp)).cdr.cdr.car
-    traceback = get_traceback_string(List(symbol_exception, exception_reg))
-    if (GreaterThan(string_length(msg), 0) is not False):
-        if ((where) is (symbol_none) is not False):
-            printf("  Error: ~a \"~a\"\n", test_name, msg)
-        else:
-            printf("  Error: ~a \"~a\" at ~a\n", test_name, msg, where)
+    assert_shaped_q = (pair_q(assert_exp)) and (pair_q(cdr_hat(assert_exp))) and (pair_q((cdr_hat(assert_exp)).cdr)) and (pair_q((cdr_hat(assert_exp)).cdr.cdr))
+    if (not(assert_shaped_q) is not False):
+        k_reg = k
+        handler_reg = handler
+        env_reg = env
+        wrong_reg = wrong
+        right_reg = right
+        verbose_reg = verbose
+        assertions_reg = assertions
+        test_name_reg = test_name
+        where_reg = where
+        msg_reg = msg
+        pc = report_unit_test_diagnostic_fallback
     else:
-        if ((where) is (symbol_none) is not False):
-            printf("  Error: ~a\n", test_name)
+        proc_exp = aunparse((cdr_hat(assert_exp)).car)
+        test_aexp = (cdr_hat(assert_exp)).cdr.car
+        test_exp = aunparse(test_aexp)
+        result_exp = (cdr_hat(assert_exp)).cdr.cdr.car
+        traceback = get_traceback_string(List(symbol_exception, exception_reg))
+        if (GreaterThan(string_length(msg), 0) is not False):
+            if ((where) is (symbol_none) is not False):
+                printf("  Error: ~a \"~a\"\n", test_name, msg)
+            else:
+                printf("  Error: ~a \"~a\" at ~a\n", test_name, msg, where)
         else:
-            printf("  Error: ~a at ~a\n", test_name, where)
-    initialize_stack_trace_b()
-    k_reg = make_cont2(b_cont2_89_d, assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
-    handler_reg = handler
-    env_reg = env
-    exp_reg = result_exp
-    pc = m
+            if ((where) is (symbol_none) is not False):
+                printf("  Error: ~a\n", test_name)
+            else:
+                printf("  Error: ~a at ~a\n", test_name, where)
+        initialize_stack_trace_b()
+        k_reg = make_cont2(b_cont2_89_d, assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k)
+        handler_reg = make_handler2(b_handler2_4_d, assertions, msg, right, test_name, verbose, where, wrong, env, handler, k)
+        env_reg = env
+        exp_reg = result_exp
+        pc = m
 
-def b_handler2_5_d(cexps, cvar, env, handler, k):
+def b_handler2_6_d(cexps, cvar, env, handler, k):
     global env_reg, exps_reg, handler_reg, k_reg, pc
     new_env = extend(env, List(cvar), List(exception_reg), List("try-catch handler"))
     k_reg = k
@@ -4801,7 +4856,7 @@ def b_handler2_5_d(cexps, cvar, env, handler, k):
     exps_reg = cexps
     pc = eval_sequence
 
-def b_handler2_6_d(fexps, env, handler):
+def b_handler2_7_d(fexps, env, handler):
     global env_reg, exps_reg, handler_reg, k_reg, pc
     k_reg = make_cont2(b_cont2_93_d, exception_reg, handler)
     handler_reg = handler
@@ -4809,7 +4864,7 @@ def b_handler2_6_d(fexps, env, handler):
     exps_reg = fexps
     pc = eval_sequence
 
-def b_handler2_7_d(cexps, cvar, fexps, env, handler, k):
+def b_handler2_8_d(cexps, cvar, fexps, env, handler, k):
     global env_reg, exps_reg, handler_reg, k_reg, pc
     new_env = extend(env, List(cvar), List(exception_reg), List("try-catch-finally handler"))
     catch_handler = try_finally_handler(fexps, env, handler)
@@ -9514,6 +9569,23 @@ def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k)
 def valid_exception_type_q(exception_type):
     return (string_q(exception_type)) and ((string_is__q(exception_type, "AssertionError")) or (string_is__q(exception_type, "Exception")) or (string_is__q(exception_type, "KeyboardInterrupt")) or (string_is__q(exception_type, "MacroError")) or (string_is__q(exception_type, "ParseError")) or (string_is__q(exception_type, "ReadError")) or (string_is__q(exception_type, "RunTimeError")) or (string_is__q(exception_type, "ScanError")) or (string_is__q(exception_type, "UnhandledException")))
 
+def report_unit_test_diagnostic_fallback():
+    global assertions_reg, pc, wrong_reg
+    if (GreaterThan(string_length(msg_reg), 0) is not False):
+        if ((where_reg) is (symbol_none) is not False):
+            printf("  Error: ~a \"~a\"\n", test_name_reg, msg_reg)
+        else:
+            printf("  Error: ~a \"~a\" at ~a\n", test_name_reg, msg_reg, where_reg)
+    else:
+        if ((where_reg) is (symbol_none) is not False):
+            printf("  Error: ~a\n", test_name_reg)
+        else:
+            printf("  Error: ~a at ~a\n", test_name_reg, where_reg)
+    make_test_callback(test_name_reg, msg_reg, False, "", "", "", "")
+    wrong_reg = (wrong_reg) + (1)
+    assertions_reg = (assertions_reg).cdr
+    pc = run_unit_test_cases
+
 def run_unit_test_cases():
     global exp_reg, handler_reg, k_reg, pc, value1_reg, value2_reg
     if (((assertions_reg) is symbol_emptylist) is not False):
@@ -9521,7 +9593,7 @@ def run_unit_test_cases():
         value1_reg = List(right_reg, wrong_reg)
         pc = apply_cont2
     else:
-        test_case_handler = make_handler2(b_handler2_4_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
+        test_case_handler = make_handler2(b_handler2_5_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         initialize_stack_trace_b()
         k_reg = make_cont2(b_cont2_90_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         handler_reg = test_case_handler
@@ -9635,13 +9707,13 @@ def eval_sequence():
         pc = m
 
 def try_catch_handler(cvar, cexps, env, handler, k):
-    return make_handler2(b_handler2_5_d, cexps, cvar, env, handler, k)
+    return make_handler2(b_handler2_6_d, cexps, cvar, env, handler, k)
 
 def try_finally_handler(fexps, env, handler):
-    return make_handler2(b_handler2_6_d, fexps, env, handler)
+    return make_handler2(b_handler2_7_d, fexps, env, handler)
 
 def try_catch_finally_handler(cvar, cexps, fexps, env, handler, k):
-    return make_handler2(b_handler2_7_d, cexps, cvar, fexps, env, handler, k)
+    return make_handler2(b_handler2_8_d, cexps, cvar, fexps, env, handler, k)
 
 def eval_choices():
     global exp_reg, fail_reg, pc
@@ -10394,7 +10466,7 @@ try_parse_handler = make_handler2(b_handler2_3_d)
 unit_test_table = symbol_undefined
 _startracing_on_q_star = False
 _starstack_trace_star = List(symbol_emptylist)
-_staruse_stack_trace_star = True
+_staruse_stack_trace_star = False
 clear_unit_tests_prim = make_proc(b_proc_5_d)
 void_prim = make_proc(b_proc_6_d)
 zero_q_prim = make_proc(b_proc_7_d)
@@ -10595,7 +10667,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 2.0.3')
+    print('Calysto Scheme, version 2.1.0')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
