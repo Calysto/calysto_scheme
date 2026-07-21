@@ -3202,7 +3202,14 @@
 
 (define *stack-trace* '(()))
 
-(define *use-stack-trace* #t)
+;; Default off: *use-stack-trace* wraps every non-JIT/non-Phase-2 call's
+;; continuation in an extra pop-frame, adding a heap-allocated
+;; continuation and an extra trampoline step per call. Measured ~10-13%
+;; wall-clock and ~25-45% memory reduction on the trampoline path with it
+;; off (see calysto_scheme/src/README-PERFORMANCE.md). Users who want
+;; stack traces for debugging can still turn it back on with
+;; (use-stack-trace #t).
+(define *use-stack-trace* #f)
 
 (define get-use-stack-trace
   (lambda ()
@@ -3491,7 +3498,49 @@
 	     (string=? exception-type "ScanError")
 	     (string=? exception-type "UnhandledException")))))
 
+(define* report-unit-test-diagnostic-fallback
+  ;; Top-level (not a local closure): this specialized register-machine
+  ;; compiler only lifts lambdas passed through the CPS m/k/handler
+  ;; plumbing into their own functions -- a local, directly-called
+  ;; zero-arg helper closure (which is what this originally was) isn't
+  ;; that pattern and isn't compiled correctly. See run-unit-test-cases
+  ;; below for why this exists.
+  (lambda (msg where test-name assertions verbose right wrong env handler fail k)
+    (if (> (string-length msg) 0)
+        (if (eq? where 'none)
+            (printf "  Error: ~a \"~a\"\n" test-name msg)
+            (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+        (if (eq? where 'none)
+            (printf "  Error: ~a\n" test-name)
+            (printf "  Error: ~a at ~a\n" test-name where)))
+    (make-test-callback test-name msg #f "" "" "" "")
+    (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))
+
 (define* run-unit-test-cases
+  ;; test-case-handler fires whenever evaluating (car assertions) raises
+  ;; an exception. It used to assume (car assertions) was always
+  ;; assert-shaped -- (app-exp assert op e1 e2 name) -- to build a
+  ;; diagnostic report. But define-tests bodies freely mix plain
+  ;; `define`s alongside `assert` calls (every top-level form here runs
+  ;; with this handler installed, not just asserts), and if a `define`
+  ;; raises instead, that assumption is wrong: destructuring a
+  ;; non-assert-shaped expression as if it were one can itself throw.
+  ;; Because nothing updates the active handler register until *after*
+  ;; that destructuring succeeds, a failure there causes trampoline's
+  ;; top-level catch-all to re-invoke this exact same handler with the
+  ;; exact same (still-failing) arguments -- an unconditional infinite
+  ;; loop, confirmed independent of any JIT/Phase-2 behavior: a plain
+  ;; (/ 1 0) inside a `define` in a define-tests block reproduces it on
+  ;; its own, on unmodified interpreter-cps.ss. assert-shaped? checks the
+  ;; structure before attempting the assert-specific destructuring
+  ;; instead of relying on catching a failure from it -- this compiler's
+  ;; ds-transform pass doesn't support Scheme's `guard`/exception forms
+  ;; here (this file is the interpreter's own implementation language,
+  ;; not code run *by* the interpreter, where try/catch would apply).
+  ;; The two re-evaluation calls below get their own minimal handler
+  ;; instead of reusing the outer `handler` -- the "FIXME: could have an
+  ;; error" cases already flagged below -- so a failure there is reported
+  ;; once and the suite moves on too, instead of looping.
   (lambda (test-name assertions verbose right wrong env handler fail k)
     (if (null? assertions)
         (k (list right wrong) fail)
@@ -3499,33 +3548,46 @@
                (lambda-handler2 (e fail)
 		 (let* ((msg (get-exception-message e))
 			(where (get-exception-info e))
-			(assert-exp (car assertions)) ;; (app-exp assert op e1 e2 name)
-			(proc-exp (aunparse (car (cdr^ assert-exp))))
-			(test-aexp (cadr (cdr^ assert-exp)))
-			(test-exp (aunparse test-aexp))
-			(result-exp (caddr (cdr^ assert-exp)))
-			(traceback (get-traceback-string (list 'exception e))))
-		   (if (> (string-length msg) 0)
-		       (if (eq? where 'none)
-			   (printf "  Error: ~a \"~a\"\n" test-name msg)
-			   (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
-		       (if (eq? where 'none)
-			   (printf "  Error: ~a\n" test-name)
-			   (printf "  Error: ~a at ~a\n" test-name where)))
-		   (initialize-stack-trace!)
-		   (m result-exp env handler fail ;; FIXME: could have an error in result?
-		      (lambda-cont2 (result-val fail)
-			(m test-aexp env handler fail ;; FIXME: could have an error in test
-			   (lambda-cont2 (test-val fail)
-			      (if verbose
-				  (begin
-				    (printf "~a\n" traceback)
-				    (printf "  Procedure    : ~a\n" proc-exp)
-				    (printf "       src     : ~a\n" test-exp)
-				    (printf "       src eval: ~a\n" test-val)
-				    (printf "       result  : ~a\n" result-val)))
-			      (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
-			      (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))))))
+			(assert-exp (car assertions))
+			(assert-shaped?
+			 (and (pair? assert-exp)
+			      (pair? (cdr^ assert-exp))
+			      (pair? (cdr (cdr^ assert-exp)))
+			      (pair? (cddr (cdr^ assert-exp))))))
+		   (if (not assert-shaped?)
+		       (report-unit-test-diagnostic-fallback msg where test-name assertions verbose right wrong env handler fail k)
+		       (let* ((proc-exp (aunparse (car (cdr^ assert-exp))))
+			      (test-aexp (cadr (cdr^ assert-exp)))
+			      (test-exp (aunparse test-aexp))
+			      (result-exp (caddr (cdr^ assert-exp)))
+			      (traceback (get-traceback-string (list 'exception e))))
+			 (if (> (string-length msg) 0)
+			     (if (eq? where 'none)
+				 (printf "  Error: ~a \"~a\"\n" test-name msg)
+				 (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+			     (if (eq? where 'none)
+				 (printf "  Error: ~a\n" test-name)
+				 (printf "  Error: ~a at ~a\n" test-name where)))
+			 (initialize-stack-trace!)
+			 (m result-exp env
+			    (lambda-handler2 (e2 fail2)
+			      (report-unit-test-diagnostic-fallback msg where test-name assertions verbose right wrong env handler fail2 k))
+			    fail
+			    (lambda-cont2 (result-val fail)
+			      (m test-aexp env
+				 (lambda-handler2 (e3 fail3)
+				   (report-unit-test-diagnostic-fallback msg where test-name assertions verbose right wrong env handler fail3 k))
+				 fail
+				 (lambda-cont2 (test-val fail)
+				    (if verbose
+					(begin
+					  (printf "~a\n" traceback)
+					  (printf "  Procedure    : ~a\n" proc-exp)
+					  (printf "       src     : ~a\n" test-exp)
+					  (printf "       src eval: ~a\n" test-val)
+					  (printf "       result  : ~a\n" result-val)))
+				    (make-test-callback test-name msg #f traceback proc-exp test-exp result-val)
+				    (run-unit-test-cases test-name (cdr assertions) verbose right (+ wrong 1) env handler fail k)))))))))))
 	  (initialize-stack-trace!)
           (m (car assertions) env test-case-handler fail
 	     (lambda-cont2 (v fail)

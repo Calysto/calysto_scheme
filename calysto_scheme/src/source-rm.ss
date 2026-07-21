@@ -166,6 +166,7 @@
 (define variants_reg 'undefined)
 (define vars_reg 'undefined)
 (define verbose_reg 'undefined)
+(define where_reg 'undefined)
 (define wrong_reg 'undefined)
 (define x_reg 'undefined)
 (define y_reg 'undefined)
@@ -1891,13 +1892,15 @@
 
 (define <cont2-89>
   (lambda (assertions msg proc-exp right test-aexp test-exp
-           test-name traceback verbose wrong env handler k)
+           test-name traceback verbose where wrong env handler k)
     (set! k_reg
       (make-cont2 <cont2-88> assertions msg proc-exp value1_reg
         right test-exp test-name traceback verbose wrong env handler
         k))
     (set! fail_reg value2_reg)
-    (set! handler_reg handler)
+    (set! handler_reg
+      (make-handler2 <handler2-4> assertions msg right test-name
+        verbose where wrong env handler k))
     (set! env_reg env)
     (set! exp_reg test-aexp)
     (set! pc m)))
@@ -2559,43 +2562,78 @@
   (lambda () (set! final_reg #f) (set! pc pc-halt-signal)))
 
 (define <handler2-4>
+  (lambda (assertions msg right test-name verbose where wrong
+           env handler k)
+    (set! k_reg k)
+    (set! handler_reg handler)
+    (set! env_reg env)
+    (set! wrong_reg wrong)
+    (set! right_reg right)
+    (set! verbose_reg verbose)
+    (set! assertions_reg assertions)
+    (set! test-name_reg test-name)
+    (set! where_reg where)
+    (set! msg_reg msg)
+    (set! pc report-unit-test-diagnostic-fallback)))
+
+(define <handler2-5>
   (lambda (assertions right test-name verbose wrong env
            handler k)
     (let ((msg 'undefined)
           (where 'undefined)
           (assert-exp 'undefined)
-          (proc-exp 'undefined)
-          (test-aexp 'undefined)
-          (test-exp 'undefined)
-          (result-exp 'undefined)
-          (traceback 'undefined))
+          (assert-shaped? 'undefined))
       (set! msg (get-exception-message exception_reg))
       (set! where (get-exception-info exception_reg))
       (set! assert-exp (car assertions))
-      (set! proc-exp (aunparse (car (cdr^ assert-exp))))
-      (set! test-aexp (cadr (cdr^ assert-exp)))
-      (set! test-exp (aunparse test-aexp))
-      (set! result-exp (caddr (cdr^ assert-exp)))
-      (set! traceback
-        (get-traceback-string (list 'exception exception_reg)))
-      (if (> (string-length msg) 0)
-          (if (eq? where 'none)
-              (printf "  Error: ~a \"~a\"\n" test-name msg)
-              (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
-          (if (eq? where 'none)
-              (printf "  Error: ~a\n" test-name)
-              (printf "  Error: ~a at ~a\n" test-name where)))
-      (initialize-stack-trace!)
-      (set! k_reg
-        (make-cont2 <cont2-89> assertions msg proc-exp right
-          test-aexp test-exp test-name traceback verbose wrong env
-          handler k))
-      (set! handler_reg handler)
-      (set! env_reg env)
-      (set! exp_reg result-exp)
-      (set! pc m))))
+      (set! assert-shaped?
+        (and (pair? assert-exp)
+             (pair? (cdr^ assert-exp))
+             (pair? (cdr (cdr^ assert-exp)))
+             (pair? (cddr (cdr^ assert-exp)))))
+      (if (not assert-shaped?)
+          (begin
+            (set! k_reg k)
+            (set! handler_reg handler)
+            (set! env_reg env)
+            (set! wrong_reg wrong)
+            (set! right_reg right)
+            (set! verbose_reg verbose)
+            (set! assertions_reg assertions)
+            (set! test-name_reg test-name)
+            (set! where_reg where)
+            (set! msg_reg msg)
+            (set! pc report-unit-test-diagnostic-fallback))
+          (let ((proc-exp 'undefined)
+                (test-aexp 'undefined)
+                (test-exp 'undefined)
+                (result-exp 'undefined)
+                (traceback 'undefined))
+            (set! proc-exp (aunparse (car (cdr^ assert-exp))))
+            (set! test-aexp (cadr (cdr^ assert-exp)))
+            (set! test-exp (aunparse test-aexp))
+            (set! result-exp (caddr (cdr^ assert-exp)))
+            (set! traceback
+              (get-traceback-string (list 'exception exception_reg)))
+            (if (> (string-length msg) 0)
+                (if (eq? where 'none)
+                    (printf "  Error: ~a \"~a\"\n" test-name msg)
+                    (printf "  Error: ~a \"~a\" at ~a\n" test-name msg where))
+                (if (eq? where 'none)
+                    (printf "  Error: ~a\n" test-name)
+                    (printf "  Error: ~a at ~a\n" test-name where)))
+            (initialize-stack-trace!)
+            (set! k_reg
+              (make-cont2 <cont2-89> assertions msg proc-exp right test-aexp test-exp
+                test-name traceback verbose where wrong env handler k))
+            (set! handler_reg
+              (make-handler2 <handler2-4> assertions msg right test-name
+                verbose where wrong env handler k))
+            (set! env_reg env)
+            (set! exp_reg result-exp)
+            (set! pc m))))))
 
-(define <handler2-5>
+(define <handler2-6>
   (lambda (cexps cvar env handler k)
     (let ((new-env 'undefined))
       (set! new-env
@@ -2610,7 +2648,7 @@
       (set! exps_reg cexps)
       (set! pc eval-sequence))))
 
-(define <handler2-6>
+(define <handler2-7>
   (lambda (fexps env handler)
     (set! k_reg (make-cont2 <cont2-93> exception_reg handler))
     (set! handler_reg handler)
@@ -2618,7 +2656,7 @@
     (set! exps_reg fexps)
     (set! pc eval-sequence)))
 
-(define <handler2-7>
+(define <handler2-8>
   (lambda (cexps cvar fexps env handler k)
     (let ((new-env 'undefined))
       (set! new-env
@@ -8504,6 +8542,25 @@
                (string=? exception-type "UnhandledException"))))))
 
 (define*
+  report-unit-test-diagnostic-fallback
+  (lambda ()
+    (if (> (string-length msg_reg) 0)
+        (if (eq? where_reg 'none)
+            (printf "  Error: ~a \"~a\"\n" test-name_reg msg_reg)
+            (printf
+              "  Error: ~a \"~a\" at ~a\n"
+              test-name_reg
+              msg_reg
+              where_reg))
+        (if (eq? where_reg 'none)
+            (printf "  Error: ~a\n" test-name_reg)
+            (printf "  Error: ~a at ~a\n" test-name_reg where_reg)))
+    (make-test-callback test-name_reg msg_reg #f "" "" "" "")
+    (set! wrong_reg (+ wrong_reg 1))
+    (set! assertions_reg (cdr assertions_reg))
+    (set! pc run-unit-test-cases)))
+
+(define*
   run-unit-test-cases
   (lambda ()
     (if (null? assertions_reg)
@@ -8513,7 +8570,7 @@
           (set! pc apply-cont2))
         (let ((test-case-handler 'undefined))
           (set! test-case-handler
-            (make-handler2 <handler2-4> assertions_reg right_reg
+            (make-handler2 <handler2-5> assertions_reg right_reg
               test-name_reg verbose_reg wrong_reg env_reg handler_reg
               k_reg))
           (initialize-stack-trace!)
@@ -8673,16 +8730,16 @@
 (define try-catch-handler
   (lambda (cvar cexps env handler k)
     (return*
-      (make-handler2 <handler2-5> cexps cvar env handler k))))
+      (make-handler2 <handler2-6> cexps cvar env handler k))))
 
 (define try-finally-handler
   (lambda (fexps env handler)
-    (return* (make-handler2 <handler2-6> fexps env handler))))
+    (return* (make-handler2 <handler2-7> fexps env handler))))
 
 (define try-catch-finally-handler
   (lambda (cvar cexps fexps env handler k)
     (return*
-      (make-handler2 <handler2-7> cexps cvar fexps env handler
+      (make-handler2 <handler2-8> cexps cvar fexps env handler
         k))))
 
 (define*
@@ -10563,7 +10620,7 @@
 
 (define *stack-trace* (list '()))
 
-(define *use-stack-trace* #t)
+(define *use-stack-trace* #f)
 
 (define-native
   make-safe-continuation

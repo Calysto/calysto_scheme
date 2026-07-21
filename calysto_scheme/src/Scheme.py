@@ -36,7 +36,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 
 #############################################################
 # Python implementation notes:
@@ -565,26 +565,61 @@ def apply_handler2():
 
 def apply_proc():
     if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
-            and proc_reg[1] is b_proc_1_d and proc_reg[5]):
+            and proc_reg[1] is b_proc_1_d and proc_reg[5]
+            and _is_phase2_safe(proc_reg)):
         bodies, formals, cenv = proc_reg[2], proc_reg[3], proc_reg[4]
         _args = args_reg
         _k2   = k2_reg
         _fail = fail_reg
+        # Arity check happens before any body statement runs, so nothing
+        # has executed yet -- safe to fall back to the trampoline here.
         try:
             n = length(formals)
             if n != length(_args):
                 raise _TrampolineFallback()
             new_env = extend(cenv, formals, _args, make_empty_docstrings(n))
-            result = _eval_sequence_direct(bodies, new_env)
-            GLOBALS['value2_reg'] = _fail
-            GLOBALS['value1_reg'] = result
-            GLOBALS['k_reg'] = _k2
-            GLOBALS['pc'] = apply_cont2
-            return
         except _TrampolineFallback:
-            GLOBALS['args_reg'] = _args   # restore for b_proc_1_d trampoline fallback
+            GLOBALS['args_reg'] = _args
             GLOBALS['k2_reg']   = _k2
             GLOBALS['fail_reg'] = _fail
+            proc_reg[1](*proc_reg[2:])
+            return
+        # This closure was certified by _is_phase2_safe as fully
+        # representable by Phase 2, so _eval_sequence_direct must run to
+        # completion. If it somehow still raises _TrampolineFallback,
+        # that means _is_phase2_safe has a soundness gap. The old
+        # behavior here was to silently discard this attempt and re-run
+        # the whole closure body via the trampoline -- which re-executes
+        # any side effects (mutation, I/O, ...) from statements that
+        # already completed before the failure (see
+        # README-PERFORMANCE.md's "Benchmark-harness correctness bug"
+        # section). Letting the exception propagate instead turns a
+        # silent wrong answer into a loud, reportable failure -- BUT
+        # trampoline()'s own top-level `except Exception` catches any
+        # propagating Python exception (including this one) and converts
+        # it into an ordinary Scheme exception object, dispatched through
+        # the normal handler_reg chain, not a process crash. Some Scheme-
+        # level handlers -- notably run-unit-test-cases in
+        # interpreter-cps.ss, which re-evaluates a failed assertion's
+        # sub-expressions to build a diagnostic report -- can then
+        # immediately re-invoke the very same (wrongly-certified) proc,
+        # which would hit the identical failure again, forever, since the
+        # wrong verdict stays cached. Invalidating the cache entry here,
+        # before re-raising, means any later attempt on this exact proc
+        # (including such an immediate diagnostic re-evaluation) takes
+        # the always-correct slow path instead of repeating the same
+        # failure -- the first failure still propagates and stays fully
+        # visible, but it can't loop.
+        try:
+            result = _eval_sequence_direct(bodies, new_env)
+        except _TrampolineFallback:
+            _phase2_safe_cache[id(proc_reg)] = (proc_reg, False)
+            raise
+        GLOBALS['value2_reg'] = _fail
+        GLOBALS['value1_reg'] = result
+        GLOBALS['k_reg'] = _k2
+        GLOBALS['pc'] = apply_cont2
+        return
     proc_reg[1](*proc_reg[2:])
 
 def apply_macro():
@@ -619,6 +654,177 @@ def _is_direct_eval_safe(bodies):
             return False
         cur = cur.cdr
     return True
+
+_phase2_safe_cache = {}   # id(proc) -> (proc, True/False)
+
+def _phase2_safe_lookup(proc):
+    """Return the cached verdict for proc, or None if not yet computed.
+    Validates identity the same way _jit_lookup does, to detect a stale
+    entry whose id() was reused after GC."""
+    entry = _phase2_safe_cache.get(id(proc))
+    if entry is None:
+        return None
+    cached_proc, result = entry
+    if cached_proc is not proc:
+        del _phase2_safe_cache[id(proc)]
+        return None
+    return result
+
+def _is_phase2_safe(proc, _visiting=None):
+    """Conservatively certify that invoking `proc` via apply_proc's Phase-2
+    fast path is guaranteed to run to completion without ever raising
+    _TrampolineFallback -- i.e. that it is safe to START a live Phase-2
+    attempt for it at all.
+
+    This exists because a live Phase-2 attempt that fails partway through
+    a multi-statement body does not fail cleanly: apply_proc's old
+    fallback re-ran the closure from the top on any mid-body
+    _TrampolineFallback, silently re-executing whatever side effects
+    already happened before the failure (see README-PERFORMANCE.md's
+    "Benchmark-harness correctness bug" section, where this was
+    discovered). The fix is to never start an attempt that isn't already
+    proven to succeed.
+
+    Mirrors _eval_direct's own dispatch (same AST node cases, same
+    "reuse this Python frame" call-inlining behavior for nested closure
+    calls) but only classifies -- it never executes anything and has no
+    side effects, the same way a failed JIT compile attempt
+    (_jit_compile_proc) never executes anything either.
+
+    Deliberately conservative: anything this can't prove safe (a call
+    through a parameter or other computed/dynamic operator, a call to a
+    closure that itself contains set!, an unresolved/forward-referenced
+    name, map/for-each's callback argument, ...) is treated as unsafe.
+    Being too conservative only costs speed (apply_proc falls back to the
+    always-correct slow trampoline for that closure); the risk this
+    guards against -- silently re-executing side effects -- only exists
+    on the "too permissive" side, so ties are broken toward unsafe.
+
+    Computed lazily, on first use (a closure's referenced names must
+    already be bound in its captured environment -- mirrors the JIT
+    compiler's own lazy, on-first-call compile+cache pattern, including
+    the same one-call "miss" for mutually recursive functions whose
+    partner isn't certified yet). Cached by identity in
+    _phase2_safe_cache, with the same GC-id-reuse guard _jit_cache uses.
+    Self/mutually-recursive references are handled by optimistically
+    assuming a proc already being checked (present in `_visiting`) is
+    safe -- sound because the overall verdict still walks every other
+    reachable expression and ANDs them together, so any real unsafety
+    anywhere in the cycle is still found and still fails the whole
+    checked closure; only the outermost call's verdict is cached, so a
+    cycle can't cache a premature/partial answer.
+    """
+    if not (isinstance(proc, tuple) and len(proc) == 6
+            and proc[1] is b_proc_1_d and proc[5]):
+        return False
+    cached = _phase2_safe_lookup(proc)
+    if cached is not None:
+        return cached
+    outermost = _visiting is None
+    if _visiting is None:
+        _visiting = set()
+    pid = id(proc)
+    if pid in _visiting:
+        return True
+    _visiting.add(pid)
+    try:
+        safe = _phase2_safe_walk_seq(proc[2], proc[4], _visiting)
+    except Exception:
+        safe = False
+    finally:
+        _visiting.discard(pid)
+    if outermost:
+        _phase2_safe_cache[pid] = (proc, safe)
+    return safe
+
+def _phase2_safe_walk_seq(bodies, env, visiting):
+    cur = bodies
+    while isinstance(cur, cons):
+        if not _phase2_safe_walk(cur.car, env, visiting):
+            return False
+        cur = cur.cdr
+    return True
+
+def _phase2_safe_walk(exp, env, visiting):
+    """True iff evaluating exp in env via Phase 2 can never raise
+    _TrampolineFallback. See _is_phase2_safe's docstring."""
+    if not isinstance(exp, cons):
+        return True
+    tag = exp.car
+    if tag is symbol_lit_aexp:
+        return True
+    elif tag is symbol_lexical_address_aexp:
+        return True   # compiler-verified; always resolves
+    elif tag is symbol_var_aexp:
+        return search_env(env, exp.cdr.car) is not False
+    elif tag is symbol_if_aexp:
+        return (_phase2_safe_walk(exp.cdr.car, env, visiting) and
+                _phase2_safe_walk(exp.cdr.cdr.car, env, visiting) and
+                _phase2_safe_walk(exp.cdr.cdr.cdr.car, env, visiting))
+    elif tag is symbol_lambda_aexp:
+        # Creating a closure has no side effects and doesn't call
+        # anything; its own body gets its own independent, lazy check
+        # if/when IT is ever itself invoked via apply_proc.
+        return True
+        # NOTE: symbol_mu_lambda_aexp (a lambda with dotted/rest formals,
+        # e.g. (lambda (a . rest) ...)) is deliberately NOT included above
+        # despite being grouped with symbol_lambda_aexp in
+        # _is_direct_eval_safe's lambda-boundary check. _eval_direct has
+        # no case for symbol_mu_lambda_aexp at all -- it falls through to
+        # `else: raise _TrampolineFallback()` -- so treating it as safe
+        # here would certify a closure Phase 2 cannot actually evaluate.
+        # Falls through to the final `else: return False` below.
+    elif tag is symbol_begin_aexp:
+        return _phase2_safe_walk_seq(exp.cdr, env, visiting)
+    elif tag is symbol_app_aexp:
+        op_exp = exp.cdr.car
+        cur = exp.cdr.cdr.car
+        while isinstance(cur, cons):
+            if not _phase2_safe_walk(cur.car, env, visiting):
+                return False
+            cur = cur.cdr
+        return _phase2_safe_walk_call(op_exp, env, visiting)
+    else:
+        return False
+
+def _phase2_safe_walk_call(op_exp, env, visiting):
+    """Statically resolve op_exp, if possible, and certify that calling it
+    is safe: a known-pure _fast_prim_map primitive (excluding map/
+    for-each, whose safety additionally depends on their callback
+    argument -- not verified here, so conservatively treated as unsafe),
+    or another closure that is itself (transitively) phase2-safe.
+    Anything unresolvable at this point -- a local parameter or other
+    computed expression used in operator position, an unbound name --
+    can't be proven safe, so is treated as unsafe."""
+    global _fast_prim_map
+    if not isinstance(op_exp, cons):
+        return False
+    if op_exp.car is symbol_lit_aexp:
+        op = op_exp.cdr.car
+    elif op_exp.car is symbol_lexical_address_aexp:
+        depth, offset = op_exp.cdr.car, op_exp.cdr.cdr.car
+        if depth == 0:
+            return False   # local parameter — runtime value, can't prove
+        try:
+            frm = list_ref(frames(env), depth - 1)
+            op = binding_value(vector_ref(frame_bindings(frm), offset))
+        except Exception:
+            return False
+    elif op_exp.car is symbol_var_aexp:
+        b = search_env(env, op_exp.cdr.car)
+        if b is False:
+            return False
+        op = binding_value(b)
+    else:
+        return False   # computed operator (nested app/lambda) — can't prove
+    if isinstance(op, tuple) and op[0] is symbol_procedure:
+        fn = op[1]
+        if _fast_prim_map is None:
+            _fast_prim_map = _build_fast_prim_map()
+        if fn in _fast_prim_map and fn not in _fast_prim_hof_fns:
+            return True
+        return _is_phase2_safe(op, visiting)
+    return False   # dlr proc / host interop / anything else — can't prove
 
 def _extend_direct(env, formals, args_list):
     """Extend environment from a Python list of arg values — no cons list construction."""
@@ -744,10 +950,9 @@ def _jit_compile_proc(proc):
     while isinstance(cur, cons):
         params.append(cur.car.name)
         cur = cur.cdr
-    self_ref = [None]   # forward-reference cell for self-recursive calls
     free = {}           # name → value captured into the exec() namespace
     try:
-        jc = _JitCompiler(proc, params, cenv, free, self_ref)
+        jc = _JitCompiler(proc, params, cenv, free)
         body_list = []
         cur = bodies
         while isinstance(cur, cons):
@@ -768,7 +973,6 @@ def _jit_compile_proc(proc):
         ns['__builtins__'] = __builtins__
         exec(compile(fn_src, '<scheme-jit>', 'exec'), ns)
         fn = ns['_jit_fn']
-        self_ref[0] = fn
         _jit_cache[pid] = (proc, fn)
         return fn
     except _TrampolineFallback:
@@ -832,13 +1036,12 @@ class _JitCompiler:
         'pair?': 'isinstance({0}, _j__cons)',
     }
 
-    def __init__(self, self_proc, params, env, free, self_ref):
+    def __init__(self, self_proc, params, env, free):
         self._self   = self_proc
         self._params = [_jit_mangle(p) for p in params]
         self._pset   = set(self._params)
         self._env    = env
         self._free   = free
-        self._sref   = self_ref
         self._used_loop = False   # set True if a self-recursive tail call was compiled
         self._const_count = 0     # counter for generated constant-capture names
 
@@ -870,6 +1073,11 @@ class _JitCompiler:
                     val = binding_value(vector_ref(frame_bindings(frm), offset))
                 except Exception:
                     raise _TrampolineFallback()
+                if val is self._self:
+                    # Self-recursive (non-tail): call the generated function
+                    # by its own def name directly, instead of paying for a
+                    # wrapper-lambda indirection on every recursive call.
+                    return '_jit_fn'
                 self._capture(m, val)
             return m
 
@@ -1013,16 +1221,16 @@ class _JitCompiler:
         b = search_env(self._env, sym)
         if b is False:
             raise _TrampolineFallback()
-        self._capture(m, binding_value(b))
+        val = binding_value(b)
+        if val is self._self:
+            # Self-recursive (non-tail): call the generated function by its
+            # own def name directly — see the lexical_address_aexp case above.
+            return '_jit_fn'
+        self._capture(m, val)
         return m
 
     def _capture(self, m, val):
         """Add a free-variable value to self._free, or raise _TrampolineFallback."""
-        if val is self._self:
-            # Self-recursive: wrap the forward-ref cell as a callable
-            sref = self._sref
-            self._free[m] = lambda *a, _r=sref: _r[0](*a)
-            return
         if isinstance(val, tuple) and val[0] is symbol_procedure:
             pid = id(val)
             jit_fn = _jit_lookup(val)
@@ -1100,6 +1308,12 @@ class _JitCompiler:
 ## Fast prim map: proc[1] function -> Python callable.
 ## Built lazily on first use from the live toplevel environment.
 _fast_prim_map = None
+
+## Subset of _fast_prim_map whose safety depends on a caller-supplied
+## callback argument (map, for-each), not just the primitive's own
+## identity. _is_phase2_safe treats these as unsafe rather than trying to
+## also verify the callback argument -- see its docstring.
+_fast_prim_hof_fns = set()
 
 def _build_fast_prim_map():
     """Populate the fast prim map by resolving known symbol names in toplevel_env."""
@@ -1235,6 +1449,8 @@ def _build_fast_prim_map():
             proc = binding_value(b)
             if isinstance(proc, tuple) and proc[0] is symbol_procedure:
                 result[proc[1]] = direct_fn
+                if sym_name in ('map', 'for-each'):
+                    _fast_prim_hof_fns.add(proc[1])
     return result
 
 def _apply_direct(proc, args, env):
