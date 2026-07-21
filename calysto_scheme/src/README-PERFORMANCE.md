@@ -1263,6 +1263,58 @@ regression they introduced.
   across all four changes, within normal run-to-run noise (~2–5%, no
   systematic direction) — consistent with a behavior-preserving refactor.
 
+### Addendum — AST field-accessor functions: tried, measured, reverted
+
+A natural next abstraction was considered: `_eval_direct`, `_JitCompiler`,
+and `_phase2_safe_walk*` all pull fields out of aexp cons-nodes with raw
+chains like `exp.cdr.cdr.cdr.car`, each re-deriving (and re-commenting)
+the same layout inline. Wrapping each tag's field extraction in a small
+named accessor (`_if_parts(exp) -> (test, then, else)`, etc.) and an
+`_iter_aexp_list` generator to replace the repeated arg-list
+`while isinstance(cur, cons): ...` loops looked like a clean win —
+implemented and initially verified (297/297 tests passing) — but
+benchmarking caught a real, reproducible regression before it shipped:
+
+| Benchmark | Before | After accessors | Why |
+|---|---|---|---|
+| `fib(30)`, tail loops (compile once, run native) | flat | flat | one-time cost, amortized over unlimited later calls |
+| Mutual recursion (`even?`/`odd?`, never JIT-compiles) | 0.924s | 1.10s (**+19%**) | `_jit_compile_proc` retries the *entire* failed compile attempt on every call (see the mutual-recursion correction above) — every accessor call's overhead is paid every single call, with no amortization at all |
+| Fresh closure allocated every iteration | 1.711s | 1.81s (**+6%**) | a *new* closure every call defeats both `_jit_cache` and `_phase2_safe_cache` — same "no amortization" problem, smaller because only one (successful) compile attempt is paid per call, not a failed one plus a full `_eval_direct` re-execution |
+
+Root cause, confirmed with an isolated microbenchmark (not just inferred):
+a plain attribute chain (`exp.cdr.cdr.car`) took ~101 ns; the same
+extraction via a one-line accessor function returning a tuple took ~139 ns
+(**+38%**, from Python's function-call and tuple-pack/unpack overhead);
+the arg-list generator took ~355 ns against a raw `while`-loop's ~227 ns
+(**+56%**, from the `yield`/`next()` suspend-resume protocol). Individually
+tiny, but multiplied across every AST node visited in a hot, uncached
+retry loop, these add up to exactly the regression measured above. A
+non-generator, list-returning variant of the arg-list helper was also
+measured (~9% over raw, versus the generator's ~56%) as a cheaper
+middle ground — not used, since *any* non-zero per-call cost was ruled
+out for this code, not just minimized.
+
+**Resolution:** reverted every accessor/generator call in `_eval_direct`,
+`_JitCompiler`, and `_phase2_safe_walk*` back to raw inline field access
+— confirmed by benchmark to fully recover all three regressed rows to
+baseline. The accessor *functions* themselves were removed (they had zero
+remaining callers), replaced with a single comment block (directly above
+`_is_direct_eval_safe` in `Scheme.py`) documenting each aexp tag's
+`(tag field1 field2 ... info)` cons-cell layout once, in prose, with zero
+runtime cost — the readability goal without the speed cost. Full test
+suite still 297/297 after reverting; every benchmark row back within
+normal noise of the Phase 8 baseline.
+
+The general lesson, consistent with this file's existing design
+principle: in `_eval_direct` and `_JitCompiler` specifically, *any*
+closure that either never successfully JIT-compiles or is freshly
+allocated on every call gets zero benefit from either cache, so these two
+code paths should be treated as always-hot and always-uncached when
+weighing a readability abstraction against its runtime cost — unlike
+`_phase2_safe_cache`-gated or `_jit_cache`-gated code reached only through
+a closure that's called many times *after* its first (cached) attempt,
+where the same kind of wrapper is normally free.
+
 ---
 
 ## What real Scheme implementations do

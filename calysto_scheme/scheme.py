@@ -44,7 +44,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 #############################################################
 # Python implementation notes:
@@ -638,6 +638,51 @@ def apply_macro():
 class _TrampolineFallback(Exception):
     pass
 
+## ===== Annotated-AST (aexp) node layouts: canonical reference =====
+##
+## _eval_direct, _JitCompiler, and _phase2_safe_walk* below are three
+## independent walks over the same annotated-AST node shapes (each tagged
+## by a `symbol_*_aexp` singleton, matched by `is`). All three access a
+## node's fields as raw cons-cell chains (`exp.cdr.car`, etc.) rather than
+## through helper accessor functions: a documented attempt at wrapping
+## each tag's field extraction in a small accessor function measured a
+## real 6-19% slowdown (see README-PERFORMANCE.md's Phase 9 addendum),
+## concentrated in exactly the code paths that have no per-closure caching
+## to amortize it (a closure that never successfully JIT-compiles, so its
+## whole AST is re-walked from scratch on every single call; or a fresh
+## closure allocated every call, so neither the JIT cache nor
+## _phase2_safe_cache ever gets a hit) -- with no offsetting benefit where
+## a closure compiles once and runs at native speed forever after. Given
+## that, the field layout below is documented here, once, as the single
+## place to look up a tag's shape, rather than as a function each walker
+## would pay to call:
+##
+##   lit-aexp:              (tag datum info)
+##                            datum = exp.cdr.car
+##   lexical-address-aexp:  (tag depth offset name info)
+##                            depth=0 -> local parameter (JIT only);
+##                            depth>0 -> free var, offset into the frame
+##                            depth-1 levels out in the captured env
+##                            depth  = exp.cdr.car
+##                            offset = exp.cdr.cdr.car
+##                            name   = exp.cdr.cdr.cdr.car
+##   var-aexp:               (tag id info)
+##                            id = exp.cdr.car
+##   if-aexp:                (tag test then else info)
+##                            test = exp.cdr.car
+##                            then = exp.cdr.cdr.car
+##                            else = exp.cdr.cdr.cdr.car
+##   lambda-aexp:            (tag formals bodies info)
+##                            formals = exp.cdr.car
+##                            bodies  = exp.cdr.cdr.car
+##   app-aexp:               (tag operator operands info)
+##                            operator = exp.cdr.car
+##                            operands = exp.cdr.cdr.car
+##   begin-aexp:             (tag exp1 exp2 ... expN)
+##                            exp.cdr is itself a proper cons-list of body
+##                            expressions -- no trailing info field, unlike
+##                            the tags above.
+
 def _is_direct_eval_safe(bodies):
     """True iff bodies contain no assign_aexp (set!) at any depth.
     Stops recursion at inner lambda boundaries (they get their own analysis)."""
@@ -895,7 +940,14 @@ def _extend_direct(env, formals, args_list):
     return cons(symbol_environment, cons(frame, env.cdr))
 
 def _eval_direct(exp, env):
-    """Direct recursive AST interpreter. Raises _TrampolineFallback for unhandled cases."""
+    """Direct recursive AST interpreter. Raises _TrampolineFallback for unhandled cases.
+
+    Uses raw cons-cell field access (exp.cdr.car, etc.) rather than a
+    helper accessor function per tag -- see the "canonical reference"
+    comment block above _is_direct_eval_safe for each tag's layout. This
+    function runs on every single AST node evaluated, with no caching at
+    all, so an extra Python function call per field access is measurable
+    here -- see README-PERFORMANCE.md's Phase 9 addendum."""
     global _fast_prim_map
     while True:
         tag = exp.car
@@ -1101,6 +1153,13 @@ class _JitCompiler:
         self._const_count = 0     # counter for generated constant-capture names
 
     def expr(self, exp):
+        # Raw cons-cell field access throughout -- see the "canonical
+        # reference" comment block above _is_direct_eval_safe for each
+        # tag's layout. _jit_compile_proc retries this whole walk from
+        # scratch on every call for a closure that never successfully
+        # compiles (e.g. mutually-recursive functions, see
+        # README-PERFORMANCE.md), so any per-field-access overhead here is
+        # paid every call, not just once per closure.
         if not isinstance(exp, cons):
             raise _TrampolineFallback()
         tag = exp.car
@@ -1216,6 +1275,9 @@ class _JitCompiler:
         return None
 
     def _app(self, op_exp, arg_list):
+        # Raw while-loop, not _iter_aexp_list -- see the note on expr()
+        # above; a generator's per-element suspend/resume cost is also
+        # measurable on this same retried-every-call path.
         args = []
         cur = arg_list
         while isinstance(cur, cons):
@@ -10702,7 +10764,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 2.1.0')
+    print('Calysto Scheme, version 2.1.1')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
