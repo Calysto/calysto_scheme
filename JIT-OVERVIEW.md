@@ -235,6 +235,44 @@ designed so that a failure or an unsupported pattern can only ever cost
 *speed*, by falling back to the slower-but-always-correct trampoline —
 never *correctness*.
 
+## How this is tested
+
+Because the fast paths (`_eval_direct` and the JIT compiler) and the
+always-correct trampoline are two independently-maintained implementations
+of the same Scheme semantics, the main risk isn't a crash — it's the two
+quietly disagreeing on an answer. The test suite (`tests/test_all.py`
+running `test_all.ss`'s `jit-edge-cases` group) is run three different
+ways in `tests/test_phase2_safety.py`: once with the trampoline forced
+for everything, once with the JIT forced off (Phase 2's direct-eval
+interpreter alone), and once normally (Phase 2 + JIT together). Every
+test case's result has to match across all three runs — a mismatch means
+one of the fast paths computed something different from the trampoline,
+which is treated as a bug regardless of which one is "wrong."
+
+Beyond ordinary functions, that suite specifically stress-tests the two
+control-flow features called out above as deliberately excluded from the
+fast paths — `call/cc` and `choose`/`require` backtracking — in
+combination with functions that *are* fast-path-eligible:
+
+- **`call/cc` escaping from inside a JIT-compiled function**, both from a
+  flattened tail loop (Phase 4) and from the middle of ordinary
+  non-tail recursion (like `fib`), including cases with a side-effect
+  counter to confirm the trampoline fallback that `call/cc` triggers
+  doesn't silently redo work that already happened.
+- **`choose`/`require` backtracking searches that repeatedly call a
+  JIT-compiled helper** — including a self-recursive one — across many
+  branches the search tries and later abandons, confirming a compiled
+  function keeps returning correct answers no matter how erratically
+  backtracking control flow calls into it.
+- **Real multi-shot `call/cc` generators** (a continuation captured once
+  and resumed several separate times, driving a JIT-compiled helper —
+  including a self-recursive one — on each resumption), built using
+  `callback`, a special form that hands a Scheme procedure to a fresh,
+  isolated re-entry point (the same mechanism used to pass Scheme
+  procedures to host callbacks, like a `sort` comparator) so each
+  resumption gets its own clean continuation boundary instead of
+  colliding with the interpreter's single shared top-level continuation.
+
 ## Net result
 
 | Stage | Time for `(fib 20)` | Speedup vs. original |
