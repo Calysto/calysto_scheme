@@ -36,7 +36,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 
 #############################################################
 # Python implementation notes:
@@ -630,6 +630,24 @@ def apply_macro():
 class _TrampolineFallback(Exception):
     pass
 
+class _SchemeRuntimeError(Exception):
+    """Raised by Phase 2/JIT fast-path code (nested closure calls,
+    car/cdr, ...) to signal a genuine Scheme-level runtime error with a
+    proper, language-level message. apply_proc's own top-level entry into
+    Phase 2 already validates arity before starting, and the classic
+    register-machine dispatch (b_proc_55_d/b_proc_56_d for car/cdr, etc.)
+    already checks argument count/type before ever touching the raw
+    Python value -- but every *nested* call from within already-running
+    Phase 2/JIT code (a JIT'd function calling another closure, _jit_call,
+    _apply_direct, a fast-prim dispatch) bypasses those checks and would
+    otherwise let a raw Python TypeError/AttributeError/IndexError escape
+    with implementation-internal names (_jit_fn, _j_b, ...) in the
+    message. trampoline() converts this into the same "RunTimeError"
+    condition type the classic dispatch produces, instead of the
+    catch-all "Unhandled <ClassName>" every other unanticipated Python
+    exception gets -- see tests/test_fastpath_error_handling.py."""
+    pass
+
 ## ===== Annotated-AST (aexp) node layouts: canonical reference =====
 ##
 ## _eval_direct, _JitCompiler, and _phase2_safe_walk* below are three
@@ -917,6 +935,32 @@ def _phase2_safe_walk_call(op_exp, env, visiting):
         return _is_phase2_safe(op, visiting)
     return False   # dlr proc / host interop / anything else — can't prove
 
+def _check_call_arity(op, args):
+    """Raise _SchemeRuntimeError (not a raw Python exception) if args'
+    length doesn't match op's formal parameter count. Mirrors b_proc_1_d's
+    own arity check (numeric_equal(length(new_args), length(new_formals)))
+    -- every one of Phase 2/JIT's *nested*-call dispatch paths (this
+    function's own callers: _eval_direct's app_aexp case, _jit_call,
+    _apply_direct) bypasses b_proc_1_d entirely and calls straight into
+    _extend_direct/extend/a JIT-compiled function, none of which validate
+    argument count themselves.
+
+    Only ever called with an op already confirmed to be a plain
+    b_proc_1_d closure (fn is b_proc_1_d), so formals is always a proper,
+    fixed-length list: a closure with rest/dotted formals compiles to a
+    different AST tag (mu_lambda_aexp) and a different proc shape
+    entirely, and is excluded from Phase 2/JIT altogether -- confirmed
+    directly: _is_phase2_safe's own first check is `proc[1] is
+    b_proc_1_d`, which such a closure never satisfies. So a plain length
+    comparison is always correct here; no variadic-arity handling needed."""
+    n = 0
+    cur = op[3]
+    while isinstance(cur, cons):
+        n += 1
+        cur = cur.cdr
+    if n != len(args):
+        raise _SchemeRuntimeError("incorrect number of arguments in application")
+
 def _extend_direct(env, formals, args_list):
     """Extend environment from a Python list of arg values — no cons list construction."""
     bindings = []
@@ -986,6 +1030,7 @@ def _eval_direct(exp, env):
                 if direct is not None:
                     return direct(args)
                 if len(op) == 6 and fn is b_proc_1_d and op[5]:
+                    _check_call_arity(op, args)
                     pid = id(op)
                     jit_fn = _jit_lookup(op)
                     if jit_fn is None:
@@ -1101,6 +1146,7 @@ def _jit_call(op, args):
     if isinstance(op, tuple) and op[0] is symbol_procedure:
         fn = op[1]
         if len(op) == 6 and fn is b_proc_1_d and op[5]:
+            _check_call_arity(op, args)
             # Mirror _eval_direct's app_aexp dispatch: give this proc a
             # chance to JIT-compile instead of always falling to Phase 2
             # via _apply_direct — otherwise a function reached *only*
@@ -1128,8 +1174,8 @@ class _JitCompiler:
         'zero?': '({0} == 0)',
         'even?': '({0} % 2 == 0)',
         'odd?':  '({0} % 2 != 0)',
-        'car':   '({0}).car',
-        'cdr':   '({0}).cdr',
+        'car':   '_j_safe_car({0})',
+        'cdr':   '_j_safe_cdr({0})',
         'abs':   'abs({0})',
         'null?': '({0} is _j__empty)',
         'pair?': 'isinstance({0}, _j__cons)',
@@ -1278,15 +1324,39 @@ class _JitCompiler:
         n   = len(args)
         sym = self._sym_name(op_exp)
 
+        if sym and (sym in self._NARY or sym in self._CMP or sym in self._UNARY) \
+                and not self._is_unshadowed_primitive(sym, op_exp):
+            # sym has the right *spelling* for one of the tables below, but
+            # doesn't currently resolve to the genuine, unmodified
+            # primitive that inlining it as a raw Python operator/template
+            # assumes -- see _is_unshadowed_primitive. Treat it as an
+            # ordinary call instead of inlining a stale operator; falls
+            # through to the general call path at the bottom of this
+            # method, same as any other name that isn't one of these ~9.
+            sym = None
+
         if sym:
             # n-ary arithmetic (left-assoc)
             if sym in self._NARY:
                 op = self._NARY[sym]
                 if n == 0:
-                    return '0' if sym == '+' else '1'
-                if n == 1 and sym == '-':
+                    # + and * have identity elements (0 and 1, matching
+                    # plus()/multiply() with zero args) -- but `-` requires
+                    # at least one argument (matching minus()/the classic
+                    # dispatch's own arity check), so (- ) is a genuine
+                    # arity error, not "0". Emitting a literal '1' for it
+                    # here would silently produce a wrong answer instead of
+                    # an error -- fall through to the general call path
+                    # below instead, which correctly reaches the
+                    # arity-checked fast-prim dispatch.
+                    if sym == '+':
+                        return '0'
+                    if sym == '*':
+                        return '1'
+                elif n == 1 and sym == '-':
                     return f'(-{args[0]})'
-                return '(' + f' {op} '.join(args) + ')'
+                else:
+                    return '(' + f' {op} '.join(args) + ')'
             # binary comparisons
             if sym in self._CMP and n == 2:
                 return f'({args[0]} {self._CMP[sym]} {args[1]})'
@@ -1296,6 +1366,10 @@ class _JitCompiler:
                     self._free['_j__empty'] = symbol_emptylist
                 elif sym == 'pair?':
                     self._free['_j__cons'] = cons
+                elif sym == 'car':
+                    self._free['_j_safe_car'] = _jit_safe_car
+                elif sym == 'cdr':
+                    self._free['_j_safe_cdr'] = _jit_safe_cdr
                 return self._UNARY[sym].format(args[0])
 
         # Operator shapes that can't be proven, at compile time, to yield a
@@ -1321,6 +1395,41 @@ class _JitCompiler:
         # General call: compile operator as expression and emit a call
         op_src = self.expr(op_exp)
         return f'{op_src}({", ".join(args)})'
+
+    def _is_unshadowed_primitive(self, sym, op_exp):
+        """True iff op_exp, resolved against this closure's own captured
+        environment, still points to the genuine, unmodified primitive
+        that _NARY/_CMP/_UNARY assume when inlining `sym` as a raw Python
+        operator/expression template. Without this check, a program that
+        redefines `+`, `<`, `car`, ... (e.g. `(set! + my-own-add)`) would
+        have any *already/later*-JIT-compiled function silently keep
+        using the original Python-operator semantics forever, ignoring
+        the redefinition -- see tests/test_primitive_redefinition.py.
+
+        Reuses _resolve_operator (the same static-resolution helper
+        _is_self_ref and _phase2_safe_walk_call use) rather than
+        re-deriving env-lookup logic here. Deliberately conservative: a
+        local parameter (kind == 'local', e.g. `+` shadowed as one of
+        this very function's own formals), an unresolved/computed
+        operator, or a resolved value that isn't exactly the primitive
+        _fast_prim_map has on file for `sym` all return False -- inlining
+        is skipped and the call falls through to the general call path,
+        which correctly dispatches to whatever `sym` actually currently
+        is. Ties are broken toward "don't inline", the same asymmetric
+        risk tradeoff used throughout Phase 2/JIT: too conservative only
+        costs a missed optimization, too permissive risks a silently
+        wrong answer.
+        """
+        global _fast_prim_map
+        kind, val = _resolve_operator(op_exp, self._env)
+        if kind != 'value':
+            return False
+        if not (isinstance(val, tuple) and val[0] is symbol_procedure):
+            return False
+        if _fast_prim_map is None:
+            _fast_prim_map = _build_fast_prim_map()
+        entry = _fast_prim_map.get(val[1])
+        return entry is not None and getattr(entry, '_fast_prim_name', None) == sym
 
     def _var(self, sym):
         """Handle var-aexp: local param or captured free variable."""
@@ -1424,13 +1533,195 @@ def _fast_prim_direct_for_each(args):
         lst = lst.cdr
     return void_value
 
-def _fast_prim_set_car(args):
-    args[0].car = args[1]
+def _jit_safe_car(x):
+    """Type-checked car, matching the classic dispatch's own check
+    (b_proc_55_d in the generated scheme.py) instead of a raw `.car`
+    attribute access, which raises a bare Python AttributeError -- with no
+    Scheme-level type -- on a non-pair. See _SchemeRuntimeError. Takes the
+    scalar argument directly (not a Python-list `args`) so _JitCompiler's
+    _UNARY inlining can call it with zero extra allocation."""
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("car called on non-pair ~s", x))
+    return x.car
+
+def _jit_safe_cdr(x):
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cdr called on non-pair ~s", x))
+    return x.cdr
+
+def _fast_prim_car(args):
+    return _jit_safe_car(args[0])
+
+def _fast_prim_cdr(args):
+    return _jit_safe_cdr(args[0])
+
+## ----- Type/bounds-checked fast-prim wrappers -----
+##
+## Every _FAST_PRIM_SPECS entry below this point that isn't a trivial
+## predicate/equality check touches its argument's internal representation
+## directly (a raw `.car`/`.cdr` chain, a Python len()/index, an isinstance
+## check assumed to already hold). The classic register-machine dispatch
+## (the b_proc_XX_d functions in the generated scheme.py, compiled from
+## interpreter-cps.ss) validates argument *type* before ever doing that --
+## these wrappers replicate the exact same check and message each one
+## does, found by reading each primitive's own b_proc_XX_d and confirmed
+## against its actual behavior (not just its check condition -- e.g. caar
+## only validates its *own* pair-ness, not a deeper level, so a value like
+## (cons 1 2) still raises a raw AttributeError even at the classic
+## baseline; this file matches that exactly, not a stricter, self-invented
+## check, since the goal is parity with the reference behavior, not a new
+## one). See tests/test_fastprim_type_checks.py.
+def _fast_prim_caar(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("caar called on non-pair ~s", x))
+    return x.car.car
+
+def _fast_prim_cdar(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cdar called on non-pair ~s", x))
+    return x.car.cdr
+
+def _fast_prim_cadar(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cadar called on non-pair ~s", x))
+    return x.car.cdr.car
+
+def _fast_prim_cdddr(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cdddr called on non-pair ~s", x))
+    return x.cdr.cdr.cdr
+
+def _fast_prim_cddr(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cddr called on non-pair ~s", x))
+    return x.cdr.cdr
+
+def _fast_prim_cadddr(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("cadddr called on non-pair ~s", x))
+    return x.cdr.cdr.cdr.car
+
+def _fast_prim_cadr(args):
+    x = args[0]
+    if not length_at_least_q(2, x):
+        raise _SchemeRuntimeError(format("cadr called on incorrect list structure ~s", x))
+    return x.cdr.car
+
+def _fast_prim_caddr(args):
+    x = args[0]
+    if not length_at_least_q(3, x):
+        raise _SchemeRuntimeError(format("caddr called on incorrect list structure ~s", x))
+    return x.cdr.cdr.car
+
+def _fast_prim_length(args):
+    x = args[0]
+    n = 0
+    while x is not symbol_emptylist:
+        if not isinstance(x, cons):
+            raise _SchemeRuntimeError(format("length called on improper list ~s", args[0]))
+        n += 1
+        x = x.cdr
+    return n
+
+def _fast_prim_symbol_to_string(args):
+    x = args[0]
+    if not isinstance(x, Symbol):
+        raise _SchemeRuntimeError(format("symbol->string called on non-symbol item ~s", x))
+    return symbol_to_string(x)
+
+def _fast_prim_round(args):
+    # round-prim (interpreter-cps.ss) checks arity and type together with
+    # one shared message, not two separate ones -- matched here rather
+    # than relying on the generic _arity_checked_prim wrapper (which
+    # would use the standard "incorrect number of arguments to round"
+    # instead), so 'round' is deliberately left out of _FAST_PRIM_ARITY.
+    if not (len(args) == 1 and number_q(args[0])):
+        raise _SchemeRuntimeError("round requires exactly one number")
+    x = args[0]
+    return round(x)
+
+def _fast_prim_set_car_checked(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("set-car! called on non-pair ~s", x))
+    x.car = args[1]
     return void_value
 
-def _fast_prim_set_cdr(args):
-    args[0].cdr = args[1]
+def _fast_prim_set_cdr_checked(args):
+    x = args[0]
+    if not isinstance(x, cons):
+        raise _SchemeRuntimeError(format("set-cdr! called on non-pair ~s", x))
+    x.cdr = args[1]
     return void_value
+
+def _fast_prim_vector_length(args):
+    x = args[0]
+    if not vector_q(x):
+        raise _SchemeRuntimeError(format("vector-length called on incorrect vector structure ~s", x))
+    return vector_length(x)
+
+def _fast_prim_vector_to_list(args):
+    x = args[0]
+    if not vector_q(x):
+        raise _SchemeRuntimeError(format("vector->list called on incorrect vector structure ~s", x))
+    return vector_to_list(x)
+
+def _fast_prim_list_to_vector(args):
+    x = args[0]
+    if not list_q(x):
+        raise _SchemeRuntimeError(format("list->vector called on incorrect list structure ~s", x))
+    return list_to_vector(x)
+
+def _fast_prim_string_length(args):
+    x = args[0]
+    if not string_q(x):
+        raise _SchemeRuntimeError("string-length called on non-string argument")
+    return string_length(x)
+
+def _fast_prim_string_to_list(args):
+    x = args[0]
+    if not string_q(x):
+        raise _SchemeRuntimeError(format("string->list called on non-string item ~s", x))
+    return string_to_list(x)
+
+def _fast_prim_list_to_string(args):
+    x = args[0]
+    if not list_q(x):
+        raise _SchemeRuntimeError(format("list->string called on incorrect list structure ~s", x))
+    return list_to_string(x)
+
+def _fast_prim_string_to_symbol(args):
+    x = args[0]
+    if not string_q(x):
+        raise _SchemeRuntimeError(format("string->symbol called on non-string item ~s", x))
+    return string_to_symbol(x)
+
+def _fast_prim_member(args):
+    item, lyst = args[0], args[1]
+    x = lyst
+    while x is not symbol_emptylist:
+        if not isinstance(x, cons):
+            raise _SchemeRuntimeError(format("member called on improper list ~s", lyst))
+        if not (equal_q(item, x.car) is False):
+            return x
+        x = x.cdr
+    return False
+
+def _fast_prim_numeric_equal(args):
+    if not all_numeric_q(args):
+        raise _SchemeRuntimeError("attempt to apply = on non-numeric argument")
+    result = True
+    for i in range(len(args) - 1):
+        if not numeric_equal(args[i], args[i + 1]):
+            result = False
+            break
+    return result
 
 ## Source of truth for Phase 2's fast primitive dispatch: Scheme name ->
 ## a Python callable taking a plain Python list of args. Module-level (not
@@ -1449,7 +1740,7 @@ _FAST_PRIM_SPECS = {
     '>':     lambda args: GreaterThan(*args),
     '<=':    lambda args: LessThanEqual(*args),
     '>=':    lambda args: GreaterThanEqual(*args),
-    '=':     lambda args: numeric_equal(*args),
+    '=':     _fast_prim_numeric_equal,
     # Logic
     'not':   lambda args: (args[0] is False),
     # Numeric predicates / math
@@ -1464,7 +1755,7 @@ _FAST_PRIM_SPECS = {
     'quotient':  lambda args: quotient(args[0], args[1]),
     'expt':      lambda args: expt_native(args[0], args[1]),
     'sqrt':      lambda args: sqrt(args[0]),
-    'round':     lambda args: round(args[0]),
+    'round':     _fast_prim_round,
     # Type predicates
     'null?':      lambda args: (args[0] is symbol_emptylist),
     'pair?':      lambda args: pair_q(args[0]),
@@ -1481,52 +1772,57 @@ _FAST_PRIM_SPECS = {
     'eqv?':   lambda args: eqv_q(args[0], args[1]),
     'equal?': lambda args: equal_q(args[0], args[1]),
     # Pair / list construction and access
-    'car':    lambda args: args[0].car,
-    'cdr':    lambda args: args[0].cdr,
+    'car':    _fast_prim_car,
+    'cdr':    _fast_prim_cdr,
     'cons':   lambda args: cons(args[0], args[1]),
-    'set-car!': _fast_prim_set_car,
-    'set-cdr!': _fast_prim_set_cdr,
-    'caar':   lambda args: args[0].car.car,
-    'cadr':   lambda args: args[0].cdr.car,
-    'cdar':   lambda args: args[0].car.cdr,
-    'cddr':   lambda args: args[0].cdr.cdr,
-    'cadar':  lambda args: args[0].car.cdr.car,
-    'caddr':  lambda args: args[0].cdr.cdr.car,
-    'cdddr':  lambda args: args[0].cdr.cdr.cdr,
-    'cadddr': lambda args: args[0].cdr.cdr.cdr.car,
+    'set-car!': _fast_prim_set_car_checked,
+    'set-cdr!': _fast_prim_set_cdr_checked,
+    'caar':   _fast_prim_caar,
+    'cadr':   _fast_prim_cadr,
+    'cdar':   _fast_prim_cdar,
+    'cddr':   _fast_prim_cddr,
+    'cadar':  _fast_prim_cadar,
+    'caddr':  _fast_prim_caddr,
+    'cdddr':  _fast_prim_cdddr,
+    'cadddr': _fast_prim_cadddr,
     # List operations
     'list':      lambda args: List(*args),
-    'length':    lambda args: length(args[0]),
+    'length':    _fast_prim_length,
     'reverse':   lambda args: reverse(args[0]),
-    'append':    lambda args: append(*args),
+    # append(*objs) (native, below) indexes objs[-1] unconditionally, so it
+    # can't handle zero arguments itself even though 0-arg (append) is
+    # valid (returns '()') at the classic dispatch -- special-cased here
+    # rather than changing the native append(), which is also used
+    # elsewhere. See tests/test_fastprim_arity.py.
+    'append':    lambda args: symbol_emptylist if not args else append(*args),
     'list-ref':  lambda args: list_ref(args[0], args[1]),
     # Search
     'memq':   lambda args: memq(args[0], args[1]),
     'memv':   lambda args: memv(args[0], args[1]),
-    'member': lambda args: member(args[0], args[1]),
+    'member': _fast_prim_member,
     'assq':   lambda args: assq(args[0], args[1]),
     'assv':   lambda args: assv(args[0], args[1]),
     # Vector operations
     'make-vector':   lambda args: make_vector(args[0]),
     'vector-ref':    lambda args: vector_ref(args[0], args[1]),
     'vector-set!':   lambda args: (vector_set_b(args[0], args[1], args[2]), void_value)[1],
-    'vector-length': lambda args: vector_length(args[0]),
-    'vector->list':  lambda args: vector_to_list(args[0]),
-    'list->vector':  lambda args: list_to_vector(args[0]),
+    'vector-length': _fast_prim_vector_length,
+    'vector->list':  _fast_prim_vector_to_list,
+    'list->vector':  _fast_prim_list_to_vector,
     # String operations
-    'string-length':  lambda args: string_length(args[0]),
+    'string-length':  _fast_prim_string_length,
     'string-ref':     lambda args: string_ref(args[0], args[1]),
     'string-append':  lambda args: string_append(*args),
-    'substring':      lambda args: substring(args[0], args[1], args[2]),
-    'string->list':   lambda args: string_to_list(args[0]),
-    'list->string':   lambda args: list_to_string(args[0]),
+    'substring':      lambda args: substring(args[0], args[1], args[2] if len(args) > 2 else string_length(args[0])),
+    'string->list':   _fast_prim_string_to_list,
+    'list->string':   _fast_prim_list_to_string,
     'string->number': lambda args: string_to_number(args[0]),
     'number->string': lambda args: number_to_string(args[0]),
     'string=?':       lambda args: string_is__q(args[0], args[1]),
     'string<?':       lambda args: stringLessThan_q(args[0], args[1]),
     # Symbol / char operations
-    'symbol->string':  lambda args: symbol_to_string(args[0]),
-    'string->symbol':  lambda args: string_to_symbol(args[0]),
+    'symbol->string':  _fast_prim_symbol_to_string,
+    'string->symbol':  _fast_prim_string_to_symbol,
     'char->integer':   lambda args: char_to_integer(args[0]),
     'integer->char':   lambda args: integer_to_char(args[0]),
     'char-alphabetic?': lambda args: char_alphabetic_q(args[0]),
@@ -1537,15 +1833,103 @@ _FAST_PRIM_SPECS = {
     'for-each': _fast_prim_direct_for_each,
 }
 
+## (min, max) argument-count bounds for every _FAST_PRIM_SPECS entry, so
+## that the exact same wrong-arity call that b_proc_1_d cleanly rejects
+## for a user closure (see _check_call_arity) also gets a clean
+## "incorrect number of arguments to X" RunTimeError here, instead of a
+## raw IndexError/TypeError from indexing straight into `args` -- none of
+## the _FAST_PRIM_SPECS callables above validate their own argument count.
+##
+## Derived empirically from each primitive's own classic dispatch
+## (b_proc_XX_d in the generated scheme.py -- always correct, since a
+## direct top-level call never goes through Phase 2 at all): the boundary
+## between "returns a value" and "some error" at the reference/baseline
+## level, probed across argument counts 0-6 with type-appropriate dummy
+## values (see the audit that found this gap). max=None means the
+## classic dispatch itself places no upper bound (fully variadic, or
+## silently ignores extra args the same way the fast lambda already
+## does) -- not asserting an upper bound there preserves exactly that
+## existing (baseline-matching) behavior rather than inventing a new,
+## stricter one. See tests/test_fastprim_arity.py.
+_FAST_PRIM_ARITY = {
+    '+': (0, None), '-': (1, None), '*': (0, None), '/': (0, None),
+    '<': (2, None), '>': (2, None), '<=': (2, None), '>=': (2, None), '=': (2, None),
+    'not': (1, 1),
+    'zero?': (1, None), 'even?': (1, 1), 'odd?': (1, 1), 'abs': (1, 1),
+    'min': (1, None), 'max': (1, None),
+    'modulo': (2, 2), 'remainder': (2, 2), 'quotient': (2, 2),
+    'expt': (2, None), 'sqrt': (1, 1),
+    # 'round' deliberately absent -- see _fast_prim_round's own comment.
+    'null?': (1, 1), 'pair?': (1, 1), 'number?': (1, 1), 'string?': (1, 1),
+    'symbol?': (1, 1), 'char?': (1, 1), 'boolean?': (1, 1), 'vector?': (1, 1),
+    'list?': (1, 1), 'procedure?': (1, 1),
+    'eq?': (2, 2), 'eqv?': (2, 2), 'equal?': (2, 2),
+    'car': (1, 1), 'cdr': (1, 1), 'cons': (2, 2),
+    'set-car!': (2, 2), 'set-cdr!': (2, 2),
+    'caar': (1, 1), 'cadr': (1, 1), 'cdar': (1, 1), 'cddr': (1, 1),
+    'cadar': (1, 1), 'caddr': (1, 1), 'cdddr': (1, 1), 'cadddr': (1, 1),
+    'list': (0, None), 'length': (1, 1), 'reverse': (1, 1), 'append': (0, None),
+    'list-ref': (2, 2),
+    'memq': (2, 2), 'memv': (2, None), 'member': (2, 2), 'assq': (2, 2), 'assv': (2, None),
+    'make-vector': (1, 1), 'vector-ref': (2, 2), 'vector-set!': (3, 3),
+    'vector-length': (1, 1), 'vector->list': (1, 1), 'list->vector': (1, 1),
+    'string-length': (1, 1), 'string-ref': (2, 2), 'string-append': (2, None),
+    'substring': (2, 3), 'string->list': (1, 1), 'list->string': (1, 1),
+    'string->number': (1, 1), 'number->string': (1, None),
+    'string=?': (2, 2), 'string<?': (2, 2),
+    'symbol->string': (1, 1), 'string->symbol': (1, 1),
+    'char->integer': (1, 1), 'integer->char': (1, 1),
+    'char-alphabetic?': (1, 1), 'char-numeric?': (1, 1), 'char-whitespace?': (1, 1),
+    'map': (2, None), 'for-each': (2, None),
+}
+
+def _arity_checked_prim(name, min_n, max_n, fn):
+    def wrapper(args):
+        n = len(args)
+        if n < min_n or (max_n is not None and n > max_n):
+            raise _SchemeRuntimeError("incorrect number of arguments to %s" % name)
+        return fn(args)
+    # _JitCompiler._is_unshadowed_primitive (Bug 2's redefinition-safety
+    # check) identifies a _fast_prim_map entry by *which primitive name it
+    # was built for*, not by comparing it to _FAST_PRIM_SPECS[sym] by
+    # identity -- that identity no longer holds now that every entry is
+    # wrapped here rather than stored as-is. Stashing the name on the
+    # wrapper is what lets that check keep working post-wrapping.
+    wrapper._fast_prim_name = name
+    return wrapper
+
 def _build_fast_prim_map():
-    """Populate the fast prim map by resolving known symbol names in toplevel_env."""
+    """Populate the fast prim map by resolving known symbol names in
+    toplevel_env, once, lazily, on first use -- cached in the module-level
+    _fast_prim_map for the life of the process (see its callers).
+
+    Keyed by proc[1], the identity of the underlying Python dispatch
+    function -- unique per *primitive* (e.g. b_proc_55_d for car), but
+    NOT unique per user-defined closure: every ordinary Scheme closure
+    shares the exact same dispatch function, b_proc_1_d (see closure() /
+    b_proc_1_d itself). If a fast-path name (e.g. `+`) has already been
+    redefined to a user closure by the time this first runs, proc[1] for
+    that name resolves to b_proc_1_d too -- registering it would map
+    b_proc_1_d itself to a primitive's handler, and since b_proc_1_d is
+    shared by *every* closure in the program, every later Phase-2/JIT
+    closure call would then incorrectly match this one entry and get
+    silently replaced by the primitive's behavior, regardless of what
+    that closure's own code says. The `proc[1] is not b_proc_1_d` guard
+    below is what prevents this: such a name is simply left out of the
+    fast-path table (that specific name loses its fast-path optimization
+    for the rest of the process -- costs speed, not correctness -- while
+    every other, non-redefined name is unaffected), rather than ever
+    letting b_proc_1_d become a key. See
+    tests/test_primitive_redefinition.py."""
     result = {}
     for sym_name, direct_fn in _FAST_PRIM_SPECS.items():
         b = search_env(toplevel_env, make_symbol(sym_name))
         if b is not False:
             proc = binding_value(b)
-            if isinstance(proc, tuple) and proc[0] is symbol_procedure:
-                result[proc[1]] = direct_fn
+            if (isinstance(proc, tuple) and proc[0] is symbol_procedure
+                    and proc[1] is not b_proc_1_d):
+                min_n, max_n = _FAST_PRIM_ARITY.get(sym_name, (0, None))
+                result[proc[1]] = _arity_checked_prim(sym_name, min_n, max_n, direct_fn)
                 if sym_name in ('map', 'for-each'):
                     _fast_prim_hof_fns.add(proc[1])
     return result
@@ -1562,6 +1946,7 @@ def _apply_direct(proc, args, env):
         if direct is not None:
             return direct(args)      # args is a Python list — no cons needed
         if len(proc) == 6 and fn is b_proc_1_d and proc[5]:
+            _check_call_arity(proc, args)
             bodies, formals, cenv = proc[2], proc[3], proc[4]
             new_env = extend(cenv, formals, List(*args), make_empty_docstrings(len(args)))
             return _eval_sequence_direct(bodies, new_env)
@@ -2036,6 +2421,9 @@ def trampoline():
                 raise
             except KeyboardInterrupt:
                 exception_reg = make_exception("KeyboardInterrupt", "Keyboard interrupt", symbol_none, symbol_none, symbol_none)
+                pc = apply_handler2
+            except _SchemeRuntimeError as e:
+                exception_reg = make_exception("RunTimeError", str(e), symbol_none, symbol_none, symbol_none)
                 pc = apply_handler2
             except Exception as e:
                 exception_reg = make_exception("Unhandled %s" % e.__class__.__name__, str(e), symbol_none, symbol_none, symbol_none)

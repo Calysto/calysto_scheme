@@ -1000,6 +1000,11 @@
   (lambda (ls)
     (and (not (null? ls)) (not (null? (cdr ls))) (null? (cddr ls)))))
 
+(define length-three?
+  (lambda (ls)
+    (and (not (null? ls)) (not (null? (cdr ls)))
+         (not (null? (cddr ls))) (null? (cdddr ls)))))
+
 (define length-at-least?
   (lambda (n ls)
     (cond
@@ -1037,7 +1042,10 @@
 ;; zero?
 (define zero?-prim
   (lambda-proc (args env2 info handler fail k2)
-      (k2 (= (car args) 0) fail)))
+    (cond
+      ((not (length-at-least? 1 args))
+       (runtime-error "incorrect number of arguments to zero?" info handler fail))
+      (else (k2 (= (car args) 0) fail)))))
 
 ;; python-eval
 (define python-eval-prim
@@ -1057,7 +1065,10 @@
 ;; expt
 (define expt-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 (expt-native (car args) (cadr args)) fail)))
+    (cond
+      ((not (length-at-least? 2 args))
+       (runtime-error "incorrect number of arguments to expt" info handler fail))
+      (else (k2 (expt-native (car args) (cadr args)) fail)))))
 
 (define end-of-session?
   (lambda (x) (eq? x end-of-session)))
@@ -1244,25 +1255,38 @@
   ;; (substring "string" start)
   ;; (substring "string" start stop)
   (lambda-proc (args env2 info handler fail k2)
-     (if (= (length args) 3)
-	 (k2 (substring (car args) (cadr args) (caddr args)) fail)
-	 (k2 (substring (car args) (cadr args) (string-length (car args))) fail))))
+     (cond
+       ((length-three? args)
+        (k2 (substring (car args) (cadr args) (caddr args)) fail))
+       ((length-two? args)
+        (k2 (substring (car args) (cadr args) (string-length (car args))) fail))
+       (else
+        (runtime-error "incorrect number of arguments to substring" info handler fail)))))
 
 ;; number->string
 (define number->string-prim
   ;; given a number, returns those digits as a string
   (lambda-proc (args env2 info handler fail k2)
-     (k2 (number->string (car args)) fail)))
+    (cond
+      ((not (length-at-least? 1 args))
+       (runtime-error "incorrect number of arguments to number->string" info handler fail))
+      (else (k2 (number->string (car args)) fail)))))
 
 ;; assv
 (define assv-prim
   ;; given 'a '((b 1) (a 2)) returns (a 2)
   (lambda-proc (args env2 info handler fail k2)
-     (k2 (assv (car args) (cadr args)) fail)))
+    (cond
+      ((not (length-at-least? 2 args))
+       (runtime-error "incorrect number of arguments to assv" info handler fail))
+      (else (k2 (assv (car args) (cadr args)) fail)))))
 ;; memv
 (define memv-prim
   (lambda-proc (args env2 info handler fail k2)
-     (k2 (memv (car args) (cadr args)) fail)))
+    (cond
+      ((not (length-at-least? 2 args))
+       (runtime-error "incorrect number of arguments to memv" info handler fail))
+      (else (k2 (memv (car args) (cadr args)) fail)))))
 
 (define safe-print
   (lambda (arg)
@@ -1404,9 +1428,7 @@
   (lambda-proc (args env2 info handler fail k2)
     (cond
       ((not (length-one? args))
-       (runtime-error
-         (format "incorrect number of arguments to symbol?: you gave ~s, should have been 1 argument" args)
-         info handler fail))
+       (runtime-error "incorrect number of arguments to symbol?" info handler fail))
       (else (k2 (apply symbol? args) fail)))))
 
 ;; number?
@@ -1888,7 +1910,7 @@
   (lambda-proc (args env2 info handler fail k2)
     (cond
       ((not (length-two? args))
-       (runtime-error "incorrect number of arguments to %" info handler fail))
+       (runtime-error "incorrect number of arguments to modulo" info handler fail))
       ((= (cadr args) 0)
        (runtime-error "modulo by zero" info handler fail))
       (else (k2 (apply modulo args) fail)))))
@@ -1897,12 +1919,17 @@
 (define min-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
+      ((not (length-at-least? 1 args))
+       (runtime-error "incorrect number of arguments to min" info handler fail))
       (else (k2 (apply min args) fail)))))
 
 ;; max
 (define max-prim
   (lambda-proc (args env2 info handler fail k2)
-     (k2 (apply max args) fail)))
+    (cond
+      ((not (length-at-least? 1 args))
+       (runtime-error "incorrect number of arguments to max" info handler fail))
+      (else (k2 (apply max args) fail)))))
 
 ;; <
 (define lt-prim
@@ -2538,18 +2565,28 @@
 ;; vector-set!
 (define vector-set!-prim
   (lambda-proc (args env2 info handler fail k2)
-    (vector-set! (car args) (cadr args) (caddr args))
-    (k2 void-value fail)))
+    (cond
+      ((not (length-three? args))
+       (runtime-error "incorrect number of arguments to vector-set!" info handler fail))
+      (else
+       (vector-set! (car args) (cadr args) (caddr args))
+       (k2 void-value fail)))))
 
 ;; vector-ref
 (define vector-ref-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 (apply vector-ref args) fail)))
+    (cond
+      ((not (length-two? args))
+       (runtime-error "incorrect number of arguments to vector-ref" info handler fail))
+      (else (k2 (apply vector-ref args) fail)))))
 
 ;; make-vector
 (define make-vector-prim
   (lambda-proc (args env2 info handler fail k2)
-    (k2 (apply make-vector args) fail)))
+    (cond
+      ((not (length-one? args))
+       (runtime-error "incorrect number of arguments to make-vector" info handler fail))
+      (else (k2 (apply make-vector args) fail)))))
 
 ;; error
 (define error-prim
