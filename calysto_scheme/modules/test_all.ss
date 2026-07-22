@@ -1496,6 +1496,199 @@
 	  1
 	  (vector-ref jit-dbl-counter-try 0)
 	  "case 65")
+
+  ;; call/cc is a primitive, not a special AST node, so a call to it from
+  ;; inside a JIT/Phase-2-eligible closure is just an ordinary application
+  ;; of an unrecognized primitive -- _apply_direct has no entry for it in
+  ;; _FAST_PRIM_SPECS and it isn't a Phase-2-safe closure either, so it
+  ;; raises _TrampolineFallback and the whole call re-runs on the
+  ;; always-correct trampoline, which knows how to honor call/cc's real
+  ;; continuation-capture semantics. jit-cc-loop is otherwise identical in
+  ;; shape to jit-count-loop (case 53): plain tail self-recursion that the
+  ;; JIT flattens into a Python while-loop. escape is called from deep
+  ;; inside that flattened loop (at n=7000, out of 200000 iterations) --
+  ;; this checks that unwinding out of a JIT'd/flattened loop via a
+  ;; captured continuation lands on the right value and doesn't corrupt
+  ;; the compiled function for later calls.
+  (define (jit-cc-loop n escape)
+    (if (= n 0)
+	'looped-to-zero
+	(begin
+	  (if (= n 7000) (escape 'escaped-early) #f)
+	  (jit-cc-loop (- n 1) escape))))
+  (assert equal?
+	  'escaped-early
+	  (call/cc (lambda (k) (jit-cc-loop 200000 k)))
+	  "case 66")
+  ;; same compiled jit-cc-loop, called again right after the escape above,
+  ;; this time with a plain non-escaping continuation -- confirms the
+  ;; earlier non-local exit didn't leave the JIT cache or the flattened
+  ;; loop's Python frame in a bad state.
+  (assert equal?
+	  'looped-to-zero
+	  (call/cc (lambda (k) (jit-cc-loop 200000 (lambda (x) x))))
+	  "case 67")
+
+  ;; call/cc early-exit from NON-tail, doubly-recursive JIT-compiled
+  ;; search (fib-shaped, like Phase 7's motivating case, not a flattened
+  ;; tail loop). jit-cc-tree-counter tracks how many calls actually ran;
+  ;; this is the call/cc analogue of case 62/63's try-catch double-
+  ;; execution regression -- confirms that escaping via a captured
+  ;; continuation out of the middle of a JIT'd non-tail recursion, after
+  ;; real side-effecting work already happened, does not replay that work
+  ;; a second time when the trampoline fallback kicks in for the call/cc
+  ;; call itself. Descending 10 -> 9 -> 8 -> 7 along the first recursive
+  ;; branch before matching target=7 and escaping, exactly 4 calls should
+  ;; have run (the second branch at each level, and everything below 7,
+  ;; must never execute).
+  (define jit-cc-tree-counter (vector 0))
+  (define (jit-cc-tree-search n target found)
+    (vector-set! jit-cc-tree-counter 0 (+ (vector-ref jit-cc-tree-counter 0) 1))
+    (if (= n target)
+	(found n)
+	(if (= n 0)
+	    'not-found
+	    (begin
+	      (jit-cc-tree-search (- n 1) target found)
+	      (jit-cc-tree-search (- n 1) target found)))))
+  (assert equal?
+	  (list 7 4)
+	  (list (call/cc (lambda (k) (jit-cc-tree-search 10 7 k)))
+		(vector-ref jit-cc-tree-counter 0))
+	  "case 68")
+
+  ;; choose/require backtracking search repeatedly calling a pure,
+  ;; Phase-2/JIT-eligible helper (jit-choose-square has no set!, so it's
+  ;; fast-path-eligible on its own) across every branch the search visits
+  ;; -- including branches that later fail `require` and get backed out
+  ;; of. choose/require themselves are never JIT/Phase-2-eligible (choose
+  ;; isn't one of _is_phase2_safe's recognized node types, so it always
+  ;; runs on the trampoline), but the helper they call on each branch is
+  ;; -- this checks that a JIT-compiled helper keeps returning correct,
+  ;; non-duplicated-looking results when invoked over and over by
+  ;; backtracking control flow it has no awareness of. The exact call
+  ;; count (28) pins down the search order so a future change to choose's
+  ;; backtracking order would be caught here too.
+  (define jit-choose-counter (vector 0))
+  (define (jit-choose-square x)
+    (vector-set! jit-choose-counter 0 (+ (vector-ref jit-choose-counter 0) 1))
+    (* x x))
+  (define (jit-choose-pair-search)
+    (let ((a (choose 1 2 3 4 5)))
+      (let ((b (choose 1 2 3 4 5)))
+	(require (= (+ (jit-choose-square a) (jit-choose-square b)) 25))
+	(require (< a b))
+	(list a b))))
+  (assert equal?
+	  (list '(3 4) 28)
+	  (list (jit-choose-pair-search) (vector-ref jit-choose-counter 0))
+	  "case 69")
+
+  ;; choose/require backtracking search where the per-branch helper is
+  ;; itself a JIT-compiled SELF-RECURSIVE function (naive fib, the JIT's
+  ;; own canonical example -- see README-PERFORMANCE.md), not just a
+  ;; single-call primitive-shaped helper like case 69. This exercises
+  ;; repeated invocation of one compiled instance across many backtracked
+  ;; (tried-then-abandoned) branches: a=1..5 all fail the first require
+  ;; before a=6 succeeds, then b=1..4 fail the second require before b=5
+  ;; succeeds.
+  (define (jit-choose-fib n) (if (< n 2) n (+ (jit-choose-fib (- n 1)) (jit-choose-fib (- n 2)))))
+  (define (jit-choose-fib-search)
+    (let ((a (choose 1 2 3 4 5 6 7 8)))
+      (require (> (jit-choose-fib a) 5))
+      (let ((b (choose 1 2 3 4 5 6 7 8)))
+	(require (= (+ (jit-choose-fib a) (jit-choose-fib b)) 13))
+	(list a b))))
+  (assert equal?
+	  '(6 5)
+	  (jit-choose-fib-search)
+	  "case 70")
+
+  ;; Multi-shot re-entrant continuations (a real generator/coroutine built
+  ;; on call/cc, not just a one-shot escape like cases 66-68) driving a
+  ;; JIT-eligible helper across several separate resumptions. Naively,
+  ;; resuming a saved continuation from a *different* top-level form than
+  ;; the one that captured it breaks in this interpreter: execute-loop-rm
+  ;; (see interpreter-cps.ss) drives the whole file through ONE shared
+  ;; global register/pc trampoline, calling (trampoline) once per
+  ;; top-level form and looping at the Python/register-machine level, not
+  ;; via Scheme continuations. A captured continuation's chain still
+  ;; bottoms out at REP-k (the single shared toplevel continuation), so
+  ;; invoking it from a later form's trampoline() call doesn't return a
+  ;; value to that form -- it hijacks that form's still-running
+  ;; trampoline() instance to run the OLD continuation's leftover work
+  ;; instead, silently discarding whatever the later form was doing. This
+  ;; is by design (REP-k is deliberately shared/global), not a bug -- but
+  ;; it means user code that wants an isolated, "resettable" call needs a
+  ;; fresh continuation boundary of its own.
+  ;;
+  ;; `callback` (special form, not a regular primitive -- see
+  ;; callback-aexp in parser-cps.ss/interpreter-cps.ss) provides exactly
+  ;; that: (callback thunk) wraps thunk in a native Python closure that,
+  ;; when called, sets handler_reg/k2_reg to fresh REP_handler/REP_k and
+  ;; runs a NESTED (trampoline) call to completion (see dlr_func/callback
+  ;; in Scheme.py) -- the same mechanism used to hand Scheme procedures to
+  ;; host callbacks (e.g. `sort`'s comparator). Because that nested
+  ;; trampoline has its OWN fresh REP_k, a continuation captured inside it
+  ;; bottoms out there instead of at the outer shared REP_k, so invoking
+  ;; it later doesn't reach past the (callback ...) boundary -- resetting
+  ;; the continuation stack for that call. Wrapping both the generator's
+  ;; first call and every resume in (callback ...) makes a real multi-shot
+  ;; generator work correctly from ordinary sequential code.
+  ;;
+  ;; jit-gen2-double is a trivial pure helper (JIT/Phase-2-eligible on its
+  ;; own); jit-gen2 itself never is (uses define/set!, like all
+  ;; call/cc-based generators), so it always runs on the trampoline -- but
+  ;; every value it yields comes from the JIT-compiled helper.
+  (define jit-gen2-saved-k #f)
+  (define (jit-gen2-double x) (* x 2))
+  (define (jit-gen2)
+    (call/cc (lambda (return)
+      (define (yield v)
+	(call/cc (lambda (k)
+	  (set! jit-gen2-saved-k k)
+	  (return v))))
+      (let loop ((i 1))
+	(yield (jit-gen2-double i))
+	(loop (+ i 1))))))
+  (define jit-gen2-run (callback (lambda () (jit-gen2))))
+  (define jit-gen2-resume (callback (lambda () (jit-gen2-saved-k 'go))))
+  (assert equal?
+	  '(2 4 6 8)
+	  (list (jit-gen2-run) (jit-gen2-resume) (jit-gen2-resume) (jit-gen2-resume))
+	  "case 71")
+
+  ;; Same (callback ...)-reset multi-shot generator pattern, but yielding
+  ;; values from a JIT-compiled SELF-RECURSIVE helper (naive fib, like
+  ;; case 70) instead of a single-expression primitive-shaped one --
+  ;; confirms the compiled instance keeps producing correct results
+  ;; across several independent nested-trampoline re-entries, each
+  ;; resuming mid-loop from a completely separate top-level form. The
+  ;; final direct call to jit-gen3-fib afterward confirms driving it
+  ;; through the generator/callback machinery didn't leave its JIT-cached
+  ;; compiled function in a bad state.
+  (define (jit-gen3-fib n) (if (< n 2) n (+ (jit-gen3-fib (- n 1)) (jit-gen3-fib (- n 2)))))
+  (define jit-gen3-saved-k #f)
+  (define (jit-gen3)
+    (call/cc (lambda (return)
+      (define (yield v)
+	(call/cc (lambda (k)
+	  (set! jit-gen3-saved-k k)
+	  (return v))))
+      (let loop ((i 0))
+	(yield (jit-gen3-fib i))
+	(loop (+ i 1))))))
+  (define jit-gen3-run (callback (lambda () (jit-gen3))))
+  (define jit-gen3-resume (callback (lambda () (jit-gen3-saved-k 'go))))
+  (assert equal?
+	  '(0 1 1 2 3 5)
+	  (list (jit-gen3-run) (jit-gen3-resume) (jit-gen3-resume) (jit-gen3-resume)
+		(jit-gen3-resume) (jit-gen3-resume))
+	  "case 72")
+  (assert equal?
+	  610
+	  (jit-gen3-fib 15)
+	  "case 73")
   )
 
 (run-tests)
