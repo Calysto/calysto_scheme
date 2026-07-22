@@ -513,6 +513,30 @@ def vector_length(vec):
 
 ### Native make- functions:
 
+### Tuple layouts, documented once here rather than at each call site:
+###
+### Every invokable tuple (any make_proc(...)/make_cont(...)/make_fail(...)/
+### make_handler(...)/make_macro(...) result, and k_reg/fail_reg/handler_reg/
+### proc_reg/macro_reg generally) is (tag, fn, *args): index 0 is the tag
+### symbol, index 1 is always the dispatch function, and everything from
+### index 2 on are the arguments to call it with (`reg[1](*reg[2:])`, see
+### apply_cont/apply_fail/apply_handler/apply_proc/apply_macro below).
+###
+### The one shape Phase 2/JIT special-cases -- an ordinary Scheme closure,
+### built by closure()/make_proc(b_proc_1_d, bodies, formals, env, safe) --
+### is always exactly 6 long, i.e. (tag, fn, bodies, formals, env, safe).
+### Named below for use in code that runs once per closure (JIT compile
+### time, cached after) rather than once per call:
+_PROC_FN      = 1  # dispatch function (b_proc_1_d for an ordinary closure)
+_PROC_BODIES  = 2
+_PROC_FORMALS = 3
+_PROC_ENV     = 4  # captured/definition environment ("cenv")
+_PROC_SAFE    = 5  # precomputed _is_direct_eval_safe() verdict
+### The once-per-*call* paths (apply_proc, _eval_direct, _apply_direct,
+### _jit_call, _check_call_arity, ...) deliberately keep bare integer
+### literals instead of these names -- see the comment on _eval_direct
+### about extra-overhead-per-node being measurable on those paths.
+
 def make_proc(*args):
     return (symbol_procedure,) + args
 
@@ -564,6 +588,8 @@ def apply_handler2():
     handler_reg[1](*handler_reg[2:])
 
 def apply_proc():
+    # proc_reg[1]=fn, [5]=safe; [2..4]=bodies/formals/cenv below.
+    # See _PROC_* constants above make_proc (bare literals here on purpose).
     if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
             and proc_reg[1] is b_proc_1_d and proc_reg[5]
             and _is_phase2_safe(proc_reg)):
@@ -793,6 +819,8 @@ def _is_phase2_safe(proc, _visiting=None):
     checked closure; only the outermost call's verdict is cached, so a
     cycle can't cache a premature/partial answer.
     """
+    # proc[1]=fn, proc[5]=safe -- runs on every apply_proc call (cheap
+    # guard before the cache lookup below), so kept as bare literals.
     if not (isinstance(proc, tuple) and len(proc) == 6
             and proc[1] is b_proc_1_d and proc[5]):
         return False
@@ -807,7 +835,9 @@ def _is_phase2_safe(proc, _visiting=None):
         return True
     _visiting.add(pid)
     try:
-        safe = _phase2_safe_walk_seq(proc[2], proc[4], _visiting)
+        # Only reached on a cache miss (once per unique closure identity,
+        # then cached forever below), so named constants cost nothing here.
+        safe = _phase2_safe_walk_seq(proc[_PROC_BODIES], proc[_PROC_ENV], _visiting)
     except Exception:
         safe = False
     finally:
@@ -927,7 +957,7 @@ def _phase2_safe_walk_call(op_exp, env, visiting):
         if kind != 'value':
             return False   # local param, computed operator, or unresolved — can't prove
     if isinstance(op, tuple) and op[0] is symbol_procedure:
-        fn = op[1]
+        fn = op[_PROC_FN]
         if _fast_prim_map is None:
             _fast_prim_map = _build_fast_prim_map()
         if fn in _fast_prim_map and fn not in _fast_prim_hof_fns:
@@ -954,7 +984,7 @@ def _check_call_arity(op, args):
     b_proc_1_d`, which such a closure never satisfies. So a plain length
     comparison is always correct here; no variadic-arity handling needed."""
     n = 0
-    cur = op[3]
+    cur = op[3]  # formals (_PROC_FORMALS); runs on every nested call, kept as a literal
     while isinstance(cur, cons):
         n += 1
         cur = cur.cdr
@@ -1021,7 +1051,10 @@ def _eval_direct(exp, env):
             while isinstance(cur, cons):
                 args.append(_eval_direct(cur.car, env))
                 cur = cur.cdr
-            # Inline _apply_direct for speed:
+            # Inline _apply_direct for speed. op[1]=fn, and below:
+            # op[5]=safe, op[4]=cenv, op[3]=formals, op[2]=bodies
+            # (see _PROC_* above make_proc) -- runs per AST node, so
+            # kept as bare literals rather than named-global lookups.
             if isinstance(op, tuple) and op[0] is symbol_procedure:
                 fn = op[1]
                 if _fast_prim_map is None:
@@ -1088,7 +1121,9 @@ def _jit_lookup(proc):
 def _jit_compile_proc(proc):
     """Try to JIT-compile a safe Scheme closure.
     Sets _jit_cache[proc] and returns the compiled fn or None."""
-    formals, bodies, cenv = proc[3], proc[2], proc[4]
+    # Runs once per unique closure identity (result cached in _jit_cache
+    # by every caller), so named constants cost nothing here.
+    formals, bodies, cenv = proc[_PROC_FORMALS], proc[_PROC_BODIES], proc[_PROC_ENV]
     params = []
     cur = formals
     while isinstance(cur, cons):
@@ -1143,6 +1178,9 @@ def _jit_call(op, args):
     un-JIT'd closure reached through a computed operator expression such as
     ((make-adder n) 0), an immediately-invoked lambda, or a parameter used
     in operator position (e.g. (define (apply-twice f x) (f (f x))))."""
+    # Runs on every call routed through here (e.g. each map/for-each
+    # element), so op[1]=fn / op[5]=safe stay bare literals -- see
+    # _PROC_* above make_proc.
     if isinstance(op, tuple) and op[0] is symbol_procedure:
         fn = op[1]
         if len(op) == 6 and fn is b_proc_1_d and op[5]:
@@ -1285,7 +1323,9 @@ class _JitCompiler:
         (silently dropped from self._params — see _jit_compile_proc) would
         misalign the frame.
         """
-        cur = self._self[3]
+        # _lambda runs once per closure at JIT-source-generation time
+        # (result cached), so named constants are free here.
+        cur = self._self[_PROC_FORMALS]
         count = 0
         while isinstance(cur, cons):
             count += 1
@@ -1296,7 +1336,7 @@ class _JitCompiler:
         fm = self._capture_const(formals)
         bd = self._capture_const(bodies)
         ce = self._capture_const(self._env)
-        of = self._capture_const(self._self[3])
+        of = self._capture_const(self._self[_PROC_FORMALS])
         values = ", ".join(self._params)
         return f'_jit_make_closure({fm}, {bd}, {ce}, {of}, [{values}])'
 
@@ -1428,7 +1468,7 @@ class _JitCompiler:
             return False
         if _fast_prim_map is None:
             _fast_prim_map = _build_fast_prim_map()
-        entry = _fast_prim_map.get(val[1])
+        entry = _fast_prim_map.get(val[_PROC_FN])
         return entry is not None and getattr(entry, '_fast_prim_name', None) == sym
 
     def _var(self, sym):
@@ -1456,7 +1496,7 @@ class _JitCompiler:
                 return
             # Wrap a fast_prim_map entry (list interface → positional interface)
             if _fast_prim_map is not None:
-                direct = _fast_prim_map.get(val[1])
+                direct = _fast_prim_map.get(val[_PROC_FN])
                 if direct is not None:
                     self._free[m] = lambda *a, _d=direct: _d(list(a))
                     return
@@ -1921,23 +1961,29 @@ def _build_fast_prim_map():
     every other, non-redefined name is unaffected), rather than ever
     letting b_proc_1_d become a key. See
     tests/test_primitive_redefinition.py."""
+    # Runs once total: this map is built lazily on first use and cached
+    # at module level (_fast_prim_map) for the life of the process, so
+    # named constants cost nothing here.
     result = {}
     for sym_name, direct_fn in _FAST_PRIM_SPECS.items():
         b = search_env(toplevel_env, make_symbol(sym_name))
         if b is not False:
             proc = binding_value(b)
             if (isinstance(proc, tuple) and proc[0] is symbol_procedure
-                    and proc[1] is not b_proc_1_d):
+                    and proc[_PROC_FN] is not b_proc_1_d):
                 min_n, max_n = _FAST_PRIM_ARITY.get(sym_name, (0, None))
-                result[proc[1]] = _arity_checked_prim(sym_name, min_n, max_n, direct_fn)
+                result[proc[_PROC_FN]] = _arity_checked_prim(sym_name, min_n, max_n, direct_fn)
                 if sym_name in ('map', 'for-each'):
-                    _fast_prim_hof_fns.add(proc[1])
+                    _fast_prim_hof_fns.add(proc[_PROC_FN])
     return result
 
 def _apply_direct(proc, args, env):
     global _fast_prim_map
     if dlr_proc_q(proc):
         return dlr_apply(proc, List(*args))
+    # Runs on every map/for-each element and every dlr callback, so
+    # proc[1]=fn / proc[5]=safe / proc[2..4]=bodies,formals,cenv below
+    # stay bare literals -- see _PROC_* above make_proc.
     if isinstance(proc, tuple) and proc[0] is symbol_procedure:
         fn = proc[1]
         if _fast_prim_map is None:
