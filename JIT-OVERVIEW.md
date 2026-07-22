@@ -1,10 +1,7 @@
 # How Calysto Scheme Got Fast: A Plain-English Guide to the JIT
 
-This document explains, without assuming a computer science background,
-what was added to Calysto Scheme to make it run much faster, and how it
-works. It's a companion to the more technical
-[`README-PERFORMANCE.md`](calysto_scheme/src/README-PERFORMANCE.md), which
-has exact code and numbers; this document focuses on the *ideas*.
+This document explains what was added to Calysto Scheme to make it run
+much faster, and how it works.
 
 ## The problem: interpreters are slow
 
@@ -161,7 +158,7 @@ A few things make this possible:
   existing structure.
 - **Arithmetic and comparisons are inlined as real Python operators**
   (`+`, `<`, etc.) instead of function calls, so `(+ a b)` becomes just
-  `a + b` in the generated code.
+  `a + b` in the generated code (if not shadowed or redefined).
 - **Calls to other JIT-compiled functions call each other directly**,
   and a function calling *itself* (as `fib` does) refers to itself by its
   own generated name (`_jit_fn`) rather than through any extra
