@@ -2610,7 +2610,15 @@
 (define+
   <proc-7>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (= (car args) 0) fail))))
+    (let ()
+      (cond
+        ((not (length-at-least? 1 args))
+         (runtime-error
+           "incorrect number of arguments to zero?"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (= (car args) 0) fail))))))
 
 (define+
   <proc-8>
@@ -2631,10 +2639,18 @@
   <proc-11>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (apply-cont2
-        k2
-        (expt-native (car args) (cadr args))
-        fail))))
+      (cond
+        ((not (length-at-least? 2 args))
+         (runtime-error
+           "incorrect number of arguments to expt"
+           info
+           handler
+           fail))
+        (else
+         (apply-cont2
+           k2
+           (expt-native (car args) (cadr args))
+           fail))))))
 
 (define+
   <proc-12>
@@ -2874,35 +2890,67 @@
   <proc-30>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (if (= (length args) 3)
-          (apply-cont2
-            k2
-            (substring (car args) (cadr args) (caddr args))
-            fail)
-          (apply-cont2
-            k2
-            (substring
-              (car args)
-              (cadr args)
-              (string-length (car args)))
-            fail)))))
+      (cond
+        ((length-three? args)
+         (apply-cont2
+           k2
+           (substring (car args) (cadr args) (caddr args))
+           fail))
+        ((length-two? args)
+         (apply-cont2
+           k2
+           (substring
+             (car args)
+             (cadr args)
+             (string-length (car args)))
+           fail))
+        (else
+         (runtime-error
+           "incorrect number of arguments to substring"
+           info
+           handler
+           fail))))))
 
 (define+
   <proc-31>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (number->string (car args)) fail))))
+    (let ()
+      (cond
+        ((not (length-at-least? 1 args))
+         (runtime-error
+           "incorrect number of arguments to number->string"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (number->string (car args)) fail))))))
 
 (define+
   <proc-32>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (apply-cont2 k2 (assv (car args) (cadr args)) fail))))
+      (cond
+        ((not (length-at-least? 2 args))
+         (runtime-error
+           "incorrect number of arguments to assv"
+           info
+           handler
+           fail))
+        (else
+         (apply-cont2 k2 (assv (car args) (cadr args)) fail))))))
 
 (define+
   <proc-33>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (apply-cont2 k2 (memv (car args) (cadr args)) fail))))
+      (cond
+        ((not (length-at-least? 2 args))
+         (runtime-error
+           "incorrect number of arguments to memv"
+           info
+           handler
+           fail))
+        (else
+         (apply-cont2 k2 (memv (car args) (cadr args)) fail))))))
 
 (define+
   <proc-34>
@@ -2952,9 +3000,7 @@
       (cond
         ((not (length-one? args))
          (runtime-error
-           (format
-             "incorrect number of arguments to symbol?: you gave ~s, should have been 1 argument"
-             args)
+           "incorrect number of arguments to symbol?"
            info
            handler
            fail))
@@ -3838,7 +3884,7 @@
       (cond
         ((not (length-two? args))
          (runtime-error
-           "incorrect number of arguments to %"
+           "incorrect number of arguments to modulo"
            info
            handler
            fail))
@@ -3850,12 +3896,27 @@
   <proc-93>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (cond (else (apply-cont2 k2 (apply min args) fail))))))
+      (cond
+        ((not (length-at-least? 1 args))
+         (runtime-error
+           "incorrect number of arguments to min"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (apply min args) fail))))))
 
 (define+
   <proc-94>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (apply max args) fail))))
+    (let ()
+      (cond
+        ((not (length-at-least? 1 args))
+         (runtime-error
+           "incorrect number of arguments to max"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (apply max args) fail))))))
 
 (define+
   <proc-95>
@@ -4497,18 +4558,42 @@
   <proc-145>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
-      (vector-set! (car args) (cadr args) (caddr args))
-      (apply-cont2 k2 void-value fail))))
+      (cond
+        ((not (length-three? args))
+         (runtime-error
+           "incorrect number of arguments to vector-set!"
+           info
+           handler
+           fail))
+        (else
+         (vector-set! (car args) (cadr args) (caddr args))
+         (apply-cont2 k2 void-value fail))))))
 
 (define+
   <proc-146>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (apply vector-ref args) fail))))
+    (let ()
+      (cond
+        ((not (length-two? args))
+         (runtime-error
+           "incorrect number of arguments to vector-ref"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (apply vector-ref args) fail))))))
 
 (define+
   <proc-147>
   (lambda (args env2 info handler fail k2 fields)
-    (let () (apply-cont2 k2 (apply make-vector args) fail))))
+    (let ()
+      (cond
+        ((not (length-one? args))
+         (runtime-error
+           "incorrect number of arguments to make-vector"
+           info
+           handler
+           fail))
+        (else (apply-cont2 k2 (apply make-vector args) fail))))))
 
 (define+
   <proc-148>
@@ -7630,6 +7715,13 @@
     (and (not (null? ls))
          (not (null? (cdr ls)))
          (null? (cddr ls)))))
+
+(define length-three?
+  (lambda (ls)
+    (and (not (null? ls))
+         (not (null? (cdr ls)))
+         (not (null? (cddr ls)))
+         (null? (cdddr ls)))))
 
 (define length-at-least?
   (lambda (n ls)

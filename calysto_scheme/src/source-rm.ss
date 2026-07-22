@@ -2805,10 +2805,15 @@
 
 (define <proc-7>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (= (car args_reg) 0))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 1 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to zero?")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (= (car args_reg) 0))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-8>
   (lambda ()
@@ -2831,11 +2836,16 @@
 
 (define <proc-11>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg
-      (expt-native (car args_reg) (cadr args_reg)))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 2 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to expt")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg
+            (expt-native (car args_reg) (cadr args_reg)))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-12>
   (lambda ()
@@ -3063,43 +3073,63 @@
 
 (define <proc-30>
   (lambda ()
-    (if (= (length args_reg) 3)
+    (if (length-three? args_reg)
         (begin
           (set! value2_reg fail_reg)
           (set! value1_reg
             (substring (car args_reg) (cadr args_reg) (caddr args_reg)))
           (set! k_reg k2_reg)
           (set! pc apply-cont2))
-        (begin
-          (set! value2_reg fail_reg)
-          (set! value1_reg
-            (substring
-              (car args_reg)
-              (cadr args_reg)
-              (string-length (car args_reg))))
-          (set! k_reg k2_reg)
-          (set! pc apply-cont2)))))
+        (if (length-two? args_reg)
+            (begin
+              (set! value2_reg fail_reg)
+              (set! value1_reg
+                (substring
+                  (car args_reg)
+                  (cadr args_reg)
+                  (string-length (car args_reg))))
+              (set! k_reg k2_reg)
+              (set! pc apply-cont2))
+            (begin
+              (set! msg_reg "incorrect number of arguments to substring")
+              (set! pc runtime-error))))))
 
 (define <proc-31>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (number->string (car args_reg)))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 1 args_reg))
+        (begin
+          (set! msg_reg
+            "incorrect number of arguments to number->string")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (number->string (car args_reg)))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-32>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (assv (car args_reg) (cadr args_reg)))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 2 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to assv")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (assv (car args_reg) (cadr args_reg)))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-33>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (memv (car args_reg) (cadr args_reg)))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 2 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to memv")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (memv (car args_reg) (cadr args_reg)))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-34>
   (lambda ()
@@ -3149,10 +3179,7 @@
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
-          (set! msg_reg
-            (format
-              "incorrect number of arguments to symbol?: you gave ~s, should have been 1 argument"
-              args_reg))
+          (set! msg_reg "incorrect number of arguments to symbol?")
           (set! pc runtime-error))
         (begin
           (set! value2_reg fail_reg)
@@ -3962,7 +3989,7 @@
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
-          (set! msg_reg "incorrect number of arguments to %")
+          (set! msg_reg "incorrect number of arguments to modulo")
           (set! pc runtime-error))
         (if (= (cadr args_reg) 0)
             (begin
@@ -3976,17 +4003,27 @@
 
 (define <proc-93>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (apply min args_reg))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 1 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to min")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (apply min args_reg))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-94>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (apply max args_reg))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-at-least? 1 args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to max")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (apply max args_reg))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-95>
   (lambda ()
@@ -4613,28 +4650,45 @@
 
 (define <proc-145>
   (lambda ()
-    (vector-set!
-      (car args_reg)
-      (cadr args_reg)
-      (caddr args_reg))
-    (set! value2_reg fail_reg)
-    (set! value1_reg void-value)
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-three? args_reg))
+        (begin
+          (set! msg_reg
+            "incorrect number of arguments to vector-set!")
+          (set! pc runtime-error))
+        (begin
+          (vector-set!
+            (car args_reg)
+            (cadr args_reg)
+            (caddr args_reg))
+          (set! value2_reg fail_reg)
+          (set! value1_reg void-value)
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-146>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (apply vector-ref args_reg))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-two? args_reg))
+        (begin
+          (set! msg_reg "incorrect number of arguments to vector-ref")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (apply vector-ref args_reg))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-147>
   (lambda ()
-    (set! value2_reg fail_reg)
-    (set! value1_reg (apply make-vector args_reg))
-    (set! k_reg k2_reg)
-    (set! pc apply-cont2)))
+    (if (not (length-one? args_reg))
+        (begin
+          (set! msg_reg
+            "incorrect number of arguments to make-vector")
+          (set! pc runtime-error))
+        (begin
+          (set! value2_reg fail_reg)
+          (set! value1_reg (apply make-vector args_reg))
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2)))))
 
 (define <proc-148>
   (lambda ()
@@ -8818,6 +8872,14 @@
       (and (not (null? ls))
            (not (null? (cdr ls)))
            (null? (cddr ls))))))
+
+(define length-three?
+  (lambda (ls)
+    (return*
+      (and (not (null? ls))
+           (not (null? (cdr ls)))
+           (not (null? (cddr ls)))
+           (null? (cdddr ls))))))
 
 (define length-at-least?
   (lambda (n ls)
