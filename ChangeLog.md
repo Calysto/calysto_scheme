@@ -1,3 +1,20 @@
+## Release 2.1.5 (Jul 23, 2026)
+
+	* Fixed a real JIT inlining bug: `odd?` compiled to a raw
+	  `n % 2 != 0`, diverging from the real primitive (`n % 2 == 1`) for
+	  any non-integer argument -- e.g. `(odd? 2.5)` returned `#t` from
+	  JIT-compiled code and `#f` everywhere else. Found by a new
+	  differential fuzzer (`tests/test_jit_fuzz.py`) that generates many
+	  random small Scheme programs and compares the trampoline, Phase 2,
+	  and JIT execution paths on each one; see `tests/test_jit_odd_float.py`
+	  for the pinned regression.
+	* Extended the JIT/Phase-2 tag-parity guard tests
+	  (`tests/test_jit_tag_parity.py`) to also cover `_phase2_safe_walk`,
+	  closing the same class of gap for the walker whose certification
+	  errors are the most dangerous (a wrongly-certified proc can commit
+	  `apply_proc` to a live Phase-2 attempt and silently re-run side
+	  effects on fallback).
+
 ## Release 2.1.4 (Jul 23, 2026)
 
 	* Fixed a latent JIT/Phase-2 safety gap: `_apply_direct` (used by
