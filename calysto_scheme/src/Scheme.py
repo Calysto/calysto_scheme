@@ -1233,11 +1233,26 @@ def _jit_compile_proc(proc):
         tail_lines = jc.tail_stmts(body_list[-1], '    ')
         ps = ', '.join(jc._params)
         lines = ['def _jit_fn(' + ps + '):']
-        lines += stmt_lines
         if jc._used_loop:
+            # Non-tail statements must re-run on every logical call, i.e.
+            # every loop iteration -- not just the first -- since each
+            # iteration is a fresh (tail-)recursive call reusing this same
+            # Python frame (see README-PERFORMANCE.md's Phase 4 tail-loop
+            # flattening). Emitting them once, before the loop, silently
+            # skipped their side effects on every call after the first --
+            # see tests/test_jit_tail_loop_nontail_stmts.py.
             lines.append('    while True:')
+            if jc._frame_var is not None:
+                # Reset once per iteration/logical call -- see _lambda's
+                # docstring -- so a later call can't reuse a stale frame
+                # a previous iteration built.
+                lines.append('        ' + jc._frame_var + ' = None')
+            lines += ['    ' + ln for ln in stmt_lines]
             lines += ['    ' + ln for ln in tail_lines]
         else:
+            if jc._frame_var is not None:
+                lines.append('    ' + jc._frame_var + ' = None')
+            lines += stmt_lines
             lines += tail_lines
         fn_src = '\n'.join(lines)
         ns = dict(free)
@@ -1253,14 +1268,23 @@ def _jit_compile_proc(proc):
         _jit_cache.set(proc, (False, _binding_write_epoch))
         return None
 
-def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
+def _jit_make_frame(parent_env, outer_formals, outer_values):
+    """Reconstruct — from live values — the environment frame the
+    enclosing JIT'd function's own parameters would occupy under normal
+    (non-JIT) evaluation, chained onto its real captured environment
+    (parent_env). Split out from _jit_make_closure (which used to build
+    this itself, once per lambda_aexp) so _JitCompiler._lambda can build
+    it *once per logical call* and share it across every lambda_aexp
+    compiled from the same enclosing function body -- see _lambda's
+    docstring."""
+    return _extend_direct(parent_env, outer_formals, outer_values)
+
+def _jit_make_closure(formals, bodies, frame_env):
     """Materialize a genuine Scheme closure for a lambda_aexp encountered
-    inside JIT'd code, by reconstructing — from live values — the frame the
-    closure would have captured had the enclosing function been evaluated
-    normally instead of JIT-compiled. Reuses the same frame/closure builders
-    the rest of the direct-eval path uses, so the result is a completely
-    ordinary Scheme proc tuple."""
-    frame_env = _extend_direct(parent_env, outer_formals, outer_values)
+    inside JIT'd code, using a frame already reconstructed by
+    _jit_make_frame (shared across sibling lambda_aexps from the same
+    call -- see _lambda). Reuses the ordinary closure() constructor, so
+    the result is a completely normal Scheme proc tuple."""
     return closure(formals, bodies, frame_env)
 
 def _jit_call(op, args):
@@ -1319,6 +1343,8 @@ class _JitCompiler:
         self._free   = free
         self._used_loop = False   # set True if a self-recursive tail call was compiled
         self._const_count = 0     # counter for generated constant-capture names
+        self._frame_var = None    # local var name holding this call's reconstructed
+                                   # outer frame, once _lambda first needs one -- see _lambda
 
     def expr(self, exp):
         # Raw cons-cell field access throughout -- see the "canonical
@@ -1410,10 +1436,29 @@ class _JitCompiler:
         proc, independently eligible for its own JIT compilation later.
 
         Only safe when this function's own formals are a plain (non-variadic)
-        list matching self._params 1:1 — _jit_make_closure rebuilds the frame
+        list matching self._params 1:1 — the reconstructed frame is built
         positionally from self._params's live values, so a rest parameter
         (silently dropped from self._params — see _jit_compile_proc) would
         misalign the frame.
+
+        The frame itself is built at most *once per logical call* and
+        shared by every lambda_aexp compiled by this same _JitCompiler
+        instance (self._frame_var names the local Python variable holding
+        it, lazily initialized here via a walrus expression so it works
+        regardless of which lambda happens to run first across conditional
+        branches) -- matching normal (non-JIT) evaluation, where every
+        closure created during one call to the enclosing function is built
+        against the exact same environment frame, so mutating a variable
+        captured by one (via a set! inside a *different*, separately
+        analyzed inner closure -- this function's own body can't contain
+        set! at all, see _is_direct_eval_safe) is visible through any
+        sibling closure that also captured it. Building an independent
+        frame per lambda_aexp instead (the previous behavior) silently
+        broke that sharing -- see tests/test_jit_lambda_shared_frame.py.
+        _jit_compile_proc resets self._frame_var's variable to None once
+        per logical call (each while-loop iteration for a self-recursive
+        tail loop, or once for an ordinary call), so a later call doesn't
+        reuse a previous call's frame.
         """
         # _lambda runs once per closure at JIT-source-generation time
         # (result cached), so named constants are free here.
@@ -1425,12 +1470,18 @@ class _JitCompiler:
         if cur is not symbol_emptylist or count != len(self._params):
             raise _TrampolineFallback()
         self._free['_jit_make_closure'] = _jit_make_closure
+        self._free['_jit_make_frame'] = _jit_make_frame
+        if self._frame_var is None:
+            self._frame_var = '_jit_frame'
         fm = self._capture_const(formals)
         bd = self._capture_const(bodies)
         ce = self._capture_const(self._env)
         of = self._capture_const(self._self[_PROC_FORMALS])
         values = ", ".join(self._params)
-        return f'_jit_make_closure({fm}, {bd}, {ce}, {of}, [{values}])'
+        fv = self._frame_var
+        frame_expr = (f'({fv} if {fv} is not None else '
+                       f'({fv} := _jit_make_frame({ce}, {of}, [{values}])))')
+        return f'_jit_make_closure({fm}, {bd}, {frame_expr})'
 
     def _sym_name(self, op_exp):
         """Extract the Scheme symbol name from a lex-addr or var operator node."""
