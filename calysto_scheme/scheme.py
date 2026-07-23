@@ -44,7 +44,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 
 #############################################################
 # Python implementation notes:
@@ -2167,7 +2167,14 @@ def _apply_direct(proc, args, env):
         return dlr_apply(proc, List(*args))
     # Runs on every map/for-each element and every dlr callback, so
     # proc[1]=fn / proc[5]=safe / proc[2..4]=bodies,formals,cenv below
-    # stay bare literals -- see _PROC_* above make_proc.
+    # stay bare literals -- see _PROC_* above make_proc. proc[5] alone only
+    # proves THIS closure's own body has no set! -- it says nothing about
+    # whether everything it calls is safe to run without ever hitting
+    # _TrampolineFallback mid-body (a call to a closure that itself uses
+    # set!, for instance). apply_proc requires the full transitive
+    # _is_phase2_safe(proc) certification before it will ever start
+    # _eval_sequence_direct; this must too, for the same reason -- see
+    # tests/test_apply_direct_proc5_gap.py.
     if isinstance(proc, tuple) and proc[0] is symbol_procedure:
         fn = proc[1]
         if _fast_prim_map is None:
@@ -2175,7 +2182,7 @@ def _apply_direct(proc, args, env):
         direct = _fast_prim_map.get(fn)
         if direct is not None:
             return direct(args)      # args is a Python list — no cons needed
-        if len(proc) == 6 and fn is b_proc_1_d and proc[5]:
+        if len(proc) == 6 and fn is b_proc_1_d and proc[5] and _is_phase2_safe(proc):
             _check_call_arity(proc, args)
             bodies, formals, cenv = proc[2], proc[3], proc[4]
             new_env = extend(cenv, formals, List(*args), make_empty_docstrings(len(args)))
@@ -11484,7 +11491,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 2.1.3')
+    print('Calysto Scheme, version 2.1.4')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:

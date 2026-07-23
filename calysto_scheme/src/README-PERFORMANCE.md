@@ -805,6 +805,25 @@ all actually compiled, not merely ran fast by chance.
   becomes worth doing together with whatever eventually restores
   reachability (the call-site certification idea in Phase 8's notes),
   not in isolation.
+- **A separate `_apply_direct` issue, found and closed after Phase 8
+  shipped: its *safety* gate, not the JIT-compilation-attempt gap above.**
+  `apply_proc` only starts a live Phase-2 attempt after the full
+  `_is_phase2_safe(proc)` certification (Phase 8); `_apply_direct` used to
+  gate the same `_eval_sequence_direct` entry point with only `proc[5]`
+  (`_is_direct_eval_safe`) — a shallow, single-closure "no `set!` in this
+  body" check with no visibility into what the closure calls. A closure
+  with `proc[5]` true but `_is_phase2_safe` false (e.g. it calls a
+  *different* closure that itself uses `set!`) could get past that
+  weaker gate and start executing, only to hit `_TrampolineFallback`
+  partway through. Confirmed this was already unreachable via any real
+  program, for the identical transitive-poisoning reason as the
+  `map`/`for-each` unreachability just above — but it was a real gap in
+  `_apply_direct`'s own contract regardless, one a future JIT change
+  could have silently made reachable. Fixed by requiring
+  `_is_phase2_safe(proc)` in `_apply_direct` too, matching `apply_proc`
+  exactly. No behavior change for any currently-reachable path (the
+  path was dead code before and after); see
+  `tests/test_apply_direct_proc5_gap.py`.
 - Verified with the full test suite (8+ repeated runs) and targeted
   scripts combining this with Phase 5's closure support, checked against
   `_jit_cache` to confirm real compilation rather than a fast-by-luck
