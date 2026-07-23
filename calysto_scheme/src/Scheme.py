@@ -1544,6 +1544,20 @@ class _JitCompiler:
                         return '1'
                 elif n == 1 and sym == '-':
                     return f'(-{args[0]})'
+                elif sym == '+':
+                    # plus() folds from an explicit 0
+                    # (functools.reduce(operator.add, args, 0)), which the
+                    # classic dispatch and _fast_prim_map both go through
+                    # for this same call -- for ordinary numbers 0 + x ==
+                    # x, but IEEE-754 negative zero is the one case where
+                    # they differ (0.0 + -0.0 == 0.0, positive, while -0.0
+                    # alone stays negative). Matching the exact fold order
+                    # here (0 + a + b + ...) keeps JIT-inlined + identical
+                    # to plus() in that edge case instead of silently
+                    # flipping a sign bit -- confirmed this diverges
+                    # without the explicit 0 -- see
+                    # tests/test_jit_plus_negative_zero.py.
+                    return '(0 + ' + ' + '.join(args) + ')'
                 else:
                     return '(' + f' {op} '.join(args) + ')'
             # binary comparisons
