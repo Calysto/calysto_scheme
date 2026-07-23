@@ -2033,7 +2033,7 @@ _FAST_PRIM_SPECS = {
     'string->list':   _fast_prim_string_to_list,
     'list->string':   _fast_prim_list_to_string,
     'string->number': lambda args: string_to_number(args[0]),
-    'number->string': lambda args: number_to_string(args[0]),
+    'number->string': lambda args: number_to_string(args[0], args[1] if len(args) > 1 else 10),
     'string=?':       lambda args: string_is__q(args[0], args[1]),
     'string<?':       lambda args: stringLessThan_q(args[0], args[1]),
     # Symbol / char operations
@@ -2071,10 +2071,16 @@ _FAST_PRIM_ARITY = {
     '+': (0, None), '-': (1, None), '*': (0, None), '/': (0, None),
     '<': (2, None), '>': (2, None), '<=': (2, None), '>=': (2, None), '=': (2, None),
     'not': (1, 1),
-    'zero?': (1, None), 'even?': (1, 1), 'odd?': (1, 1), 'abs': (1, 1),
+    # zero?/expt were (1, None)/(2, None) -- too permissive, matching the
+    # classic dispatch's own former looseness (length-at-least?, not an
+    # exact check): a fast-prim call with extra args just silently
+    # ignored them (zero?'s wrapper only ever reads args[0]; expt's only
+    # args[0]/args[1]) instead of raising an arity error, on every path
+    # -- see tests/test_arity_tightening.py.
+    'zero?': (1, 1), 'even?': (1, 1), 'odd?': (1, 1), 'abs': (1, 1),
     'min': (1, None), 'max': (1, None),
     'modulo': (2, 2), 'remainder': (2, 2), 'quotient': (2, 2),
-    'expt': (2, None), 'sqrt': (1, 1),
+    'expt': (2, 2), 'sqrt': (1, 1),
     # 'round' deliberately absent -- see _fast_prim_round's own comment.
     'null?': (1, 1), 'pair?': (1, 1), 'number?': (1, 1), 'string?': (1, 1),
     'symbol?': (1, 1), 'char?': (1, 1), 'boolean?': (1, 1), 'vector?': (1, 1),
@@ -2086,12 +2092,14 @@ _FAST_PRIM_ARITY = {
     'cadar': (1, 1), 'caddr': (1, 1), 'cdddr': (1, 1), 'cadddr': (1, 1),
     'list': (0, None), 'length': (1, 1), 'reverse': (1, 1), 'append': (0, None),
     'list-ref': (2, 2),
-    'memq': (2, 2), 'memv': (2, None), 'member': (2, 2), 'assq': (2, 2), 'assv': (2, None),
+    # memv/assv were (2, None) -- same too-permissive pattern as zero?/
+    # expt above (their wrappers only ever read args[0]/args[1]).
+    'memq': (2, 2), 'memv': (2, 2), 'member': (2, 2), 'assq': (2, 2), 'assv': (2, 2),
     'make-vector': (1, 1), 'vector-ref': (2, 2), 'vector-set!': (3, 3),
     'vector-length': (1, 1), 'vector->list': (1, 1), 'list->vector': (1, 1),
     'string-length': (1, 1), 'string-ref': (2, 2), 'string-append': (2, None),
     'substring': (2, 3), 'string->list': (1, 1), 'list->string': (1, 1),
-    'string->number': (1, 1), 'number->string': (1, None),
+    'string->number': (1, 1), 'number->string': (1, 2),
     'string=?': (2, 2), 'string<?': (2, 2),
     'symbol->string': (1, 1), 'string->symbol': (1, 1),
     'char->integer': (1, 1), 'integer->char': (1, 1),
@@ -2509,8 +2517,28 @@ def char_to_integer(c):
 def integer_to_char(i):
     return make_char(chr(i))
 
-def number_to_string(number):
-    return str(number)
+## radix defaults to 10 (str(number), handling floats/fractions/complex/
+## anything else str() knows about) -- previously the only mode, silently
+## accepting but ignoring an explicit radix argument (see
+## tests/test_number_to_string_radix.py). A non-10 radix follows R7RS:
+## only defined for an exact integer, so anything else is a clean
+## _SchemeRuntimeError rather than a nonsensical string. '{:x}'.format(n)
+## (a str *method* call), not the bare format(n, 'x') builtin -- format
+## is shadowed module-wide by the Scheme-level ~s/~a formatter above.
+def number_to_string(number, radix=10):
+    if radix == 10:
+        return str(number)
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise _SchemeRuntimeError(
+            format("number->string: a radix other than 10 requires an exact integer, got ~s", number))
+    if radix == 2:
+        return '{:b}'.format(number)
+    if radix == 8:
+        return '{:o}'.format(number)
+    if radix == 16:
+        return '{:x}'.format(number)
+    raise _SchemeRuntimeError(
+        format("number->string: unsupported radix ~s (must be 2, 8, 10, or 16)", radix))
 
 def string_to_integer(s):
     return int(s)
@@ -5676,7 +5704,7 @@ def b_proc_6_d():
 
 def b_proc_7_d():
     global k_reg, msg_reg, pc, value1_reg, value2_reg
-    if (not(length_at_least_q(1, args_reg)) is not False):
+    if (not(length_exactly_q(1, args_reg)) is not False):
         msg_reg = "incorrect number of arguments to zero?"
         pc = runtime_error
     else:
@@ -5706,7 +5734,7 @@ def b_proc_10_d():
 
 def b_proc_11_d():
     global k_reg, msg_reg, pc, value1_reg, value2_reg
-    if (not(length_at_least_q(2, args_reg)) is not False):
+    if (not(length_exactly_q(2, args_reg)) is not False):
         msg_reg = "incorrect number of arguments to expt"
         pc = runtime_error
     else:
@@ -5938,18 +5966,18 @@ def b_proc_30_d():
 
 def b_proc_31_d():
     global k_reg, msg_reg, pc, value1_reg, value2_reg
-    if (not(length_at_least_q(1, args_reg)) is not False):
+    if (not(length_between_q(1, 2, args_reg)) is not False):
         msg_reg = "incorrect number of arguments to number->string"
         pc = runtime_error
     else:
         value2_reg = fail_reg
-        value1_reg = number_to_string((args_reg).car)
+        value1_reg = (number_to_string((args_reg).car, (args_reg).cdr.car) if length_at_least_q(2, args_reg) else number_to_string((args_reg).car))
         k_reg = k2_reg
         pc = apply_cont2
 
 def b_proc_32_d():
     global k_reg, msg_reg, pc, value1_reg, value2_reg
-    if (not(length_at_least_q(2, args_reg)) is not False):
+    if (not(length_exactly_q(2, args_reg)) is not False):
         msg_reg = "incorrect number of arguments to assv"
         pc = runtime_error
     else:
@@ -5960,7 +5988,7 @@ def b_proc_32_d():
 
 def b_proc_33_d():
     global k_reg, msg_reg, pc, value1_reg, value2_reg
-    if (not(length_at_least_q(2, args_reg)) is not False):
+    if (not(length_exactly_q(2, args_reg)) is not False):
         msg_reg = "incorrect number of arguments to memv"
         pc = runtime_error
     else:
@@ -10527,6 +10555,12 @@ def mu_trace_closure(name, formals, runt, bodies, env):
 
 def length_three_q(ls):
     return (not(((ls) is symbol_emptylist))) and (not((((ls).cdr) is symbol_emptylist))) and (not((((ls).cdr.cdr) is symbol_emptylist))) and ((((ls).cdr.cdr.cdr) is symbol_emptylist))
+
+def length_exactly_q(n, ls):
+    return (length_at_least_q(n, ls)) and (not(length_at_least_q((n) + (1), ls)))
+
+def length_between_q(lo, hi, ls):
+    return (length_at_least_q(lo, ls)) and (not(length_at_least_q((hi) + (1), ls)))
 
 def all_char_q(ls):
     return (((ls) is symbol_emptylist)) or ((char_q((ls).car)) and (all_char_q((ls).cdr)))

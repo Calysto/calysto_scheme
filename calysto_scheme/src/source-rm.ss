@@ -2805,7 +2805,7 @@
 
 (define <proc-7>
   (lambda ()
-    (if (not (length-at-least? 1 args_reg))
+    (if (not (length-exactly? 1 args_reg))
         (begin
           (set! msg_reg "incorrect number of arguments to zero?")
           (set! pc runtime-error))
@@ -2836,7 +2836,7 @@
 
 (define <proc-11>
   (lambda ()
-    (if (not (length-at-least? 2 args_reg))
+    (if (not (length-exactly? 2 args_reg))
         (begin
           (set! msg_reg "incorrect number of arguments to expt")
           (set! pc runtime-error))
@@ -3096,20 +3096,23 @@
 
 (define <proc-31>
   (lambda ()
-    (if (not (length-at-least? 1 args_reg))
+    (if (not (length-between? 1 2 args_reg))
         (begin
           (set! msg_reg
             "incorrect number of arguments to number->string")
           (set! pc runtime-error))
         (begin
           (set! value2_reg fail_reg)
-          (set! value1_reg (number->string (car args_reg)))
+          (set! value1_reg
+            (if (length-at-least? 2 args_reg)
+                (number->string (car args_reg) (cadr args_reg))
+                (number->string (car args_reg))))
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
 (define <proc-32>
   (lambda ()
-    (if (not (length-at-least? 2 args_reg))
+    (if (not (length-exactly? 2 args_reg))
         (begin
           (set! msg_reg "incorrect number of arguments to assv")
           (set! pc runtime-error))
@@ -3121,7 +3124,7 @@
 
 (define <proc-33>
   (lambda ()
-    (if (not (length-at-least? 2 args_reg))
+    (if (not (length-exactly? 2 args_reg))
         (begin
           (set! msg_reg "incorrect number of arguments to memv")
           (set! pc runtime-error))
@@ -8888,6 +8891,14 @@
         (if (or (null? ls) (not (pair? ls)))
             (return* #f)
             (return* (length-at-least? (- n 1) (cdr ls)))))))
+
+(define length-exactly?
+  (lambda (n ls)
+    (return* (and (length-at-least? n ls) (not (length-at-least? (+ n 1) ls))))))
+
+(define length-between?
+  (lambda (lo hi ls)
+    (return* (and (length-at-least? lo ls) (not (length-at-least? (+ hi 1) ls))))))
 
 (define all-numeric?
   (lambda (ls)
