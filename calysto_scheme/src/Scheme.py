@@ -1161,21 +1161,54 @@ def _jit_mangle(sym):
         s = '_' + s
     return '_j_' + s
 
-_jit_cache = _IdentityCache()   # proc -> compiled_fn or False
+_jit_cache = _IdentityCache()   # proc -> (compiled_fn-or-False, epoch)
 
 def _jit_lookup(proc):
     """Return the cached compiled function for proc, or None if not yet
-    compiled OR if a previous compile attempt failed -- a cached failure
-    is deliberately reported the same as "not yet attempted" (not a
-    permanent verdict), so a call site retries compilation on every call.
-    That retry cost is real (see README-PERFORMANCE.md's mutual-recursion
-    discussion) but preserved here unchanged from the prior implementation,
-    since collapsing it into a permanent failure cache is a behavior change,
-    not a refactor."""
-    value = _jit_cache.get(proc)
-    if value is _CACHE_MISS or value is False:
+    compiled, if a previous compile attempt failed, OR if it was compiled
+    before some binding a free-variable capture inside it depended on was
+    reassigned since (a stale snapshot).
+
+    _JitCompiler/_capture freeze every free variable's *value* into the
+    compiled function's Python closure once, at compile time -- an
+    already-JIT-compiled helper closure captured directly by its compiled
+    Python function, a primitive wrapped from _fast_prim_map, or a plain
+    scalar. Unlike Phase 2's _eval_direct, which re-resolves every name
+    fresh on every call, none of that ever gets re-checked once compiled:
+    a later (set! + something-else) or (set! limit 20) would leave any
+    already-compiled function silently using the original value forever,
+    exactly the residual risk _is_unshadowed_primitive's own docstring
+    already documents for the narrower case of inlined arithmetic/
+    comparison operators -- except unguarded here, for every OTHER kind of
+    capture (confirmed by reproducing it before this epoch check existed
+    -- see tests/test_jit_cache_invalidation.py).
+
+    Reuses _binding_write_epoch (see _phase2_safe_lookup's docstring for
+    the full reasoning -- set_binding_value_b bumps it on every existing-
+    binding mutation anywhere in the interpreter) rather than a separate
+    counter: one mutation invalidates both caches' stale entries in a
+    single cheap comparison, and there's no bookkeeping anywhere of which
+    specific names a given compile captured to invalidate more narrowly.
+    Costlier here than for _phase2_safe_cache -- a Phase 2 re-walk is
+    cheap, a JIT recompile is a real compile()/exec() -- but a stale
+    compile can only happen for a name that's actually still being
+    reassigned somewhere (via set!, so on the slow trampoline path: any
+    closure containing set! is excluded from Phase 2/JIT entirely by
+    _is_direct_eval_safe), never from inside the hot compiled loop itself.
+
+    A cached failure (fn is False) is, as before, always reported the
+    same as "not yet attempted" regardless of epoch (see
+    README-PERFORMANCE.md's mutual-recursion discussion) -- retried on
+    every call already, so there's nothing additional to invalidate."""
+    entry = _jit_cache.get(proc)
+    if entry is _CACHE_MISS:
         return None
-    return value
+    fn, epoch = entry
+    if fn is False:
+        return None
+    if epoch != _binding_write_epoch:
+        return None
+    return fn
 
 def _jit_compile_proc(proc):
     """Try to JIT-compile a safe Scheme closure.
@@ -1211,13 +1244,13 @@ def _jit_compile_proc(proc):
         ns['__builtins__'] = __builtins__
         exec(compile(fn_src, '<scheme-jit>', 'exec'), ns)
         fn = ns['_jit_fn']
-        _jit_cache.set(proc, fn)
+        _jit_cache.set(proc, (fn, _binding_write_epoch))
         return fn
     except _TrampolineFallback:
-        _jit_cache.set(proc, False)
+        _jit_cache.set(proc, (False, _binding_write_epoch))
         return None
     except Exception:
-        _jit_cache.set(proc, False)
+        _jit_cache.set(proc, (False, _binding_write_epoch))
         return None
 
 def _jit_make_closure(formals, bodies, parent_env, outer_formals, outer_values):
