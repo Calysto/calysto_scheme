@@ -93,6 +93,9 @@ class Translator(object):
             "sort-native", "sort-elements", "insert-elements",
             ## direct eval fast path (native in Scheme.py):
             "<proc-1>", "closure",
+            ## overridden to bump _binding_write_epoch on every existing-
+            ## binding mutation, for _phase2_safe_cache invalidation:
+            "set-binding-value!",
         ] + self.overrides()
 
     def overrides(self):

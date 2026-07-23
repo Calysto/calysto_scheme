@@ -647,7 +647,10 @@ def apply_proc():
         try:
             result = _eval_sequence_direct(bodies, new_env)
         except _TrampolineFallback:
-            _phase2_safe_cache.set(proc_reg, False)
+            # epoch=None: a genuine soundness gap observed by execution,
+            # not just a stale snapshot -- permanent, see
+            # _phase2_safe_lookup's docstring.
+            _phase2_safe_cache.set(proc_reg, (False, None))
             raise
         GLOBALS['value2_reg'] = _fail
         GLOBALS['value1_reg'] = result
@@ -776,12 +779,68 @@ class _IdentityCache:
     def set(self, key, value):
         self._entries[id(key)] = (key, value)
 
-_phase2_safe_cache = _IdentityCache()   # proc -> True/False
+## _binding_write_epoch / set_binding_value_b: see _phase2_safe_lookup's
+## docstring for why this exists. set_binding_value_b is normally
+## generated from source-rm.ss's `set-binding-value!` (just `(set-car!
+## binding value)`) -- overridden here (added to translate_rm.py's
+## to_ignore list) so it can bump a counter, since it is the one place
+## every existing-binding mutation in the whole interpreter funnels
+## through: (set! ...), a top-level (define ...) that overwrites an
+## already-bound name, and amb/choose's own undo-on-backtrack. Bumping
+## unconditionally on all of these (rather than only "the ones that
+## matter") is deliberate -- see _phase2_safe_lookup.
+_binding_write_epoch = 0
+
+def set_binding_value_b(binding, value):
+    global _binding_write_epoch
+    _binding_write_epoch += 1
+    set_car_b(binding, value)
+
+_phase2_safe_cache = _IdentityCache()   # proc -> (verdict, epoch-or-None)
 
 def _phase2_safe_lookup(proc):
-    """Return the cached verdict for proc, or None if not yet computed."""
-    value = _phase2_safe_cache.get(proc)
-    return None if value is _CACHE_MISS else value
+    """Return the cached verdict for proc, or None if not yet computed --
+    or if it was computed before some binding it depended on was
+    reassigned since (a stale snapshot; see below).
+
+    _is_phase2_safe's certification resolves names (e.g. an operator like
+    `+` in _phase2_safe_walk_call) against the live environment once, then
+    caches the resulting verdict by proc identity forever. That's a
+    snapshot: a later (set! + something-not-fast-prim-safe) can make an
+    already-cached "safe" verdict wrong in retrospect, without anything
+    about `proc` itself changing. Left unchecked, apply_proc would still
+    trust the stale verdict, start a live Phase-2 attempt, and hit
+    exactly the "soundness gap" scenario _is_phase2_safe's own docstring
+    warns about -- except the gap isn't a bug in the analysis, just a
+    snapshot gone stale, and apply_proc has no way to tell the difference:
+    either way it treats the mid-body _TrampolineFallback as unrecoverable
+    and propagates a loud, internal-looking error instead of running the
+    closure correctly (confirmed by reproducing it before this epoch
+    check existed -- see tests/test_phase2_safe_cache_invalidation.py).
+
+    Coarse-grained on purpose: ANY binding write anywhere invalidates
+    every cached verdict, not just ones that actually depended on what
+    changed, because a cached verdict doesn't record which specific names
+    it resolved during certification -- there's nothing narrower to
+    compare against without adding that bookkeeping. Correct, and cheap
+    (one integer compare per lookup); a wrongly-invalidated entry only
+    costs a re-walk, and since any closure containing a set! is already
+    excluded from Phase 2 entirely by _is_direct_eval_safe, an epoch bump
+    can only happen alongside a call that was already on the slow
+    (trampoline) path, never inside a Phase-2/JIT hot loop itself.
+
+    epoch is None for apply_proc's own "genuine soundness gap" verdict
+    (a mismatch observed directly by execution, not just a snapshot risk)
+    -- permanent, and deliberately exempt from this staleness check, so
+    an unrelated later write can't un-blacklist a proc already proven to
+    have a real bug in its certification."""
+    entry = _phase2_safe_cache.get(proc)
+    if entry is _CACHE_MISS:
+        return None
+    verdict, epoch = entry
+    if epoch is not None and epoch != _binding_write_epoch:
+        return None
+    return verdict
 
 def _is_phase2_safe(proc, _visiting=None):
     """Conservatively certify that invoking `proc` via apply_proc's Phase-2
@@ -851,7 +910,7 @@ def _is_phase2_safe(proc, _visiting=None):
     finally:
         _visiting.discard(pid)
     if outermost:
-        _phase2_safe_cache.set(proc, safe)
+        _phase2_safe_cache.set(proc, (safe, _binding_write_epoch))
     return safe
 
 def _phase2_safe_walk_seq(bodies, env, visiting):
@@ -8683,9 +8742,6 @@ def binding_value(binding):
 
 def binding_docstring(binding):
     return (binding).cdr
-
-def set_binding_value_b(binding, value):
-    set_car_b(binding, value)
 
 def set_binding_docstring_b(binding, docstring):
     set_cdr_b(binding, docstring)
