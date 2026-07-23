@@ -2425,25 +2425,65 @@ def divide(*args):
     except:
         return functools.reduce(operator.truediv, args)
 
-def numeric_equal(o1, o2):
-    return o1 == o2
+## N-ary chained comparison (a < b < c < ..., not just pairwise), matching
+## _fast_prim_numeric_equal's own already-correct pattern for `=`. The
+## classic dispatch's own arity check (b_proc_95_d..b_proc_99_d in the
+## generated scheme.py) already only requires "at least 2" args -- the
+## bug was these being fixed 2-parameter functions, so e.g.
+## Apply(LessThan, args_reg) crashed with a raw Python TypeError the
+## moment the arity check let 3+ args through. `=` had this same crash
+## in the classic dispatch (Apply(numeric_equal, args_reg)) despite
+## _fast_prim_numeric_equal already handling N-ary correctly on the
+## Phase 2/JIT path, meaning (= a b c) silently gave a correct answer or
+## crashed depending on invisible internal state (whether the calling
+## closure happened to be Phase-2-certified) -- see
+## tests/test_nary_comparisons.py.
+##
+## `a, b, *rest` (not a single `*args`) rather than the more obvious
+## `all(args[i] OP args[i+1] for i in range(len(args)-1))` on the whole
+## tuple: measured ~1.5x overhead for the overwhelmingly common 2-arg
+## case with this shape, vs. ~5x with the single-*args version -- these
+## are also used in hot internal bookkeeping (e.g. numeric_equal in
+## b_proc_1_d's own per-call arity check, on every classic-trampoline
+## function call; not on the Phase 2/JIT hot path, which uses
+## _check_call_arity's own plain integer comparison instead), so the
+## fast path for the by-far-most-common 2-arg call matters. The N-ary
+## case (`rest` non-empty) only ever happens for an actual N-ary Scheme
+## call and pays the tuple-rebuild + loop cost once, not per comparison.
+def numeric_equal(o1, o2, *rest):
+    if not rest:
+        return o1 == o2
+    args = (o1, o2) + rest
+    return all(args[i] == args[i + 1] for i in range(len(args) - 1))
 
 def equal_q(o1, o2):
     if boolean_q(o1) or boolean_q(o2):
         return boolean_q(o1) and boolean_q(o2) and o1 is o2
     return o1 == o2
 
-def LessThan(a, b):
-    return a < b
+def LessThan(a, b, *rest):
+    if not rest:
+        return a < b
+    args = (a, b) + rest
+    return all(args[i] < args[i + 1] for i in range(len(args) - 1))
 
-def LessThanEqual(a, b):
-    return a <= b
+def LessThanEqual(a, b, *rest):
+    if not rest:
+        return a <= b
+    args = (a, b) + rest
+    return all(args[i] <= args[i + 1] for i in range(len(args) - 1))
 
-def GreaterThanEqual(a, b):
-    return a >= b
+def GreaterThanEqual(a, b, *rest):
+    if not rest:
+        return a >= b
+    args = (a, b) + rest
+    return all(args[i] >= args[i + 1] for i in range(len(args) - 1))
 
-def GreaterThan(a, b):
-    return a > b
+def GreaterThan(a, b, *rest):
+    if not rest:
+        return a > b
+    args = (a, b) + rest
+    return all(args[i] > args[i + 1] for i in range(len(args) - 1))
 
 def memq(item, lyst):
     current = lyst
