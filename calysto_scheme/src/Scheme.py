@@ -36,7 +36,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.5"
+__version__ = "2.1.6"
 
 #############################################################
 # Python implementation notes:
@@ -590,8 +590,14 @@ def apply_handler2():
 def apply_proc():
     # proc_reg[1]=fn, [5]=safe; [2..4]=bodies/formals/cenv below.
     # See _PROC_* constants above make_proc (bare literals here on purpose).
+    # _staruse_jit_star (Scheme-level *use-jit*, default #t) is a live
+    # runtime toggle, checked here rather than folded into
+    # _is_phase2_safe/_phase2_safe_cache -- caching a False verdict while
+    # the flag happened to be off would wrongly keep this proc off
+    # Phase 2 forever, even after the flag is switched back on.
     if (isinstance(proc_reg, tuple) and len(proc_reg) == 6
             and proc_reg[1] is b_proc_1_d and proc_reg[5]
+            and _staruse_jit_star
             and _is_phase2_safe(proc_reg)):
         bodies, formals, cenv = proc_reg[2], proc_reg[3], proc_reg[4]
         _args = args_reg
@@ -1305,7 +1311,9 @@ def _jit_call(op, args):
     # _PROC_* above make_proc.
     if isinstance(op, tuple) and op[0] is symbol_procedure:
         fn = op[1]
-        if len(op) == 6 and fn is b_proc_1_d and op[5]:
+        # _staruse_jit_star: see apply_proc's comment. Falls through to
+        # _apply_direct below when off, which is gated the same way.
+        if len(op) == 6 and fn is b_proc_1_d and op[5] and _staruse_jit_star:
             _check_call_arity(op, args)
             # Mirror _eval_direct's app_aexp dispatch: give this proc a
             # chance to JIT-compile instead of always falling to Phase 2
@@ -2180,7 +2188,10 @@ def _apply_direct(proc, args, env):
         direct = _fast_prim_map.get(fn)
         if direct is not None:
             return direct(args)      # args is a Python list — no cons needed
-        if len(proc) == 6 and fn is b_proc_1_d and proc[5] and _is_phase2_safe(proc):
+        # See apply_proc's comment on _staruse_jit_star for why this is a
+        # separate live check rather than folded into _is_phase2_safe.
+        if (len(proc) == 6 and fn is b_proc_1_d and proc[5]
+                and _staruse_jit_star and _is_phase2_safe(proc)):
             _check_call_arity(proc, args)
             bodies, formals, cenv = proc[2], proc[3], proc[4]
             new_env = extend(cenv, formals, List(*args), make_empty_docstrings(len(args)))

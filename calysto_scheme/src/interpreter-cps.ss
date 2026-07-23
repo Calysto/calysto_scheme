@@ -386,6 +386,24 @@
   (lambda (value)
     (set! *use-stack-trace* (true? value))))
 
+;; Default on: *use-jit* gates entry into Phase 2/JIT (apply_proc,
+;; _apply_direct, _jit_call in Scheme.py) -- a closure containing set!
+;; is excluded from Phase 2/JIT regardless of this flag (see
+;; calysto_scheme/src/README-PERFORMANCE.md's "Abandoned: set! support
+;; in Phase 2/JIT" section); this flag instead lets everything else
+;; (naive/tail recursion, closures, HOF, map, ...) be forced onto the
+;; same always-correct trampoline path too, e.g. for debugging or
+;; profiling the slow path. Turn it back off with (use-jit #f).
+(define *use-jit* #t)
+
+(define get-use-jit
+  (lambda ()
+    *use-jit*))
+
+(define set-use-jit!
+  (lambda (value)
+    (set! *use-jit* (true? value))))
+
 (define initialize-stack-trace!
   (lambda ()
     (set-car! *stack-trace* '())))
@@ -1012,6 +1030,20 @@
       ((or (null? ls) (not (pair? ls))) #f)
       (else (length-at-least? (- n 1) (cdr ls))))))
 
+;; zero?, expt, memv, and assv used to accept (and silently discard) extra
+;; arguments because length-at-least? only checks a lower bound -- see
+;; tests/test_arity_tightening.py. length-exactly?/length-between? give an
+;; exact/ranged check for primitives (zero?, expt, memv, assv,
+;; number->string) whose implementation only ever reads a fixed number of
+;; args.
+(define length-exactly?
+  (lambda (n ls)
+    (and (length-at-least? n ls) (not (length-at-least? (+ n 1) ls)))))
+
+(define length-between?
+  (lambda (lo hi ls)
+    (and (length-at-least? lo ls) (not (length-at-least? (+ hi 1) ls)))))
+
 (define all-numeric?
   (lambda (ls)
     (or (null? ls)
@@ -1043,7 +1075,7 @@
 (define zero?-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
-      ((not (length-at-least? 1 args))
+      ((not (length-exactly? 1 args))
        (runtime-error "incorrect number of arguments to zero?" info handler fail))
       (else (k2 (= (car args) 0) fail)))))
 
@@ -1066,7 +1098,7 @@
 (define expt-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
-      ((not (length-at-least? 2 args))
+      ((not (length-exactly? 2 args))
        (runtime-error "incorrect number of arguments to expt" info handler fail))
       (else (k2 (expt-native (car args) (cadr args)) fail)))))
 
@@ -1265,11 +1297,15 @@
 
 ;; number->string
 (define number->string-prim
-  ;; given a number, returns those digits as a string
+  ;; given a number, returns those digits as a string; an optional second
+  ;; arg is a radix (2/8/10/16 -- see number_to_string in Scheme.py, which
+  ;; this calls into with 1 or 2 args)
   (lambda-proc (args env2 info handler fail k2)
     (cond
-      ((not (length-at-least? 1 args))
+      ((not (length-between? 1 2 args))
        (runtime-error "incorrect number of arguments to number->string" info handler fail))
+      ((length-at-least? 2 args)
+       (k2 (number->string (car args) (cadr args)) fail))
       (else (k2 (number->string (car args)) fail)))))
 
 ;; assv
@@ -1277,14 +1313,14 @@
   ;; given 'a '((b 1) (a 2)) returns (a 2)
   (lambda-proc (args env2 info handler fail k2)
     (cond
-      ((not (length-at-least? 2 args))
+      ((not (length-exactly? 2 args))
        (runtime-error "incorrect number of arguments to assv" info handler fail))
       (else (k2 (assv (car args) (cadr args)) fail)))))
 ;; memv
 (define memv-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
-      ((not (length-at-least? 2 args))
+      ((not (length-exactly? 2 args))
        (runtime-error "incorrect number of arguments to memv" info handler fail))
       (else (k2 (memv (car args) (cadr args)) fail)))))
 
@@ -2638,6 +2674,18 @@
       (else
        (runtime-error "use-stack-trace requires exactly one boolean or nothing" info handler fail)))))
 
+(define use-jit-prim
+  (lambda-proc (args env2 info handler fail k2)
+    (cond
+      ((and (length-one? args) (boolean? (car args)))
+       (begin
+	 (set-use-jit! (car args))
+	 (k2 void-value fail)))
+      ((null? args)
+       (k2 *use-jit* fail))
+      (else
+       (runtime-error "use-jit requires exactly one boolean or nothing" info handler fail)))))
+
 (define use-tracing-prim
   (lambda-proc (args env2 info handler fail k2)
     (cond
@@ -3092,6 +3140,7 @@
 	    (list 'unbox unbox-prim "(unbox BOX): return the contents of BOX")
 	    (list 'unparse unparse-prim "(unparse AST): ")
 	    (list 'unparse-procedure unparse-procedure-prim "(unparse-procedure ...): ")  ;; unparse should be in CPS
+	    (list 'use-jit use-jit-prim "(use-jit [BOOLEAN]): get Phase-2/JIT usage setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-lexical-address use-lexical-address-prim "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
 	    (list 'use-stack-trace use-stack-trace-prim "(use-stack-trace BOOLEAN): set stack-trace usage on/off")
 	    (list 'use-tracing use-tracing-prim "(use-tracing [BOOLEAN]): get tracing setting, or set it on/off if BOOLEAN is given")

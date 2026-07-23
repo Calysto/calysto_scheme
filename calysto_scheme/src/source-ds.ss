@@ -2612,7 +2612,7 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((not (length-at-least? 1 args))
+        ((not (length-exactly? 1 args))
          (runtime-error
            "incorrect number of arguments to zero?"
            info
@@ -2640,7 +2640,7 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((not (length-at-least? 2 args))
+        ((not (length-exactly? 2 args))
          (runtime-error
            "incorrect number of arguments to expt"
            info
@@ -2916,11 +2916,16 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((not (length-at-least? 1 args))
+        ((not (length-between? 1 2 args))
          (runtime-error
            "incorrect number of arguments to number->string"
            info
            handler
+           fail))
+        ((length-at-least? 2 args)
+         (apply-cont2
+           k2
+           (number->string (car args) (cadr args))
            fail))
         (else (apply-cont2 k2 (number->string (car args)) fail))))))
 
@@ -2929,7 +2934,7 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((not (length-at-least? 2 args))
+        ((not (length-exactly? 2 args))
          (runtime-error
            "incorrect number of arguments to assv"
            info
@@ -2943,7 +2948,7 @@
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
-        ((not (length-at-least? 2 args))
+        ((not (length-exactly? 2 args))
          (runtime-error
            "incorrect number of arguments to memv"
            info
@@ -4685,6 +4690,23 @@
       (cond
         ((and (length-one? args) (boolean? (car args)))
          (begin
+           (set-use-jit! (car args))
+           (apply-cont2 k2 void-value fail)))
+        ((null? args) (apply-cont2 k2 *use-jit* fail))
+        (else
+         (runtime-error
+           "use-jit requires exactly one boolean or nothing"
+           info
+           handler
+           fail))))))
+
+(define+
+  <proc-154>
+  (lambda (args env2 info handler fail k2 fields)
+    (let ()
+      (cond
+        ((and (length-one? args) (boolean? (car args)))
+         (begin
            (set! *tracing-on?* (true? (car args)))
            (apply-cont2 k2 void-value fail)))
         ((null? args) (apply-cont2 k2 *tracing-on?* fail))
@@ -4696,7 +4718,7 @@
            fail))))))
 
 (define+
-  <proc-154>
+  <proc-155>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4709,7 +4731,7 @@
         (else (apply-cont2 k2 (apply eqv? args) fail))))))
 
 (define+
-  <proc-155>
+  <proc-156>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4722,7 +4744,7 @@
         (else (apply-cont2 k2 (apply vector? args) fail))))))
 
 (define+
-  <proc-156>
+  <proc-157>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4735,7 +4757,7 @@
         (else (apply-cont2 k2 (apply atom? args) fail))))))
 
 (define+
-  <proc-157>
+  <proc-158>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4748,41 +4770,41 @@
         (else (apply-cont2 k2 (apply iter? args) fail))))))
 
 (define+
-  <proc-158>
+  <proc-159>
   (lambda (args env2 info handler fail k2 fields)
     (let () (apply-cont2 k2 (apply getitem-native args) fail))))
 
 (define+
-  <proc-159>
+  <proc-160>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (apply setitem-native args)
       (apply-cont2 k2 void-value fail))))
 
 (define+
-  <proc-160>
+  <proc-161>
   (lambda (args env2 info handler fail k2 fields)
     (let () (apply-cont2 k2 (apply hasitem-native args) fail))))
 
 (define+
-  <proc-161>
+  <proc-162>
   (lambda (args env2 info handler fail k2 fields)
     (let () (apply-cont2 k2 (apply getattr-native args) fail))))
 
 (define+
-  <proc-162>
+  <proc-163>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (apply setattr-native args)
       (apply-cont2 k2 void-value fail))))
 
 (define+
-  <proc-163>
+  <proc-164>
   (lambda (args env2 info handler fail k2 fields)
     (let () (apply-cont2 k2 (apply hasattr-native args) fail))))
 
 (define+
-  <proc-164>
+  <proc-165>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4795,7 +4817,7 @@
         (else (apply-cont2 k2 (apply list? args) fail))))))
 
 (define+
-  <proc-165>
+  <proc-166>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4809,7 +4831,7 @@
          (apply-cont2 k2 (procedure-object? (car args)) fail))))))
 
 (define+
-  <proc-166>
+  <proc-167>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4822,7 +4844,7 @@
         (else (apply-cont2 k2 (apply string<? args) fail))))))
 
 (define+
-  <proc-167>
+  <proc-168>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4835,7 +4857,7 @@
         (else (apply-cont2 k2 (apply float args) fail))))))
 
 (define+
-  <proc-168>
+  <proc-169>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4848,7 +4870,7 @@
         (else (apply-cont2 k2 (apply globals args) fail))))))
 
 (define+
-  <proc-169>
+  <proc-170>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4862,7 +4884,7 @@
          (apply-cont2 k2 (apply truncate-to-integer args) fail))))))
 
 (define+
-  <proc-170>
+  <proc-171>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4875,7 +4897,7 @@
         (else (apply-cont2 k2 (apply assq args) fail))))))
 
 (define+
-  <proc-171>
+  <proc-172>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4886,7 +4908,7 @@
            (make-cont2 <cont2-119> k2)))))))
 
 (define+
-  <proc-172>
+  <proc-173>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4899,7 +4921,7 @@
         (else (apply-cont2 k2 (apply property args) fail))))))
 
 (define+
-  <proc-173>
+  <proc-174>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4912,7 +4934,7 @@
         (else (apply-cont2 k2 (apply / args) fail))))))
 
 (define+
-  <proc-174>
+  <proc-175>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4926,7 +4948,7 @@
          (apply-cont2 k2 (apply reset-toplevel-env args) fail))))))
 
 (define+
-  <proc-175>
+  <proc-176>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4939,7 +4961,7 @@
         (else (sort-native args env2 info handler fail k2))))))
 
 (define+
-  <proc-176>
+  <proc-177>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4952,7 +4974,7 @@
         (else (apply-cont2 k2 (apply string-append args) fail))))))
 
 (define+
-  <proc-177>
+  <proc-178>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4965,7 +4987,7 @@
         (else (apply-cont2 k2 (apply string-split args) fail))))))
 
 (define+
-  <proc-178>
+  <proc-179>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (cond
@@ -4978,24 +5000,24 @@
         (else (apply-cont2 k2 (apply type args) fail))))))
 
 (define+
-  <proc-179>
+  <proc-180>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (apply-cont2 k2 (apply use-lexical-address args) fail))))
 
 (define+
-  <proc-180>
+  <proc-181>
   (lambda (args env2 info handler fail k2 fields)
     (let () (apply-cont2 k2 (host-environment-native) fail))))
 
 (define+
-  <proc-181>
+  <proc-182>
   (lambda (args env2 info handler fail k2 fields)
     (let ()
       (apply-cont2 k2 (get-exception-message (car args)) fail))))
 
 (define+
-  <proc-182>
+  <proc-183>
   (lambda (args env2 info handler fail k2 fields)
     (let ((external-function-object (car fields)))
       (apply-cont2
@@ -7261,6 +7283,11 @@
 (define set-use-stack-trace!
   (lambda (value) (set! *use-stack-trace* (true? value))))
 
+(define get-use-jit (lambda () *use-jit*))
+
+(define set-use-jit!
+  (lambda (value) (set! *use-jit* (true? value))))
+
 (define initialize-stack-trace!
   (lambda () (set-car! *stack-trace* '())))
 
@@ -7729,6 +7756,16 @@
       ((< n 1) #t)
       ((or (null? ls) (not (pair? ls))) #f)
       (else (length-at-least? (- n 1) (cdr ls))))))
+
+(define length-exactly?
+  (lambda (n ls)
+    (and (length-at-least? n ls)
+         (not (length-at-least? (+ n 1) ls)))))
+
+(define length-between?
+  (lambda (lo hi ls)
+    (and (length-at-least? lo ls)
+         (not (length-at-least? (+ hi 1) ls)))))
 
 (define all-numeric?
   (lambda (ls)
@@ -8752,6 +8789,10 @@
                          unparse-procedure-prim
                          "(unparse-procedure ...): ")
                        (list
+                         'use-jit
+                         use-jit-prim
+                         "(use-jit [BOOLEAN]): get Phase-2/JIT usage setting, or set it on/off if BOOLEAN is given")
+                       (list
                          'use-lexical-address
                          use-lexical-address-prim
                          "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
@@ -8807,7 +8848,7 @@
 
 (define make-external-proc
   (lambda (external-function-object)
-    (make-proc <proc-182> external-function-object)))
+    (make-proc <proc-183> external-function-object)))
 
 (define process-formals-and-args
   (lambda (params args info handler fail)
@@ -9268,6 +9309,8 @@
 
 (define *use-stack-trace* #f)
 
+(define *use-jit* #t)
+
 (define-native
   make-safe-continuation
   (lambda (k)
@@ -9602,61 +9645,63 @@
 
 (define use-stack-trace-prim (make-proc <proc-152>))
 
-(define use-tracing-prim (make-proc <proc-153>))
+(define use-jit-prim (make-proc <proc-153>))
 
-(define eqv?-prim (make-proc <proc-154>))
+(define use-tracing-prim (make-proc <proc-154>))
 
-(define vector?-prim (make-proc <proc-155>))
+(define eqv?-prim (make-proc <proc-155>))
 
-(define atom?-prim (make-proc <proc-156>))
+(define vector?-prim (make-proc <proc-156>))
 
-(define iter?-prim (make-proc <proc-157>))
+(define atom?-prim (make-proc <proc-157>))
 
-(define getitem-prim (make-proc <proc-158>))
+(define iter?-prim (make-proc <proc-158>))
 
-(define setitem-prim (make-proc <proc-159>))
+(define getitem-prim (make-proc <proc-159>))
 
-(define hasitem-prim (make-proc <proc-160>))
+(define setitem-prim (make-proc <proc-160>))
 
-(define getattr-prim (make-proc <proc-161>))
+(define hasitem-prim (make-proc <proc-161>))
 
-(define setattr-prim (make-proc <proc-162>))
+(define getattr-prim (make-proc <proc-162>))
 
-(define hasattr-prim (make-proc <proc-163>))
+(define setattr-prim (make-proc <proc-163>))
 
-(define list?-prim (make-proc <proc-164>))
+(define hasattr-prim (make-proc <proc-164>))
 
-(define procedure?-prim (make-proc <proc-165>))
+(define list?-prim (make-proc <proc-165>))
 
-(define string<?-prim (make-proc <proc-166>))
+(define procedure?-prim (make-proc <proc-166>))
 
-(define float-prim (make-proc <proc-167>))
+(define string<?-prim (make-proc <proc-167>))
 
-(define globals-prim (make-proc <proc-168>))
+(define float-prim (make-proc <proc-168>))
 
-(define int-prim (make-proc <proc-169>))
+(define globals-prim (make-proc <proc-169>))
+
+(define int-prim (make-proc <proc-170>))
 
 (define-native
   truncate-to-integer
   (lambda (x) (inexact->exact (truncate x))))
 
-(define assq-prim (make-proc <proc-170>))
+(define assq-prim (make-proc <proc-171>))
 
-(define dict-prim (make-proc <proc-171>))
+(define dict-prim (make-proc <proc-172>))
 
-(define property-prim (make-proc <proc-172>))
+(define property-prim (make-proc <proc-173>))
 
-(define rational-prim (make-proc <proc-173>))
+(define rational-prim (make-proc <proc-174>))
 
-(define reset-toplevel-env-prim (make-proc <proc-174>))
+(define reset-toplevel-env-prim (make-proc <proc-175>))
 
-(define sort-prim (make-proc <proc-175>))
+(define sort-prim (make-proc <proc-176>))
 
-(define string-append-prim (make-proc <proc-176>))
+(define string-append-prim (make-proc <proc-177>))
 
-(define string-split-prim (make-proc <proc-177>))
+(define string-split-prim (make-proc <proc-178>))
 
-(define typeof-prim (make-proc <proc-178>))
+(define typeof-prim (make-proc <proc-179>))
 
 (define-native
   type
@@ -9676,13 +9721,13 @@
       ((box? x) '<type:box>)
       (else '<type:unknown>))))
 
-(define use-lexical-address-prim (make-proc <proc-179>))
+(define use-lexical-address-prim (make-proc <proc-180>))
 
 (define-native host-environment-native (lambda () "scheme"))
 
-(define host-environment-prim (make-proc <proc-180>))
+(define host-environment-prim (make-proc <proc-181>))
 
-(define get-exception-message-prim (make-proc <proc-181>))
+(define get-exception-message-prim (make-proc <proc-182>))
 
 (define-native
   make-initial-env-extended

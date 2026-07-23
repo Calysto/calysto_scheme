@@ -3101,14 +3101,18 @@
           (set! msg_reg
             "incorrect number of arguments to number->string")
           (set! pc runtime-error))
-        (begin
-          (set! value2_reg fail_reg)
-          (set! value1_reg
-            (if (length-at-least? 2 args_reg)
-                (number->string (car args_reg) (cadr args_reg))
-                (number->string (car args_reg))))
-          (set! k_reg k2_reg)
-          (set! pc apply-cont2)))))
+        (if (length-at-least? 2 args_reg)
+            (begin
+              (set! value2_reg fail_reg)
+              (set! value1_reg
+                (number->string (car args_reg) (cadr args_reg)))
+              (set! k_reg k2_reg)
+              (set! pc apply-cont2))
+            (begin
+              (set! value2_reg fail_reg)
+              (set! value1_reg (number->string (car args_reg)))
+              (set! k_reg k2_reg)
+              (set! pc apply-cont2))))))
 
 (define <proc-32>
   (lambda ()
@@ -4778,6 +4782,26 @@
   (lambda ()
     (if (and (length-one? args_reg) (boolean? (car args_reg)))
         (begin
+          (set-use-jit! (car args_reg))
+          (set! value2_reg fail_reg)
+          (set! value1_reg void-value)
+          (set! k_reg k2_reg)
+          (set! pc apply-cont2))
+        (if (null? args_reg)
+            (begin
+              (set! value2_reg fail_reg)
+              (set! value1_reg *use-jit*)
+              (set! k_reg k2_reg)
+              (set! pc apply-cont2))
+            (begin
+              (set! msg_reg
+                "use-jit requires exactly one boolean or nothing")
+              (set! pc runtime-error))))))
+
+(define <proc-154>
+  (lambda ()
+    (if (and (length-one? args_reg) (boolean? (car args_reg)))
+        (begin
           (set! *tracing-on?* (true? (car args_reg)))
           (set! value2_reg fail_reg)
           (set! value1_reg void-value)
@@ -4794,7 +4818,7 @@
                 "use-tracing requires exactly one boolean or nothing")
               (set! pc runtime-error))))))
 
-(define <proc-154>
+(define <proc-155>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -4806,7 +4830,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-155>
+(define <proc-156>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4818,7 +4842,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-156>
+(define <proc-157>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4830,7 +4854,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-157>
+(define <proc-158>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4842,14 +4866,14 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-158>
+(define <proc-159>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (apply getitem-native args_reg))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-159>
+(define <proc-160>
   (lambda ()
     (apply setitem-native args_reg)
     (set! value2_reg fail_reg)
@@ -4857,21 +4881,21 @@
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-160>
+(define <proc-161>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (apply hasitem-native args_reg))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-161>
+(define <proc-162>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (apply getattr-native args_reg))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-162>
+(define <proc-163>
   (lambda ()
     (apply setattr-native args_reg)
     (set! value2_reg fail_reg)
@@ -4879,14 +4903,14 @@
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-163>
+(define <proc-164>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (apply hasattr-native args_reg))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-164>
+(define <proc-165>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4898,7 +4922,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-165>
+(define <proc-166>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4910,7 +4934,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-166>
+(define <proc-167>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -4922,7 +4946,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-167>
+(define <proc-168>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4934,7 +4958,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-168>
+(define <proc-169>
   (lambda ()
     (if (not (null? args_reg))
         (begin
@@ -4946,7 +4970,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-169>
+(define <proc-170>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -4958,7 +4982,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-170>
+(define <proc-171>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -4970,7 +4994,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-171>
+(define <proc-172>
   (lambda ()
     (if (null? args_reg)
         (begin
@@ -4983,7 +5007,7 @@
           (set! associations_reg (car args_reg))
           (set! pc make-dict-tuples)))))
 
-(define <proc-172>
+(define <proc-173>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -4995,7 +5019,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-173>
+(define <proc-174>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -5007,7 +5031,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-174>
+(define <proc-175>
   (lambda ()
     (if (not (null? args_reg))
         (begin
@@ -5020,7 +5044,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-175>
+(define <proc-176>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -5028,7 +5052,7 @@
           (set! pc runtime-error))
         (set! pc sort-native))))
 
-(define <proc-176>
+(define <proc-177>
   (lambda ()
     (if (not (length-at-least? 2 args_reg))
         (begin
@@ -5041,7 +5065,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-177>
+(define <proc-178>
   (lambda ()
     (if (not (length-two? args_reg))
         (begin
@@ -5054,7 +5078,7 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-178>
+(define <proc-179>
   (lambda ()
     (if (not (length-one? args_reg))
         (begin
@@ -5066,28 +5090,28 @@
           (set! k_reg k2_reg)
           (set! pc apply-cont2)))))
 
-(define <proc-179>
+(define <proc-180>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (apply use-lexical-address args_reg))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-180>
+(define <proc-181>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (host-environment-native))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-181>
+(define <proc-182>
   (lambda ()
     (set! value2_reg fail_reg)
     (set! value1_reg (get-exception-message (car args_reg)))
     (set! k_reg k2_reg)
     (set! pc apply-cont2)))
 
-(define <proc-182>
+(define <proc-183>
   (lambda (external-function-object)
     (set! value2_reg fail_reg)
     (set! value1_reg (apply* external-function-object args_reg))
@@ -8152,6 +8176,11 @@
 (define set-use-stack-trace!
   (lambda (value) (set! *use-stack-trace* (true? value))))
 
+(define get-use-jit (lambda () (return* *use-jit*)))
+
+(define set-use-jit!
+  (lambda (value) (set! *use-jit* (true? value))))
+
 (define initialize-stack-trace!
   (lambda () (set-car! *stack-trace* '())))
 
@@ -8894,11 +8923,15 @@
 
 (define length-exactly?
   (lambda (n ls)
-    (return* (and (length-at-least? n ls) (not (length-at-least? (+ n 1) ls))))))
+    (return*
+      (and (length-at-least? n ls)
+           (not (length-at-least? (+ n 1) ls))))))
 
 (define length-between?
   (lambda (lo hi ls)
-    (return* (and (length-at-least? lo ls) (not (length-at-least? (+ hi 1) ls))))))
+    (return*
+      (and (length-at-least? lo ls)
+           (not (length-at-least? (+ hi 1) ls))))))
 
 (define all-numeric?
   (lambda (ls)
@@ -10097,6 +10130,10 @@
            unparse-procedure-prim
            "(unparse-procedure ...): ")
          (list
+           'use-jit
+           use-jit-prim
+           "(use-jit [BOOLEAN]): get Phase-2/JIT usage setting, or set it on/off if BOOLEAN is given")
+         (list
            'use-lexical-address
            use-lexical-address-prim
            "(use-lexical-address [BOOLEAN]): get lexical-address setting, or set it on/off if BOOLEAN is given")
@@ -10150,7 +10187,7 @@
 
 (define make-external-proc
   (lambda (external-function-object)
-    (return* (make-proc <proc-182> external-function-object))))
+    (return* (make-proc <proc-183> external-function-object))))
 
 (define process-formals-and-args
   (lambda (params args info handler fail)
@@ -10695,6 +10732,8 @@
 
 (define *use-stack-trace* #f)
 
+(define *use-jit* #t)
+
 (define-native
   make-safe-continuation
   (lambda (k)
@@ -11038,61 +11077,63 @@
 
 (define use-stack-trace-prim (make-proc <proc-152>))
 
-(define use-tracing-prim (make-proc <proc-153>))
+(define use-jit-prim (make-proc <proc-153>))
 
-(define eqv?-prim (make-proc <proc-154>))
+(define use-tracing-prim (make-proc <proc-154>))
 
-(define vector?-prim (make-proc <proc-155>))
+(define eqv?-prim (make-proc <proc-155>))
 
-(define atom?-prim (make-proc <proc-156>))
+(define vector?-prim (make-proc <proc-156>))
 
-(define iter?-prim (make-proc <proc-157>))
+(define atom?-prim (make-proc <proc-157>))
 
-(define getitem-prim (make-proc <proc-158>))
+(define iter?-prim (make-proc <proc-158>))
 
-(define setitem-prim (make-proc <proc-159>))
+(define getitem-prim (make-proc <proc-159>))
 
-(define hasitem-prim (make-proc <proc-160>))
+(define setitem-prim (make-proc <proc-160>))
 
-(define getattr-prim (make-proc <proc-161>))
+(define hasitem-prim (make-proc <proc-161>))
 
-(define setattr-prim (make-proc <proc-162>))
+(define getattr-prim (make-proc <proc-162>))
 
-(define hasattr-prim (make-proc <proc-163>))
+(define setattr-prim (make-proc <proc-163>))
 
-(define list?-prim (make-proc <proc-164>))
+(define hasattr-prim (make-proc <proc-164>))
 
-(define procedure?-prim (make-proc <proc-165>))
+(define list?-prim (make-proc <proc-165>))
 
-(define string<?-prim (make-proc <proc-166>))
+(define procedure?-prim (make-proc <proc-166>))
 
-(define float-prim (make-proc <proc-167>))
+(define string<?-prim (make-proc <proc-167>))
 
-(define globals-prim (make-proc <proc-168>))
+(define float-prim (make-proc <proc-168>))
 
-(define int-prim (make-proc <proc-169>))
+(define globals-prim (make-proc <proc-169>))
+
+(define int-prim (make-proc <proc-170>))
 
 (define-native
   truncate-to-integer
   (lambda (x) (inexact->exact (truncate x))))
 
-(define assq-prim (make-proc <proc-170>))
+(define assq-prim (make-proc <proc-171>))
 
-(define dict-prim (make-proc <proc-171>))
+(define dict-prim (make-proc <proc-172>))
 
-(define property-prim (make-proc <proc-172>))
+(define property-prim (make-proc <proc-173>))
 
-(define rational-prim (make-proc <proc-173>))
+(define rational-prim (make-proc <proc-174>))
 
-(define reset-toplevel-env-prim (make-proc <proc-174>))
+(define reset-toplevel-env-prim (make-proc <proc-175>))
 
-(define sort-prim (make-proc <proc-175>))
+(define sort-prim (make-proc <proc-176>))
 
-(define string-append-prim (make-proc <proc-176>))
+(define string-append-prim (make-proc <proc-177>))
 
-(define string-split-prim (make-proc <proc-177>))
+(define string-split-prim (make-proc <proc-178>))
 
-(define typeof-prim (make-proc <proc-178>))
+(define typeof-prim (make-proc <proc-179>))
 
 (define-native
   type
@@ -11121,13 +11162,13 @@
                                                 '<type:vector>
                                                 (if (box? x) '<type:box> '<type:unknown>))))))))))))))
 
-(define use-lexical-address-prim (make-proc <proc-179>))
+(define use-lexical-address-prim (make-proc <proc-180>))
 
 (define-native host-environment-native (lambda () "scheme"))
 
-(define host-environment-prim (make-proc <proc-180>))
+(define host-environment-prim (make-proc <proc-181>))
 
-(define get-exception-message-prim (make-proc <proc-181>))
+(define get-exception-message-prim (make-proc <proc-182>))
 
 (define-native
   make-initial-env-extended
