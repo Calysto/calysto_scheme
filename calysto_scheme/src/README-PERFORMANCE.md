@@ -757,6 +757,25 @@ all actually compiled, not merely ran fast by chance.
 - A parameter called directly in operator position (custom comparators,
   predicates, callbacks invoked by hand rather than via `map`/`for-each`)
   is now JIT-eligible.
+  **No longer current as of Phase 8, below — see its own "what this
+  doesn't cover" section.** `_is_phase2_safe` (added in Phase 8, after
+  this phase shipped) replaced `apply_proc`'s old, shallow gate (just
+  `proc_reg[1] is b_proc_1_d and proc_reg[5]`, all this phase needed)
+  with a static check that a closure's *entire reachable call graph* is
+  provably safe, not just its own body. It can't resolve a "local
+  parameter used as operator" call (or an IIFE, or any other computed-
+  operator call — exactly the three shapes `_jit_call` was built for) to
+  a concrete value at certification time, so it's classified unsafe —
+  and that classification poisons every caller, transitively, all the
+  way to the top level. Since JIT compilation is only ever attempted
+  from inside an already-Phase-2-certified execution, `apply-twice` (and
+  anything that calls it, even indirectly) no longer reaches Phase 2 at
+  all today, so it never gets a chance to JIT-compile — confirmed
+  directly in a later audit: `_is_phase2_safe(apply-twice)` is `False`,
+  and re-running this section's own `drive` benchmark shows `apply-twice`
+  never appears in `_jit_cache`. Deliberately left unfixed, not an
+  oversight: see Phase 8's own note below on why a sound fix needs new
+  analysis, not a quick patch.
 - **Related, separate, still-open gap found along the way (not fixed
   here):** `_apply_direct` — used by `_fast_prim_map`'s `map`/`for-each`
   wrappers (`_fast_prim_direct_map`, `_fast_prim_direct_for_each`, etc.),
@@ -1124,15 +1143,24 @@ recursion — the shapes most code actually hits — are unaffected.
   easy-to-reason-about static check rather than a more invasive runtime
   mechanism.
 - Does not attempt to recover Phase 5/6's lost speed for
-  dynamic-dispatch shapes. A sound way to do that — e.g. certifying a
-  dynamically-resolved callee *at the call site, at the moment its
-  actual value becomes available*, and running just that one call via a
-  synchronous, non-retrying path, rather than gating the whole closure
-  upfront — was considered and looks promising, but requires reasoning
-  carefully about `call/cc`/`amb`/`choose` interaction (the same class
-  of subtlety that made the `set!`/JIT idea below not worth shipping
-  half-verified) and is deliberately left as future work rather than
-  bundled into a correctness fix.
+  dynamic-dispatch shapes — specifically, Phase 6's "parameter called in
+  operator position" support (`apply-twice`-shaped functions) becomes
+  unreachable via normal top-level execution as a side effect of this
+  phase, confirmed directly in a later audit (`_is_phase2_safe
+  (apply-twice)` is `False`; see Phase 6's own "what this does and
+  doesn't cover" section above, updated to point here). Phase 5's other
+  half — a function directly *returning* a closure over its own
+  parameters — is unaffected and remains reachable, since creating a
+  closure has no call to resolve and so never trips this same
+  certification gap. A sound way to recover the lost half would be
+  e.g. certifying a dynamically-resolved callee *at the call site, at
+  the moment its actual value becomes available*, and running just that
+  one call via a synchronous, non-retrying path, rather than gating the
+  whole closure upfront — was considered and looks promising, but
+  requires reasoning carefully about `call/cc`/`amb`/`choose` interaction
+  (the same class of subtlety that made the `set!`/JIT idea below not
+  worth shipping half-verified) and is deliberately left as future work
+  rather than bundled into a correctness fix.
 - `map`/`for-each` are conservatively treated as always phase2-unsafe
   (not attempting to verify their callback argument specifically), even
   though many real calls (e.g. a directly-written `lambda` literal

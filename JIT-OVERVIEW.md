@@ -196,7 +196,12 @@ subtle bugs it exposed:
   and functions that call one of their own parameters as if it were a
   function (used for custom comparators, callbacks, etc.). Both of these
   are very common patterns in real Scheme code and previously fell back
-  to the slower path unconditionally.
+  to the slower path unconditionally. (Update: Phase 8, below, later
+  made the second half of this — calling a parameter as a function —
+  unreachable in ordinary programs again, as a deliberate, understood
+  side effect of closing a correctness gap, not a regression that
+  slipped through unnoticed. The first half, returning a new function,
+  is unaffected.)
 - **Phase 7 — removed one last layer of indirection** for a function
   calling itself (the most common recursive pattern, as in `fib`), nearly
   tripling speed for that specific shape.
@@ -208,7 +213,12 @@ subtle bugs it exposed:
   This was fixed by teaching the interpreter to *prove upfront*, before
   ever starting, that every part of a function's body is provably safe to
   attempt this way — rather than discovering a problem partway through
-  and needing to "undo" and retry.
+  and needing to "undo" and retry. The proof can't see far enough to
+  vouch for a call whose target isn't known until the moment it runs
+  (a parameter used as a function, as in Phase 6 above), so that one
+  narrow pattern quietly lost its speedup again as the price of the fix
+  — always correct either way, just not always as fast as Phase 6 once
+  made it.
 - **Phase 9 — cleanup**, consolidating duplicated logic without changing
   behavior, to make the code easier to maintain and audit going forward.
 
