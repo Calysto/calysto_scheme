@@ -1,3 +1,17 @@
+## Release 2.1.6 (Jul 23, 2026)
+
+	* Added `(use-jit [BOOLEAN])`, a new primitive mirroring
+	  `use-stack-trace`: get or set a live `*use-jit*` flag (default
+	  `#t`) that gates all three Phase 2/JIT entry points (`apply_proc`,
+	  `_apply_direct`, `_jit_call`), letting any code -- not just
+	  closures containing `set!` -- be forced onto the always-correct
+	  trampoline path, e.g. for debugging or profiling.
+	* Backported the `zero?`/`expt`/`memv`/`assv`/`number->string`
+	  arity-tightening fix (2.1.3) into `interpreter-cps.ss`, the true
+	  CPS source it was missing from; that commit had hand-patched the
+	  generated `source-rm.ss` and `scheme.py` directly, which a later
+	  full pipeline regeneration would have silently reverted.
+
 ## Release 2.1.5 (Jul 23, 2026)
 
 	* Fixed a real JIT inlining bug: `odd?` compiled to a raw
