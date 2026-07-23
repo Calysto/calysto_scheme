@@ -1341,7 +1341,13 @@ class _JitCompiler:
         'not':   '({0} is False)',
         'zero?': '({0} == 0)',
         'even?': '({0} % 2 == 0)',
-        'odd?':  '({0} % 2 != 0)',
+        # Must match odd_q's real definition (`n % 2 == 1`) exactly, not
+        # `!= 0` -- the two agree for every integer (n % 2 is always 0 or
+        # 1 there) but silently diverge for a non-integer argument, e.g.
+        # 2.5 % 2 == 0.5: `!= 0` is True (wrongly "odd"), `== 1` is False
+        # (correct) -- found by tests/test_jit_fuzz.py's differential
+        # fuzzer, see tests/test_jit_odd_float.py.
+        'odd?':  '({0} % 2 == 1)',
         'car':   '_j_safe_car({0})',
         'cdr':   '_j_safe_cdr({0})',
         'abs':   'abs({0})',
