@@ -1,3 +1,15 @@
+## Release 2.1.4 (Jul 23, 2026)
+
+	* Fixed a latent JIT/Phase-2 safety gap: `_apply_direct` (used by
+	  map/for-each's fast-prim callbacks and as `_jit_call`'s fallback for
+	  a computed-operator call) gated execution with only a closure's own
+	  shallow `proc[5]` check, not the full transitive `_is_phase2_safe`
+	  certification `apply_proc` requires -- a closure that itself called
+	  a `set!`-using helper could start executing and only fail partway
+	  through. Confirmed unreachable via any real program today, but
+	  closed so a future JIT change can't silently reopen it. See
+	  `tests/test_apply_direct_proc5_gap.py`.
+
 ## Release 1.4.6 (Sep 5, 2018)
 
 	* fixed typo in run-tests that prevented showing incorrect count
