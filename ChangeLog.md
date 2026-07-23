@@ -10,6 +10,96 @@
 	  closed so a future JIT change can't silently reopen it. See
 	  `tests/test_apply_direct_proc5_gap.py`.
 
+## Release 2.1.3 (Jul 23, 2026)
+
+	* Fixed an N-ary comparison crash (`<`, `>`, `<=`, `>=` with 3+ args) and
+	  a classic-dispatch/JIT divergence for `=`
+	* Fixed JIT-inlined `+` diverging from the classic dispatch on IEEE-754
+	  negative zero
+	* Tightened arity checks on `zero?`, `expt`, `memv`, `assv`; added radix
+	  support (e.g. `(number->string 255 16)`) to `number->string`
+	* Fixed stale JIT captures and stale Phase-2 safety certification after
+	  a primitive is redefined
+	* Fixed two JIT correctness bugs: sibling closures not sharing a frame,
+	  and tail-loop non-tail statements only running on the first iteration
+	* Closed several JIT/Phase-2 correctness gaps found via a call/cc and
+	  choose/require backtracking edge-case audit; added JIT-OVERVIEW.md
+	  documenting the JIT design and how it's tested
+
+## Release 2.1.2 (Jul 22, 2026)
+
+	* Fixed JIT/Phase-2 correctness gaps: primitive redefinition could
+	  corrupt calls to unrelated closures; fast-path errors leaked raw
+	  Python exceptions instead of proper Scheme conditions; audited and
+	  fixed arity/type checking across all 83 fast-path primitives
+	* Named proc-tuple field indices in cold (compile-once) JIT/Phase-2
+	  code paths for clarity (no behavior change)
+
+## Release 2.1.1 (Jul 21, 2026)
+
+	* JIT: self-recursive non-tail calls now call the compiled function
+	  directly instead of through an indirection wrapper (~2.3-2.8x faster
+	  on naive/tree recursion)
+	* Fixed a silent double-execution bug: Phase 2's fallback path could
+	  re-run part of a closure's body -- and its side effects -- when it
+	  hit an unsupported construct partway through; replaced with an
+	  up-front, whole-call-graph safety certification
+	* Fixed a pre-existing test-framework infinite loop; disabled stack
+	  traces by default (~10-13% faster, ~25-45% less memory)
+	* Reduced duplication across the JIT/Phase-2 machinery (shared identity
+	  cache, operator-resolution helpers, fast-primitive table)
+
+## Release 2.0.3 (Jul 21, 2026)
+
+	* Fixed a TypeError crash calling `map`/`for-each` with a lambda from
+	  JIT-eligible code
+	* Added a benchmarking suite (`scripts/benchmark.py`) and cross-version
+	  performance comparisons
+
+## Release 2.0.2 (Jul 21, 2026)
+
+	* Fixed a RecursionError crash in deep tail-recursive loops (past
+	  ~5,000 iterations) by adding tail-call optimization to the JIT and
+	  the direct-eval fast path
+	* Added JIT support for closures/higher-order functions and for a
+	  parameter used in operator position (e.g.
+	  `(define (apply-twice f x) (f (f x)))`)
+	* Fixed a `'tuple' object is not callable` crash when a computed
+	  operator evaluated to a closure at runtime
+	* Fixed `set!` on a function parameter silently writing to a
+	  same-named module-level global instead of the parameter
+
+## Release 2.0.1 (Jul 20, 2026)
+
+	* Allowed `try` to be shadowed as a plain identifier again, without
+	  reintroducing the earlier silent-swallow bug
+	* Added a GitHub Actions test workflow (Python 3.9-3.12)
+	* Fixed the `calysto.display.HTML` example in the reference notebook
+
+## Release 2.0.0 (Jul 20, 2026)
+
+	* Major performance overhaul: trampoline optimizations, a direct-eval
+	  fast path, and JIT compilation to Python for eligible closures
+	  (~4,500x speedup on some benchmarks)
+	* Added support for `%plot inline` magic
+
+## Release 1.4.8 (May 16, 2023)
+
+	* Reimplemented dictionaries; dict keys are always strings
+	* Revised `dlr_apply` to handle kwargs as a dict
+	* Fixed `sort` and `procedure?` primitives; restructured the Makefile
+	* Removed `try` without `catch`; removed the `^` primitive
+	* Fixed unparse and the `case` macro
+	* Fixed the "Unhandled exception" message
+	* Build/install cleanup: Docker updates, additional install
+	  requirements, added LICENSE.txt
+
+## Release 1.4.7 (Nov 25, 2021)
+
+	* Updated `collections.Iterable` to `collections.abc.Iterable` for
+	  newer Python versions
+	* Fixed the REPL when running without yasi installed
+
 ## Release 1.4.6 (Sep 5, 2018)
 
 	* fixed typo in run-tests that prevented showing incorrect count
