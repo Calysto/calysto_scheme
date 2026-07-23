@@ -44,7 +44,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 
 #############################################################
 # Python implementation notes:
@@ -11484,7 +11484,7 @@ def restart():
 initialize_globals()
 
 def main():
-    print('Calysto Scheme, version 2.1.2')
+    print('Calysto Scheme, version 2.1.3')
     print('----------------------------')
     import sys
     for filename in sys.argv[1:]:
