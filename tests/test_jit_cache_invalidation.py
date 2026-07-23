@@ -37,6 +37,19 @@ correctly declines (_TrampolineFallback) and the closure falls back to
 Phase 2/the trampoline instead -- slower, but still correct, the same
 "failure only ever costs speed" guarantee used throughout this codebase.
 
+Bonus (unplanned) side effect, confirmed and covered by
+test_redefining_an_inlined_operator_after_first_compile_is_observed
+below: since a whole compiled function is evicted and recompiled, not
+just its individual captures, this same epoch check *also* closes
+_is_unshadowed_primitive's own previously-documented residual risk for
+inlined arithmetic/comparison operators (`+`, `<`, ...) redefined *after*
+a function using them was already compiled -- see that function's own
+_is_unshadowed_primitive check, which now gets re-run against the fresh
+environment on every recompile. test_primitive_redefinition.py's own
+"Bug 2" only ever covered a function compiled *after* a redefinition,
+not one redefined *after* being compiled -- that gap is what this file's
+test closes.
+
 Runs in a fresh subprocess for the same reason test_primitive_redefinition
 .py and test_phase2_safe_cache_invalidation.py do: process-wide singleton
 state (_jit_cache, _binding_write_epoch) must start fresh.
@@ -182,4 +195,33 @@ def test_recompiled_function_stays_jit_compiled_when_the_new_capture_is_still_el
         "fallen back to Phase 2/the trampoline) after limit2 was "
         "redefined, since the new value (20) is just as JIT-capturable "
         "as the old one"
+    )
+
+
+def test_redefining_an_inlined_operator_after_first_compile_is_observed(tmp_path):
+    """Case 4 (found while verifying the fix above, not planned when it
+    was written): _JitCompiler._app inlines `+`/`-`/`*`/comparisons/etc.
+    as raw Python operators rather than going through _capture at all --
+    a different mechanism, guarded by _is_unshadowed_primitive instead.
+    That guard only ever protected a function being compiled *after* a
+    primitive was already redefined (test_primitive_redefinition.py's own
+    "Bug 2"); a primitive redefined *after* a function using it was
+    already compiled had nothing to re-check the inlining, so it kept
+    using the stale, baked-in Python operator forever. _jit_lookup's
+    epoch check fixes this too, as a side effect: recompiling re-runs
+    _is_unshadowed_primitive against the fresh environment, so it
+    correctly declines to re-inline `+` once it's been shadowed."""
+    src = """
+    (define (f x) (+ x x))
+    (define (warmup-f y) (f y))
+    (warmup-f 1)
+    (set! + (lambda (a b) (* a b)))
+    (warmup-f 5)
+    """
+    result = _run_fresh(src, tmp_path)
+    assert result == 25, (
+        "f, JIT-compiled (inlining + as a raw Python operator) before + "
+        f"was redefined, did not observe the redefinition -- got "
+        f"{result!r}, expected 25 (5*5, via the redefined +; the stale, "
+        "still-inlined-addition answer would be 10, i.e. 5+5)"
     )

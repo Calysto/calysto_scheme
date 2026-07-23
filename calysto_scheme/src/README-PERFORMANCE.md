@@ -486,6 +486,17 @@ _UNARY = {
 }
 ```
 
+`_is_unshadowed_primitive` guards against inlining a name that's *already*
+been redefined by the time a function using it is compiled (see
+`test_primitive_redefinition.py`). Redefining a primitive *after* a
+function that inlines it has already been compiled used to be a separate,
+unguarded gap -- since fixed as a side effect of the JIT cache's
+epoch-based invalidation (see "JIT cache" below and
+`_jit_lookup`/`_is_unshadowed_primitive`'s docstrings in Scheme.py):
+recompiling on a stale epoch re-runs this check against the fresh
+environment too. See `test_jit_cache_invalidation.py`'s
+`test_redefining_an_inlined_operator_after_first_compile_is_observed`.
+
 ---
 
 ### Free variable capture

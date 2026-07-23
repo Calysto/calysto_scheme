@@ -26,10 +26,17 @@ against the interpreter directly:
    bug 1 doesn't fire (map already warmed up correctly before the
    redefinition), the JIT compiler decides whether to inline `+`/`-`/`*`/
    comparisons/etc. as raw Python operators by checking the operator's
-   *literal spelling* in the source (_sym_name), never what it currently
-   resolves to. A JIT-compiled function that calls a later-redefined
-   primitive keeps using the *original* Python-operator semantics forever,
-   silently ignoring the redefinition.
+   *literal spelling* in the source (_sym_name). _is_unshadowed_primitive
+   guards this at the moment of compilation -- test_redefining_a_
+   primitive_after_warmup_is_observed_by_later_jit_compiles below covers
+   a function *compiled after* + was already redefined, confirming that
+   case is handled. A *further* case -- + redefined *after* a function
+   using it was already compiled, previously left this function's
+   already-compiled Python code silently using the original semantics
+   forever, since nothing ever re-checked it -- is a distinct bug, fixed
+   later by _jit_cache's epoch-based invalidation (see _jit_lookup's
+   docstring) and covered separately in
+   tests/test_jit_cache_invalidation.py, not here.
 
 Both tests run in a fresh subprocess (see _fresh_process_eval.py) because
 the bug is specifically about the *first-use* state of the process-wide
@@ -94,7 +101,11 @@ def test_redefining_a_primitive_after_warmup_is_observed_by_later_jit_compiles(t
     """Bug 2: once _fast_prim_map is safely warmed up (built before any
     redefinition, so it is not poisoned -- see the test above), a *later*
     redefinition of `+` must still be observed by any closure that gets
-    JIT-compiled afterward, exactly like it would on the plain trampoline."""
+    JIT-compiled afterward (test/call-test below are both defined and
+    first compiled *after* the redefinition), exactly like it would on
+    the plain trampoline. The distinct case of a function *already*
+    compiled before + is redefined is covered separately in
+    tests/test_jit_cache_invalidation.py."""
     src = """
     (define (warmup a b) (+ a b))
     (define (call-warmup n) (warmup n n))

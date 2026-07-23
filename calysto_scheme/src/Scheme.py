@@ -1174,14 +1174,20 @@ def _jit_lookup(proc):
     already-JIT-compiled helper closure captured directly by its compiled
     Python function, a primitive wrapped from _fast_prim_map, or a plain
     scalar. Unlike Phase 2's _eval_direct, which re-resolves every name
-    fresh on every call, none of that ever gets re-checked once compiled:
-    a later (set! + something-else) or (set! limit 20) would leave any
-    already-compiled function silently using the original value forever,
-    exactly the residual risk _is_unshadowed_primitive's own docstring
-    already documents for the narrower case of inlined arithmetic/
-    comparison operators -- except unguarded here, for every OTHER kind of
-    capture (confirmed by reproducing it before this epoch check existed
-    -- see tests/test_jit_cache_invalidation.py).
+    fresh on every call, none of that ever got re-checked once compiled: a
+    later (set! + something-else) or (set! limit 20) would leave any
+    already-compiled function silently using the original value forever
+    (confirmed by reproducing it before this epoch check existed -- see
+    tests/test_jit_cache_invalidation.py). Since a stale compiled function
+    is evicted and recompiled *as a whole*, not just its individual
+    captures, this also closes -- as a side effect, not by original
+    design -- _is_unshadowed_primitive's own previously-documented
+    residual risk for inlined arithmetic/comparison operators (`+`, `<`,
+    ...): recompiling re-runs that check against the fresh environment
+    too, so it correctly declines to re-inline a name that's since been
+    shadowed. See test_primitive_redefinition.py's original inlined-
+    operator case, and test_jit_cache_invalidation.py's
+    redefined-after-first-compile variant of it.
 
     Reuses _binding_write_epoch (see _phase2_safe_lookup's docstring for
     the full reasoning -- set_binding_value_b bumps it on every existing-
@@ -1584,10 +1590,15 @@ class _JitCompiler:
         environment, still points to the genuine, unmodified primitive
         that _NARY/_CMP/_UNARY assume when inlining `sym` as a raw Python
         operator/expression template. Without this check, a program that
-        redefines `+`, `<`, `car`, ... (e.g. `(set! + my-own-add)`) would
-        have any *already/later*-JIT-compiled function silently keep
-        using the original Python-operator semantics forever, ignoring
-        the redefinition -- see tests/test_primitive_redefinition.py.
+        already redefines `+`, `<`, `car`, ... (e.g. `(set! + my-own-add)`)
+        *before* a function using it is ever compiled would have that
+        first compile attempt bake in the wrong, stale-at-birth semantics
+        -- see tests/test_primitive_redefinition.py. A redefinition
+        happening *after* a function has already been compiled is a
+        separate case, not this function's job: _jit_lookup's epoch check
+        (see its docstring) evicts and recompiles the whole function when
+        that happens, which re-runs this exact check against the fresh
+        environment -- see test_jit_cache_invalidation.py.
 
         Reuses _resolve_operator (the same static-resolution helper
         _is_self_ref and _phase2_safe_walk_call use) rather than
