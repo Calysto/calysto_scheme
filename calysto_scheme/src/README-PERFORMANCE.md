@@ -788,6 +788,23 @@ all actually compiled, not merely ran fast by chance.
   `_apply_direct`. The same fix applied to `_jit_call` here (attempt
   `_jit_compile_proc` before falling back) would apply directly to
   `_apply_direct` too — a small, separate, mechanically similar follow-on.
+  **Also no longer current as of Phase 8, for the identical reason as the
+  bullet above — confirmed directly in a later audit:** `map`/`for-each`
+  are excluded from `_phase2_safe_walk_call`'s certification (see Phase
+  8's own "what this doesn't cover" section, `map`/`for-each` bullet), so
+  any function that calls them directly is uncertified, and that poisons
+  every (transitive) caller the same way `apply-twice` does. Traced
+  `_fast_prim_direct_map`/`_fast_prim_direct_for_each` directly: neither
+  is ever invoked by a normal nested-call program today (`_is_phase2_safe`
+  is `False` for the calling function, so Phase 2 is never entered, so
+  these fast-prim wrappers are never reached — the classic trampoline's
+  own native `map`/`for-each` handle the call instead). So this "small,
+  separate, mechanically similar follow-on" would have zero measurable
+  effect on its own now — the code path it would improve isn't exercised
+  by anything, the same as `_jit_call`'s fix for `apply-twice`. It only
+  becomes worth doing together with whatever eventually restores
+  reachability (the call-site certification idea in Phase 8's notes),
+  not in isolation.
 - Verified with the full test suite (8+ repeated runs) and targeted
   scripts combining this with Phase 5's closure support, checked against
   `_jit_cache` to confirm real compilation rather than a fast-by-luck
