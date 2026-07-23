@@ -127,6 +127,7 @@ Calysto Scheme can also be un under PyPy for increased performance.
 
 Calysto Scheme supports:
 
+* JIT - just in time compilation
 * continuations
 * use of all Python libraries
 * choose/fail - built in fail and try again
@@ -136,7 +137,7 @@ Calysto Scheme supports:
 Planned:
 
 * Object-oriented class definitions and instance creation
-* complete Scheme functions (one can fall back to Python for now)
+* create a full set of Scheme functions (one can fall back to Python functions for now)
 
 Limitations:
 
