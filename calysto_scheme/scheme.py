@@ -545,8 +545,16 @@ _PROC_SAFE    = 5  # precomputed _is_direct_eval_safe() verdict
 ### literals instead of these names -- see the comment on _eval_direct
 ### about extra-overhead-per-node being measurable on those paths.
 
+class _ProcTuple(tuple):
+    # A plain tuple subclass so procedures still repr as "#<procedure>"
+    # (matching the old cons-based representation) instead of dumping
+    # their raw (fn, bodies, formals, env, safe) contents.
+    __slots__ = ()
+    def __repr__(self):
+        return "#<procedure>"
+
 def make_proc(*args):
-    return (symbol_procedure,) + args
+    return _ProcTuple((symbol_procedure,) + args)
 
 def make_macro(*args):
     return (symbol_macro_transformer,) + args
