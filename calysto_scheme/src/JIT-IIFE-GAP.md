@@ -316,7 +316,7 @@ True:` rewrite, not silently reintroduce a nested Python scope).
 needing the same fuzzing-based verification discipline as Fix A, but with
 more surface area for a subtle miss.
 
-### Fix C — a restricted, non-undoable internal `set!` for tying the letrec knot (unblocks named-`let`'s *own* wrapper, and internal `define`s)
+### Fix C — a restricted, non-undoable internal `set!` for tying the letrec knot (necessary, not sufficient, for named-`let`'s *own* wrapper and internal `define`s — see correction below)
 
 Fix A doesn't help named-`let`'s outer `(lambda (loop) (set! loop ...)
 (loop ...))` wrapper reach Phase 2/JIT on its own merits — it's excluded
@@ -350,6 +350,48 @@ The idea: introduce a second AST tag for this pattern — say
 reachable from ordinary user syntax), and skip the undo-continuation setup
 for it entirely.
 
+**Correction, found while checking this more carefully: Fix C alone is
+inert.** The wrapper closure has *two* independent reasons
+`_is_phase2_safe` is `False`, not one — Fix C only removes the first.
+The second: its body calls `loop` — its own formal parameter — in
+operator position, and that shape is *separately* excluded regardless of
+any `set!`, confirmed directly on the simplest possible case with no
+`set!` anywhere at all:
+
+```scheme
+(define (apply-twice f x) (f (f x)))
+```
+```
+proc[5]: True
+is_phase2_safe: False
+jit_lookup: None
+```
+
+This is Phase 6/8's own already-documented "local parameter used in
+operator position" gap: `_resolve_operator` returns `('local', None)` for
+a depth-0 lexical address (a parameter's value is only known at runtime),
+and `_phase2_safe_walk_call` treats `'local'` exactly like
+`'unresolved'` — unconditionally unsafe. The named-`let` wrapper's
+`(loop ...)` call is precisely this shape from its own point of view
+(`loop` is *its* parameter). So even with Fix C making the `set!` itself
+invisible to `_is_direct_eval_safe`, `_is_phase2_safe(wrapper)` would
+still be `False` on this second, completely independent ground, and
+`apply_proc` would still never enter Phase 2 for it — Fix C's benefit is
+entirely gated behind also resolving *this* shape.
+
+Note this second gap is not simply "the same as Fix A" — Fix A as scoped
+above only recognizes a *syntactically literal* lambda in operator
+position; resolving `loop` here needs something Fix A doesn't have:
+flow-sensitivity, i.e. recognizing that this *particular* local variable
+was just given a concrete, known value by the `internal_assign_aexp`
+statement immediately preceding this call, in the same body sequence.
+That's a genuinely different (if kindred) piece of analysis from
+recognizing a literal lambda operator, and it would need to be added
+alongside Fix C — and, more generally, on top of `_resolve_operator`'s own
+Phase-8-era conservatism about the plain `apply-twice` case above, which
+isn't specific to `let`/`letrec` at all and is worth fixing in its own
+right regardless of anything in this document.
+
 This is real, from-scratch implementation work, not a check to relax.
 Confirmed directly: `symbol_assign_aexp` appears exactly once in the whole
 of `Scheme.py` — in `_is_direct_eval_safe`'s exclusion check — so there is
@@ -373,12 +415,13 @@ actually run means:
   risk (a wrong "yes" here is a silent-wrong-answer bug, same as
   everywhere else in this document), this verification isn't optional.
 
-**Estimated effort/risk: moderate — narrower and safer than the original
-general-`set!` effort** (it never has to solve undo/backtracking at all,
-which was the specific, stated reason that effort was abandoned), but
-still genuinely new execution and code-generation paths, not a pure
-analysis change like Fix A. Independent of Fix A/Fix B: it addresses a
-different closure (the letrec wrapper itself) than either of those.
+**Estimated effort/risk: moderate on its own terms** — narrower and safer
+than the original general-`set!` effort, since it never has to solve
+undo/backtracking at all — **but not sufficient by itself.** It needs a
+companion change (resolving a parameter just fixed by an
+`internal_assign_aexp` in the same body, and/or the plain
+`apply-twice`-shaped gap generally) before it produces any observable
+effect. Treat the pair as one unit of work, not two independent options.
 
 ### Recommendation
 
@@ -386,13 +429,19 @@ Fix A is the higher-leverage, lowest-risk piece — worth doing on its own
 even without the others, since it turns "never reaches Phase 2 at all"
 into "reaches Phase 2 and the existing JIT pipeline," which is already a
 large win by itself (see Phase 5's own measured numbers for exactly this
-call shape). Fix C is a good complementary follow-up specifically for
-named-`let`/`letrec`/internal-defines — narrower in scope than general
-`set!` support and correspondingly lower-risk, but Fix A still has to land
-first (or alongside) for the *enclosing* function around any of these to
-benefit; Fix C alone only frees the letrec wrapper itself, which today
-already manages to reach the JIT indirectly via the classic trampoline's
-own re-check. Fix B is the deepest and riskiest of the three, and only
-obviously worth its cost once Fix A (and, for named-`let`, Fix C) are in
+call shape).
+
+Fix C is *not* a standalone follow-up the way it first looked — traced
+through directly, it produces zero observable benefit until it's paired
+with resolving the "own parameter, just assigned, called as operator"
+shape (found while checking this). That combination is worth doing
+together, specifically for named-`let`/`letrec`/internal-defines, and is
+still narrower and lower-risk than reviving general `set!` support. But
+it doesn't reduce to "just do Fix C" — it's Fix C plus a second, related
+piece of operator-resolution work, and Fix A still has to land separately
+for the *enclosing* function around any of these to benefit too.
+
+Fix B is the deepest and riskiest of the three, and only obviously worth
+its cost once Fix A (and, for named-`let`, the Fix C pairing above) are in
 and the residual repeated-compile cost is actually measured on real
 workloads.
