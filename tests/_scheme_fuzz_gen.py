@@ -9,13 +9,16 @@ Deliberately narrow in scope: every construct used here is one
 _eval_direct / _JitCompiler / _phase2_safe_walk explicitly claims to
 handle (see test_jit_tag_parity.py) -- arithmetic, comparisons, `if`,
 self/mutual recursion, closures returned from closures, a parameter
-called as a function, list ops, and `begin` (deliberately, since `begin`
+called as a function, list ops, `begin` (deliberately, since `begin`
 is the one documented, intentional gap between _eval_direct and
 _JitCompiler -- see this file's `begin_body` case and
-test_jit_tag_parity.py's module docstring). The goal isn't broad language
-coverage, it's many random *shapes* of the specific patterns the three
-walkers' bug history (README-PERFORMANCE.md's Phases 6-9) shows they can
-silently disagree about.
+test_jit_tag_parity.py's module docstring), and `let`/`or`/`and`/`cond`/
+named-`let` (which all desugar to a literal-lambda IIFE operator --
+`((lambda (v ...) body) e ...)` -- per JIT-IIFE-GAP.md; see this file's
+`let_wrapped_*`/`nested_let`/`or_and`/`cond`/`named_let` cases). The goal
+isn't broad language coverage, it's many random *shapes* of the specific
+patterns the three walkers' bug history (README-PERFORMANCE.md's Phases
+6-9) shows they can silently disagree about.
 
 Every generated case is self-contained (its own uniquely-numbered
 function name(s), no shared mutable state) and constructed to always
@@ -228,6 +231,144 @@ def _case_arith_leaf(rng, idx):
     return _gen_num_expr(rng, [], 4)
 
 
+def _case_let_wrapped_rec(rng, idx):
+    """Non-tail self-recursion whose base-case test is wrapped in a
+    `let` -- i.e. the literal-lambda IIFE-operator shape any `let`
+    desugars to, `((lambda (v) body) e)` (JIT-IIFE-GAP.md). Stresses
+    _phase2_safe_walk_call's IIFE-operator branch: `<=`/the combining op,
+    referenced from inside the let's body, are lexical-address operators
+    at depth > 0 relative to the let's own synthetic frame -- exactly the
+    shape that silently resolved to the wrong enclosing frame before that
+    branch pushed a real placeholder frame onto env (confirmed directly
+    against JIT-IIFE-GAP.md's mi-loop case before this fix)."""
+    fn = f"g_{idx}"
+    base = rng.choice([0, 1])
+    combine = rng.choice(_NARY_OPS)
+    src = (
+        f"(define ({fn} n)\n"
+        f"  (let ((done (<= n {base})))\n"
+        f"    (if done n\n"
+        f"        ({combine} ({fn} (- n 1)) ({fn} (- n 2))))))\n"
+        f"({fn} {_rand_arg(rng, 0, 12)})"
+    )
+    return src
+
+
+def _case_let_wrapped_tail_rec(rng, idx):
+    """Tail-recursive accumulator loop whose per-iteration step is
+    wrapped in a `let` -- the JIT-IIFE-GAP.md mi-loop shape directly: a
+    plain, set!-free `let` inside a hot self-recursive loop, previously
+    permanently excluded from Phase 2/JIT (not just slowed down) because
+    _phase2_safe_walk_call could not resolve a literal-lambda operator at
+    all."""
+    fn = f"g_{idx}"
+    op = rng.choice(["+", "-"])
+    other = rng.choice(["n", _gen_num_expr(rng, ["n"], 1)])
+    step = f"({op} acc {other})"
+    src = (
+        f"(define ({fn} n acc)\n"
+        f"  (let ((done (<= n 0)))\n"
+        f"    (if done acc\n"
+        f"        ({fn} (- n 1) {step}))))\n"
+        f"({fn} {_rand_arg(rng, 0, 200)} {_lit_src(rng.choice(_NUM_LITERALS))})"
+    )
+    return src
+
+
+def _case_nested_let_rec(rng, idx):
+    """Self-recursion wrapped in two levels of nested `let` -- stresses
+    the IIFE-operator branch across more than one synthetic frame: a
+    reference from the innermost let's body to a primitive is at lexical
+    depth >= 2 relative to its own frame, which only resolves correctly
+    if *every* enclosing synthetic frame was pushed with the right
+    shape, not just the innermost one."""
+    fn = f"g_{idx}"
+    base = rng.choice([0, 1])
+    combine = rng.choice(_NARY_OPS)
+    src = (
+        f"(define ({fn} n)\n"
+        f"  (let ((a (- n 0)))\n"
+        f"    (let ((done (<= a {base})))\n"
+        f"      (if done a\n"
+        f"          ({combine} ({fn} (- a 1)) ({fn} (- a 2)))))))\n"
+        f"({fn} {_rand_arg(rng, 0, 12)})"
+    )
+    return src
+
+
+def _case_or_and_rec(rng, idx):
+    """Self-recursion whose base-case test goes through `or`/`and`,
+    which also desugar through a `let` IIFE (JIT-IIFE-GAP.md) -- same
+    static-safety gap as a plain `let`, reached through a different
+    macro.
+
+    Both test variants must still reduce to a monotonic `n <= base`
+    threshold -- true for every n from some point downward, never true
+    then false again as n keeps decreasing. An earlier version used
+    `(and (<= n base) (>= n 0))`, a finite *window* of base cases
+    (single-point when base=0) that the `(- n 2)` recursive step can
+    jump clean over on an unlucky branch, landing just past it on the
+    negative side where the window is false again -- and since every
+    branch of this non-memoized double recursion is explored, one such
+    branch is enough to recurse forever. This is invisible under
+    fast/phase2-only timing (RecursionError caps it there), but the
+    classic trampoline this case exists to exercise under "slow" mode
+    doesn't grow the Python call stack for Scheme recursion at all, so
+    it just hung -- caught by test_jit_fuzz.py's slow-mode subprocess
+    stalling well past its timeout instead of a clean failure."""
+    fn = f"g_{idx}"
+    base = rng.choice([0, 1])
+    combine = rng.choice(_NARY_OPS)
+    test = rng.choice([
+        f"(or (< n {base}) (= n {base}))",
+        f"(and (<= n {base}) #t)",
+    ])
+    src = (
+        f"(define ({fn} n)\n"
+        f"  (if {test} n\n"
+        f"      ({combine} ({fn} (- n 1)) ({fn} (- n 2)))))\n"
+        f"({fn} {_rand_arg(rng, 0, 12)})"
+    )
+    return src
+
+
+def _case_cond_rec(rng, idx):
+    """Self-recursion whose base case is a `cond`, which also bottoms
+    out in a `let` internally (JIT-IIFE-GAP.md)."""
+    fn = f"g_{idx}"
+    base = rng.choice([0, 1])
+    combine = rng.choice(_NARY_OPS)
+    src = (
+        f"(define ({fn} n)\n"
+        f"  (cond ((<= n {base}) n)\n"
+        f"        (else ({combine} ({fn} (- n 1)) ({fn} (- n 2))))))\n"
+        f"({fn} {_rand_arg(rng, 0, 12)})"
+    )
+    return src
+
+
+def _case_named_let(rng, idx):
+    """A named-let accumulator loop -- desugars through letrec/set!
+    (JIT-IIFE-GAP.md), so its own outer wrapper stays excluded from
+    Phase 2/JIT even after the literal-lambda-operator fix (a real set!
+    still bars _is_direct_eval_safe directly). Included to confirm the
+    fix doesn't change this shape's *result* -- only which of the three
+    execution paths individual pieces of it end up using. `loop` is
+    local to the let, so no top-level-name collision risk across cases
+    despite not being uniquely numbered."""
+    op = rng.choice(["+", "-"])
+    other = rng.choice(["i", _gen_num_expr(rng, ["i"], 1)])
+    step = f"({op} acc {other})"
+    n = _rand_arg(rng, 0, 100)
+    acc0 = _lit_src(rng.choice(_NUM_LITERALS))
+    src = (
+        f"(let loop ((i {n}) (acc {acc0}))\n"
+        f"  (if (<= i 0) acc\n"
+        f"      (loop (- i 1) {step})))"
+    )
+    return src
+
+
 _CASE_KINDS = [
     _case_simple_rec,
     _case_tail_rec,
@@ -237,6 +378,12 @@ _CASE_KINDS = [
     _case_list_ops,
     _case_begin_body,
     _case_arith_leaf,
+    _case_let_wrapped_rec,
+    _case_let_wrapped_tail_rec,
+    _case_nested_let_rec,
+    _case_or_and_rec,
+    _case_cond_rec,
+    _case_named_let,
 ]
 
 

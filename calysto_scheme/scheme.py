@@ -1015,8 +1015,10 @@ def _phase2_safe_walk_call(op_exp, env, visiting):
     is safe: a known-pure _fast_prim_map primitive (excluding map/
     for-each, whose safety additionally depends on their callback
     argument -- not verified here, so conservatively treated as unsafe),
-    or another closure that is itself (transitively) phase2-safe.
-    Anything unresolvable at this point -- a local parameter or other
+    another closure that is itself (transitively) phase2-safe, or a
+    literal-lambda IIFE operator (the let/or/and/cond/case/named-let
+    desugaring shape) whose own body is itself (transitively) phase2-safe.
+    Anything else unresolvable at this point -- a local parameter or other
     computed expression used in operator position, an unbound name --
     can't be proven safe, so is treated as unsafe."""
     global _fast_prim_map
@@ -1025,6 +1027,42 @@ def _phase2_safe_walk_call(op_exp, env, visiting):
     # rather than folding into _resolve_operator's shared contract.
     if isinstance(op_exp, cons) and op_exp.car is symbol_lit_aexp:
         op = op_exp.cdr.car
+    elif isinstance(op_exp, cons) and op_exp.car is symbol_lambda_aexp:
+        # An IIFE operator -- ((lambda (v ...) body ...) e ...), exactly
+        # how let/or/and/cond/case/named-let all desugar. Both real
+        # executors already handle this shape fine: _eval_direct's own
+        # symbol_lambda_aexp case (above) just builds a closure that the
+        # surrounding app_aexp case then calls like any other proc, and
+        # _JitCompiler generates code for it via _jit_call. The only gap
+        # is this static walk refusing to even try, so recurse into the
+        # lambda's own body instead of bailing out.
+        #
+        # A real frame for the formals -- not just `env` unmodified --
+        # has to be pushed first: nested lexical-address depths inside
+        # the body are counted relative to the *actual* runtime frame
+        # stack, which includes one frame for this lambda's own formals.
+        # Skipping this would silently shift every deeper reference off
+        # by one frame and make _resolve_lexical_address resolve the
+        # wrong binding entirely (confirmed directly: without this, a
+        # reference to a global like `>=` from inside a `let` nested in
+        # a function body resolved to the wrong frame and was wrongly
+        # declared unsafe -- see the mi-loop case in
+        # tests/test_jit_iife_operator.py). The values bound don't
+        # matter -- a depth-0 reference to one of them used as an
+        # operator is still unconditionally unsafe ('local', below)
+        # regardless of what's in the cell, and a depth-0 reference used
+        # as a plain value is unconditionally safe regardless too
+        # (_phase2_safe_walk's lexical_address_aexp case) -- only the
+        # frame's *shape* (its formal names, for by-name shadowing, and
+        # its presence, for depth-counting) has to be right.
+        formals = op_exp.cdr.car
+        dummy_args = []
+        cur = formals
+        while isinstance(cur, cons):
+            dummy_args.append(False)
+            cur = cur.cdr
+        inner_env = _extend_direct(env, formals, dummy_args)
+        return _phase2_safe_walk_seq(op_exp.cdr.cdr.car, inner_env, visiting)
     else:
         kind, op = _resolve_operator(op_exp, env)
         if kind != 'value':
