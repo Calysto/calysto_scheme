@@ -1,14 +1,43 @@
 # Why `let` (and everything built on it) can shut off the JIT
 
+## Status: Fix A has landed
+
+`_phase2_safe_walk_call` now resolves a literal-lambda operator instead of
+giving up on it — see "Fix A" below for what shipped and
+`test_jit_iife_operator.py`/`_scheme_fuzz_gen.py`'s IIFE-shaped cases for
+the regression/fuzz coverage. **This closes the dominant cost described
+below for `let`/`or`/`and`/`cond`/`case`**: a function whose body contains
+one of these no longer gets permanently excluded from Phase 2/JIT the way
+this document originally found — the `mi-loop` example in "Verified,
+directly" now reaches Phase 2 and JIT-compiles.
+
+**Fix A does not cover named-`let`** (or plain `letrec`/`letrec*`, or
+mutually-referential internal `define`s): its outer
+`(lambda (loop) (set! loop ...) (loop ...))` wrapper still contains a
+literal `set!`, which `_phase2_safe_walk` has no case for regardless of
+how its operator resolves — confirmed still excluded after Fix A landed.
+That gap, and the second, smaller repeated-compile cost described below,
+are exactly Fix B and Fix C, both still open. The rest of this document
+is preserved as originally written (including the now-historical
+"Verified, directly" numbers) since it's still the accurate account of
+what those two remaining fixes require and why.
+
+---
+
 ## Summary
 
 `let`, `or`, `and`, `cond`, `case`, `record-case`, and named-`let` all
 desugar, at some point, into an application whose *operator* is a literal
 `(lambda ...)` — an IIFE (immediately-invoked function expression):
 `((lambda (v) body) e)`. Any function that contains one of these calls
-*anywhere in its own body* is permanently excluded from Phase 2/JIT,
-**not just slowed down** — confirmed directly (see "Verified, directly"
-below). This is the dominant cost. A second, smaller cost stacks on top of
+*anywhere in its own body* was, before Fix A landed (see "Status" above),
+permanently excluded from Phase 2/JIT, **not just slowed down** —
+confirmed directly (see "Verified, directly" below, and re-verified
+against the same example after the fix in Fix A's "Landed" section). This
+was the dominant cost, and is now resolved for the non-`set!`-implicated
+cases (`let`/`or`/`and`/`cond`/`case`); named-`let`'s own outer wrapper is
+excluded for an independent reason (see "The relationship to `set!`"
+below) and is unaffected by Fix A. A second, smaller cost stacks on top of
 it for the specific closures that manage to still reach the JIT despite
 that exclusion (e.g. a named-`let`'s self-recursive inner loop): those get
 recompiled from scratch, at real `compile()`/`exec()` cost, on every
@@ -144,6 +173,20 @@ single one of its ~50 iterations, every single pixel. This is not "pays a
 repeated compile cost"; it's "never gets a shot at Phase 2 or the JIT at
 all."
 
+**Re-verified after Fix A landed, same example, same instrumentation:**
+
+```
+proc[5] (is_direct_eval_safe): True
+is_phase2_safe:                True
+jit_lookup:                    <function _jit_fn at ...>
+```
+
+`mi-loop` now reaches Phase 2 and is JIT-compiled — pinned as
+`test_mi_loop_plain_let_reaches_phase2_and_jit_and_is_correct` in
+`test_jit_iife_operator.py`. `mandelbrot-iterations` (the caller) is no
+longer poisoned either, confirming the transitivity direction also now
+resolves cleanly in the safe case.
+
 ### The second, smaller effect: closures that *do* still reach the JIT
 
 Named-`let`'s outer `(lambda (loop) (set! loop ...) (loop ...))` wrapper
@@ -237,7 +280,7 @@ inherits the same "this needs real care, not a quick patch" character.
 
 These are two separable fixes with very different risk profiles.
 
-### Fix A — teach `_phase2_safe_walk_call` to resolve a literal-lambda operator (addresses the *dominant* cost)
+### Fix A — teach `_phase2_safe_walk_call` to resolve a literal-lambda operator (addresses the *dominant* cost) — **Landed**
 
 Right now `_resolve_operator` gives up immediately on anything that isn't
 a `var_aexp`/`lexical_address_aexp`. It could additionally recognize: the
@@ -282,6 +325,52 @@ Caveats:
 predicate (`_resolve_operator`/`_phase2_safe_walk_call`), not to code
 generation, with an existing fallback (today's behavior) if the new case
 is written conservatively.
+
+**Landed.** Implemented in `_phase2_safe_walk_call` largely as scoped
+above, with one correction found while verifying it against the `mi-loop`
+example: "extending `env` with the lambda's formals bound to
+unknown-but-locally-scoped" cannot mean *reusing `env` unmodified*, which
+was the first thing tried. Lexical-address depths inside the IIFE body
+are counted relative to the actual runtime frame stack, which gains one
+new frame per level of IIFE nesting; leaving `env` unmodified silently
+shifts every reference more than one frame away (e.g. a call to a
+primitive like `>=` from inside the `let`, which is exactly what
+`mi-loop` does) onto the wrong frame, and `_resolve_lexical_address`
+either resolves the wrong binding or fails outright — in this case,
+`_is_phase2_safe(mi-loop)` stayed `False` even with the new branch
+present, for the new, wrong reason instead of the old one. The fix pushes
+a *real* frame via `_extend_direct(env, formals, dummy_args)` before
+recursing, with placeholder values (`False`) that are never actually
+read: a depth-0 reference to one of these formals used as an operator is
+still unconditionally unsafe (`'local'`), and used as a plain value is
+still unconditionally safe (`_phase2_safe_walk`'s `lexical_address_aexp`
+case) — only the frame's *shape* (formal names, and its presence at all,
+for depth-counting) needs to be right. Confirmed correct on two levels of
+nested `let` specifically because a single added frame wasn't enough to
+catch this class of bug; one level alone still resolves depth-1
+references correctly by coincidence.
+
+Verified per the caveats above:
+- The `mi-loop` example now reaches Phase 2 and JIT-compiles — see
+  "Verified, directly"'s post-fix re-check earlier in this document.
+- A body that's genuinely unsafe (calls its own formal in operator
+  position, e.g.) is still correctly rejected —
+  `test_unsafe_iife_body_is_still_rejected` in
+  `test_jit_iife_operator.py`.
+- Named-`let`'s outer wrapper is still correctly excluded (its literal
+  `set!`) — `test_named_let_outer_wrapper_still_excluded_but_correct`.
+- Differential fuzzing: six new IIFE-shaped generators (`let`, nested
+  `let`, `let`-wrapped tail recursion, `or`/`and`, `cond`, named-`let`)
+  added to `_scheme_fuzz_gen.py`, run through `test_jit_fuzz.py`'s
+  existing fast/slow/phase2-only three-way comparison across several
+  seeds and case counts (up to 1500 cases) with no mismatches. This also
+  caught one unrelated fuzz-generator bug in the process: an
+  `(and (<= n base) (>= n 0))` base-case test formed a window a `-2`
+  recursive step could jump over, which hung specifically under the
+  trampoline (real Scheme tail calls there don't grow the Python call
+  stack, so there's no `RecursionError` to eventually cap it) — fixed by
+  using a monotonic threshold test instead, consistent with every other
+  case in that file.
 
 ### Fix B — inline non-escaping IIFEs directly as Python locals (addresses the *secondary*, repeated-compile cost)
 
@@ -429,19 +518,27 @@ Fix A is the higher-leverage, lowest-risk piece — worth doing on its own
 even without the others, since it turns "never reaches Phase 2 at all"
 into "reaches Phase 2 and the existing JIT pipeline," which is already a
 large win by itself (see Phase 5's own measured numbers for exactly this
-call shape).
+call shape). **Landed** — see "Fix A" above for the implementation and its
+verification.
 
 Fix C is *not* a standalone follow-up the way it first looked — traced
 through directly, it produces zero observable benefit until it's paired
 with resolving the "own parameter, just assigned, called as operator"
 shape (found while checking this). That combination is worth doing
 together, specifically for named-`let`/`letrec`/internal-defines, and is
-still narrower and lower-risk than reviving general `set!` support. But
-it doesn't reduce to "just do Fix C" — it's Fix C plus a second, related
-piece of operator-resolution work, and Fix A still has to land separately
-for the *enclosing* function around any of these to benefit too.
+still narrower and lower-risk than reviving general `set!` support. Fix A
+having landed removes one of its two preconditions — the *enclosing*
+function around a named-`let`/`letrec`/internal-define now benefits from
+Fix A on its own merits already, per the caveat noted in Fix A's own
+section above (an enclosing function that also happens to contain a
+named-`let` now reaches Phase 2 independently of named-let's own,
+narrower path through it). What's left, unchanged: Fix C plus the
+"own parameter, just assigned, called as operator" resolution, still
+needed together before named-`let`'s *own* outer wrapper (as opposed to
+its enclosing function) can reach Phase 2/JIT.
 
 Fix B is the deepest and riskiest of the three, and only obviously worth
-its cost once Fix A (and, for named-`let`, the Fix C pairing above) are in
-and the residual repeated-compile cost is actually measured on real
-workloads.
+its cost now that Fix A is in and its residual repeated-compile cost
+(the second, smaller effect described above — a fresh closure identity
+per loop iteration paying a real `compile()`/`exec()` every time) can
+actually be measured on real workloads instead of estimated.
