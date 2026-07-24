@@ -1943,16 +1943,37 @@
 	((null?^ (cdr^ exps)) (k (car^ exps)))
 	(else (k `(if ,(car^ exps) (and ,@(at^ (cdr^ exps))) #f)))))))
 
-;; avoids variable capture
+;; Fresh names for hygiene-sensitive macros (or/cond/case/record-case)
+;; that need a temporary binding but have no true hygienic-macro system
+;; to fall back on (this dialect's symbols are interned/compared by
+;; name -- see Symbol.__eq__ in Scheme.py -- not by object identity, so
+;; there's no such thing as a truly uncapturable uninterned symbol
+;; here). A counter-based name no realistic user program would type is
+;; the practical substitute. This lets these macros bind their temp
+;; directly and splice the rest of the expansion straight into the
+;; `if`'s branches (which are already lazy) instead of wrapping the
+;; rest in a `(lambda () ...)` purely to re-run it outside the temp's
+;; scope: that older thunk-per-evaluation trick defeated the JIT's
+;; identity-keyed compile caches for any `or`/`cond`/`case`/`record-case`
+;; evaluated in a hot loop (see README-PERFORMANCE.md).
+(define *gensym-counter* 0)
+
+(define gensym^
+  (lambda (prefix)
+    (set! *gensym-counter* (+ *gensym-counter* 1))
+    (string->symbol
+      (string-append "%%" prefix "-" (number->string *gensym-counter*)))))
+
+;; avoids variable capture (via gensym, not a thunk -- see gensym^ above)
 (define or-transformer^
   (lambda-macro (adatum handler fail k)
     (let ((exps (cdr^ adatum)))
       (cond
 	((null?^ exps) (k '#f))
 	((null?^ (cdr^ exps)) (k (car^ exps)))
-	(else (k `(let ((bool ,(car^ exps))
-			(else-code (lambda () (or ,@(at^ (cdr^ exps))))))
-		    (if bool bool (else-code)))))))))
+	(else (let ((g (gensym^ "or-bool")))
+		(k `(let ((,g ,(car^ exps)))
+		      (if ,g ,g (or ,@(at^ (cdr^ exps))))))))))))
 
 (define* amacro-error
   (lambda (msg adatum handler fail)
@@ -1982,24 +2003,23 @@
 		   ((null?^ (cdr^ then-exps)) (k (car^ then-exps)))
 		   (else (k `(begin ,@(at^ then-exps))))))
 		((null?^ then-exps)
-		 (if (null?^ other-clauses)
-		   (k `(let ((bool ,test-exp))
-			 (if bool bool)))
-		   (k `(let ((bool ,test-exp)
-			     (else-code (lambda () (cond ,@(at^ other-clauses)))))
-			 (if bool bool (else-code))))))
+		 (let ((g (gensym^ "cond-bool")))
+		   (if (null?^ other-clauses)
+		     (k `(let ((,g ,test-exp))
+			   (if ,g ,g)))
+		     (k `(let ((,g ,test-exp))
+			   (if ,g ,g (cond ,@(at^ other-clauses))))))))
 		((eq?^ (car^ then-exps) '=>)
 		 (cond
 		   ((null?^ (cdr^ then-exps))
 		    (amacro-error "improper => clause" first-clause handler fail))
 		   ((null?^ other-clauses)
-		    (k `(let ((bool ,test-exp)
-			      (th (lambda () ,(cadr^ then-exps))))
-			  (if bool ((th) bool)))))
-		   (else (k `(let ((bool ,test-exp)
-				   (th (lambda () ,(cadr^ then-exps)))
-				   (else-code (lambda () (cond ,@(at^ other-clauses)))))
-			       (if bool ((th) bool) (else-code)))))))
+		    (let ((g (gensym^ "cond-bool")))
+		      (k `(let ((,g ,test-exp))
+			    (if ,g (,(cadr^ then-exps) ,g))))))
+		   (else (let ((g (gensym^ "cond-bool")))
+			   (k `(let ((,g ,test-exp))
+				 (if ,g (,(cadr^ then-exps) ,g) (cond ,@(at^ other-clauses)))))))))
 		((null?^ other-clauses)
 		 (if (null?^ (cdr^ then-exps))
 		   (k `(if ,test-exp ,(car^ then-exps)))
@@ -2023,20 +2043,24 @@
 	  (lambda-cont (v)
 	    (k `(let (,(car^ bindings)) ,v)))))))
 
-;; avoids variable capture
+;; avoids variable capture (via gensym, not a thunk -- see gensym^ above);
+;; each clause body is spliced directly into its cond clause, so (unlike
+;; the old thunk-based expansion) only the matching clause's code ever
+;; runs and no closure is allocated for any clause, matching or not.
 (define case-transformer^
   (lambda-macro (adatum handler fail k)
     (let ((exp (cadr^ adatum))
-	  (clauses (cddr^ adatum)))
-      (case-clauses->cond-clauses^ 'r clauses
-	  (lambda-cont2 (bindings new-clauses)  ;; bindings and new-clauses are unannotated
-	    (k `(let ((r ,exp) ,@bindings) (cond ,@new-clauses))))))))
+	  (clauses (cddr^ adatum))
+	  (r (gensym^ "case")))
+      (case-clauses->cond-clauses^ r clauses
+	  (lambda-cont (new-clauses)
+	    (k `(let ((,r ,exp)) (cond ,@new-clauses))))))))
 
-(define* case-clauses->simple-cond-clauses^
+(define* case-clauses->cond-clauses^
   (lambda (var clauses k)
     (if (null?^ clauses)
       (k '())
-      (case-clauses->simple-cond-clauses^ var (cdr^ clauses)
+      (case-clauses->cond-clauses^ var (cdr^ clauses)
 	(lambda-cont (new-clauses)
 	  (let ((clause (car^ clauses)))
 	    (cond
@@ -2047,52 +2071,36 @@
 	      (else (k (cons `((memq ,var ',(car^ clause)) ,@(at^ (cdr^ clause)))
 			     new-clauses))))))))))
 
-(define* case-clauses->cond-clauses^
-  (lambda (var clauses k2)
-    (if (null?^ clauses)
-      (k2 '() '())
-      (case-clauses->cond-clauses^ var (cdr^ clauses)
-	(lambda-cont2 (bindings new-clauses)  ;; bindings and new-clauses are unannotated
-	  (let ((clause (car^ clauses)))
-	    (if (eq?^ (car^ clause) 'else)
-	      (k2 (cons `(else-code (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		  (cons '(else (else-code)) new-clauses))
-	      (if (symbol?^ (car^ clause))
-		(let ((name (car^ clause)))
-		  (k2 (cons `(,name (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		      (cons `((eq? ,var ',(car^ clause)) (apply ,name '())) new-clauses)))
-		(let ((name (caar^ clause)))
-		  (k2 (cons `(,name (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		      (cons `((memq ,var ',(car^ clause)) (apply ,name '())) new-clauses)))))))))))
-
-;; avoids variable capture
+;; avoids variable capture (via gensym, not a thunk -- see gensym^ above);
+;; each clause body is spliced directly into its cond clause, so (unlike
+;; the old thunk-based expansion) only the matching clause's
+;; part-destructuring closure is ever allocated, not one per clause
+;; every time.
 (define record-case-transformer^
   (lambda-macro (adatum handler fail k)
     (let ((exp (cadr^ adatum))
-	  (clauses (cddr^ adatum)))
-      (record-case-clauses->cond-clauses^ 'r clauses
-	(lambda-cont2 (bindings new-clauses)  ;; bindings and new-clauses are unannotated
-	  (k `(let ((r ,exp) ,@bindings) (cond ,@new-clauses))))))))
+	  (clauses (cddr^ adatum))
+	  (r (gensym^ "record-case")))
+      (record-case-clauses->cond-clauses^ r clauses
+	(lambda-cont (new-clauses)
+	  (k `(let ((,r ,exp)) (cond ,@new-clauses))))))))
 
 (define* record-case-clauses->cond-clauses^
-  (lambda (var clauses k2)
+  (lambda (var clauses k)
     (if (null?^ clauses)
-      (k2 '() '())
+      (k '())
       (record-case-clauses->cond-clauses^ var (cdr^ clauses)
-	(lambda-cont2 (bindings new-clauses)  ;; bindings and new-clauses are unannotated
+	(lambda-cont (new-clauses)
 	  (let ((clause (car^ clauses)))
 	    (if (eq?^ (car^ clause) 'else)
-	      (k2 (cons `(else-code (lambda () ,@(at^ (cdr^ clause)))) bindings)
-		  (cons `(else (else-code)) new-clauses))
+	      (k (cons `(else ,@(at^ (cdr^ clause))) new-clauses))
 	      (if (symbol?^ (car^ clause))
-		(let ((name (car^ clause)))
-		  (k2 (cons `(,name (lambda ,(cadr^ clause) ,@(at^ (cddr^ clause)))) bindings)
-		      (cons `((eq? (car ,var) ',(car^ clause)) (apply ,name (cdr ,var)))
-			    new-clauses)))
-		(let ((name (caar^ clause)))
-		  (k2 (cons `(,name (lambda ,(cadr^ clause) ,@(at^ (cddr^ clause)))) bindings)
-		      (cons `((memq (car ,var) ',(car^ clause)) (apply ,name (cdr ,var)))
-			    new-clauses)))))))))))
+		(k (cons `((eq? (car ,var) ',(car^ clause))
+			   (apply (lambda ,(cadr^ clause) ,@(at^ (cddr^ clause))) (cdr ,var)))
+			 new-clauses))
+		(k (cons `((memq (car ,var) ',(car^ clause))
+			   (apply (lambda ,(cadr^ clause) ,@(at^ (cddr^ clause))) (cdr ,var)))
+			 new-clauses))))))))))
 
 ;;----------------------------------------------------------------------------
 
@@ -2154,12 +2162,13 @@
 	   (type-tester-name
 	     (string->symbol (string-append (symbol->string^ type-name) "?")))
 	   (exp (caddr^ adatum))
-	   (clauses (cdddr^ adatum)))
-      (record-case-clauses->cond-clauses^ 'r clauses
-	(lambda-cont2 (bindings new-clauses)  ;; bindings and new-clauses are unannotated
-	  (k `(let ((r ,exp) ,@bindings)
-		(if (not (,type-tester-name r))
-		  (error 'cases "~a is not a valid ~a" r ',type-name)
+	   (clauses (cdddr^ adatum))
+	   (r (gensym^ "cases")))
+      (record-case-clauses->cond-clauses^ r clauses
+	(lambda-cont (new-clauses)
+	  (k `(let ((,r ,exp))
+		(if (not (,type-tester-name ,r))
+		  (error 'cases "~a is not a valid ~a" ,r ',type-name)
 		  (cond ,@new-clauses)))))))))
 
 ;;----------------------------------------------------------------------------
