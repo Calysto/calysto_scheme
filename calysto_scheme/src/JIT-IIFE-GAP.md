@@ -1,6 +1,13 @@
 # Why `let` (and everything built on it) can shut off the JIT
 
-## Status: Fix A and Fix B have both landed
+## Status: Fix A and Fix B have landed; Fix C was investigated and rejected
+
+**Fix A and Fix B have both landed** (below). **Fix C was investigated in
+depth and found unsafe as designed** — its central correctness argument
+("this specific `set!` never needs undo-on-backtrack support") is false,
+disproven with a reproducible counterexample. See Fix C's own section for
+the full account. Don't re-attempt Fix C's original design without reading
+that counterexample first.
 
 **Fix A** (landed first) taught `_phase2_safe_walk_call` to resolve a
 literal-lambda operator instead of giving up on it, so a function
@@ -625,7 +632,7 @@ those other transformers.
   faster than) the hand-optimized `let`-free workaround this document's
   own `mandelbrot.ss` example originally had to resort to.
 
-### Fix C — a restricted, non-undoable internal `set!` for tying the letrec knot (necessary, not sufficient, for named-`let`'s *own* wrapper and internal `define`s — see correction below)
+### Fix C — a restricted, non-undoable internal `set!` for tying the letrec knot (necessary, not sufficient, for named-`let`'s *own* wrapper and internal `define`s — see correction below) — **Investigated and rejected: unsafe as designed**
 
 Fix A doesn't help named-`let`'s outer `(lambda (loop) (set! loop ...)
 (loop ...))` wrapper reach Phase 2/JIT on its own merits — it's excluded
@@ -732,6 +739,128 @@ companion change (resolving a parameter just fixed by an
 `apply-twice`-shaped gap generally) before it produces any observable
 effect. Treat the pair as one unit of work, not two independent options.
 
+**Investigated (via a dedicated design-review pass, the same discipline
+used before Fix B) and rejected before any code was written.** The core
+claim above — "this `set!` always writes to a brand-new cell, exactly
+once, before anything could possibly read it, and every re-entry
+(including one driven by `amb`/`choose` backtracking) allocates a *fresh*
+cell, so there's no aliasing across a backtrack boundary for undo to
+restore" — **is false.** It's true only for the narrow sub-claim "two
+*separate* logical entries into the same `let`/`letrec` never share
+storage." It was never true for the actual risk: a closure that *escapes*
+one entry (stored somewhere reachable from outside, not just returned
+normally) and is then *invoked after* a backtrack unwinds back through the
+point where the tie-in `set!` ran.
+
+Confirmed directly, reproducibly, against the live interpreter — no
+hypothetical, no analogy:
+
+```scheme
+(define captured (vector #f))
+(choose
+  (begin
+    (let loop ((i 0))
+      (vector-set! captured 0 loop)
+      (if (= i 0) 'first (loop (- i 1))))
+    (require #f)                       ; force a full unwind, unconditionally,
+    'unreached)                        ; *after* the named-let already
+                                        ; completed normally
+  ((vector-ref captured 0) 3))
+```
+
+Today (full undo, as it works before this investigation and unchanged by
+it): this raises `RunTimeError: attempt to apply non-procedure 'undefined'`.
+`loop` escapes via `vector-set!` (a plain mutation, never undo-wrapped —
+only `assign-aexp` gets that treatment, confirmed as the only such site in
+`interpreter-cps.ss`'s `m`), and when it's later invoked, its own
+self-reference to `loop` resolves to `'undefined` — because the outer
+`(require #f)`'s full backtrack correctly reverted the tie-in `set!` via
+the *existing* undo machinery on its way back out, exactly as that
+machinery is supposed to work. **If `internal_assign_aexp` had skipped
+undo tracking, as Fix C's whole premise requires, this exact program would
+instead silently keep running** — `loop`'s cell would never revert, the
+stale self-reference would resolve, and `(loop 3)` would actually execute
+— a real, verified, silent change in observable behavior, not a
+theoretical risk. `(require #f)` doesn't even need to be lexically inside
+the named-`let` for this to happen; the hazard comes from an *outer*
+backtrack unwinding *through* the tie-in point, which can happen from
+anywhere dynamically enclosing the call, regardless of what the
+named-`let`'s own body does or doesn't contain.
+
+This is exactly the finding `README-PERFORMANCE.md`'s "Abandoned: `set!`
+support in Phase 2/JIT" section already made for the *general* case — "a
+function can be running 'inside' an active backtracking search without any
+`choose`/`amb` appearing anywhere in its own text ... the risk comes from
+the *caller's* dynamic context, not the callee's code" — and already
+declined to ship even partially verified. Restricting *which* assignments
+get the new tag (Fix C's whole idea) changes nothing about *who might be
+dynamically backtracking through them* at the moment they run. Phase 2 and
+the JIT have no `fail`/undo-continuation parameter at all (confirmed:
+`symbol_assign_aexp` appears exactly once in `Scheme.py`, in
+`_is_direct_eval_safe`'s exclusion check) — there is no channel for either
+of them to know "a live backtracking search might currently be in
+progress," no matter how narrowly the mutation being considered is scoped.
+`README-PERFORMANCE.md` already considered and rejected the natural
+mitigation (checking the live fail-continuation register against a known
+"no backtracking possible" baseline) as still not fully verifiable, for
+the same underlying reason.
+
+**This also isn't just a narrower-but-still-worthwhile win with an asterisk
+attached.** A companion measurement (instrumenting `_jit_compile_proc` on
+a hot named-`let`-based benchmark) found that named-`let`'s own wrapper
+dispatch cost — the piece Fix C targets — is only about half of the total
+remaining overhead. The other half comes from an entirely different,
+`set!`-unrelated mechanism: the tied-in inner closure is a fresh Python
+object every single outer call, so `_jit_cache` never gets a hit and it
+pays a real `compile()`/`exec()` cost every time, exactly the "second,
+smaller effect" this document's own "Verified, directly" section already
+described. Fix C, even if it were safe, would do nothing about that half.
+
+**If a genuinely sound version of this is ever wanted**, the only path
+found that actually closes the gap is a *whole-program*, not per-function,
+gate: track whether `choose`/`amb` has *ever actually executed* anywhere
+in the running process (a global flag, bumped inside `choose-aexp`'s
+evaluator, mirroring the existing `_binding_write_epoch` pattern already
+used for cache invalidation elsewhere in `Scheme.py`), and only treat
+`internal_assign_aexp` as safe while that flag is still false —
+unconditionally declining it, and invalidating any cache entries that used
+the optimization, the instant it flips true. This removes the precondition
+the counterexample above depends on (a live/possible backtracking
+context), but at real cost: **zero benefit for any program or
+REPL/notebook session that uses `amb`/`choose` anywhere at all**, even in
+code unrelated to the named-`let`/`letrec` being considered — a real cost
+given this project treats `amb`/`choose` as a supported, documented
+feature (`test_all.ss`'s own `floors2` test exercises it extensively), not
+a corner case. Building and, especially, *verifying* that gate (correctly
+extending across `load`/interactive `eval` of new top-level forms after
+compiles have already happened) is itself a nontrivial, adversarial-testing-
+requiring project — not something to bolt on casually to recover roughly
+half of an already-modest remaining win.
+
+**Two regression tests worth keeping regardless of what's decided about
+Fix C** (both already run against the live interpreter as part of this
+investigation, both pin *today's* correct, fully-undo-protected behavior):
+the named-`let` example above (must keep raising `RunTimeError`, not
+silently start succeeding, for as long as full undo is kept), and its
+`letrec` analogue (a `letrec` binding whose *value expression* itself
+contains `choose`, escaped via a mutable structure — pins the more general
+aliasing hazard, not just named-let's narrower self-tie shape).
+
+**Recommendation: do not implement Fix C as designed.** Named-`let`/
+`letrec`/internal-defines' *enclosing* function already gets the full
+benefit of Fix A+B today; only the wrapper's own dispatch remains
+unaddressed, worth roughly 2× on the specific case measured here, not an
+order of magnitude — and reaching even that requires either accepting a
+proven, reproducible silent-behavior-change under `amb`/`choose`, or
+building materially more infrastructure (the whole-program gate above)
+than this section originally scoped, for a payoff now known to be smaller
+than assumed. The separate, `set!`-unrelated recompilation-avoidance
+opportunity noted above (a closure built from an already-JIT-compiled body
+shouldn't need a fresh `compile()`/`exec()` on every call just because its
+free variables differ) is a more promising, better-isolated place to look
+for further speedup, if one is wanted — untouched by any of the soundness
+problems here.
+
 ### Recommendation
 
 Fix A is the higher-leverage, lowest-risk piece — worth doing on its own
@@ -758,19 +887,24 @@ accumulate exactly this kind of gap, one per call site that turns out to
 need updating — the root-cause fix instead needed the gaps found once,
 structurally, not per call site).
 
-Fix C is *not* a standalone follow-up the way it first looked — traced
-through directly, it produces zero observable benefit until it's paired
-with resolving the "own parameter, just assigned, called as operator"
-shape (found while checking this). That combination is worth doing
-together, specifically for named-`let`/`letrec`/internal-defines, and is
-still narrower and lower-risk than reviving general `set!` support. Fix A
-having landed removes one of its two preconditions — the *enclosing*
-function around a named-`let`/`letrec`/internal-define now benefits from
-Fix A (and now Fix B) on its own merits already, per the caveat noted in
-Fix A's own section above (an enclosing function that also happens to
-contain a named-`let` now reaches Phase 2 independently of named-let's
-own, narrower path through it). What's left, unchanged: Fix C plus the
-"own parameter, just assigned, called as operator" resolution, still
-needed together before named-`let`'s *own* outer wrapper (as opposed to
-its enclosing function) can reach Phase 2/JIT. This is the only piece of
-this document's original analysis still fully open.
+Fix C turned out to be worse than "not a standalone follow-up" — its core
+safety argument is false, disproven with a reproducible counterexample
+(see "Fix C" above). **Rejected as designed; do not implement.** The
+*enclosing* function around a named-`let`/`letrec`/internal-define already
+benefits fully from Fix A+B, per the caveat noted in Fix A's own section
+above (an enclosing function that also happens to contain a named-`let`
+reaches Phase 2 independently of named-let's own, narrower path through
+it) — what's NOT reachable is named-`let`'s/`letrec`'s *own* outer
+wrapper, and closing that gap the way Fix C proposed means accepting a
+proven silent-behavior-change under `amb`/`choose`. A sound version would
+need a whole-program "has backtracking ever run" gate (sketched in Fix C's
+section above), which is real, verifiable-but-nontrivial infrastructure
+for a payoff now measured at roughly 2× on the specific case checked, not
+an order of magnitude — about half of the remaining cost turns out to be a
+separate, `set!`-unrelated recompilation issue (a fresh closure identity
+every call means a fresh `compile()`/`exec()` every call) that Fix C
+wouldn't touch even if it were safe. This document's remaining open items
+are: that recompilation-avoidance idea (untouched by any soundness
+problem, worth its own separate investigation), and the whole-program gate
+above, if named-`let`'s own wrapper reaching Phase 2/JIT is ever judged
+worth that infrastructure cost.
