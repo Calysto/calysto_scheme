@@ -1322,6 +1322,11 @@
     (formals (list-of id?))
     (bodies (list-of aexpression?))
     (info source-info?))
+  (let-aexp
+    (vars (list-of id?))
+    (val-aexps (list-of aexpression?))
+    (bodies (list-of aexpression?))
+    (info source-info?))
   (mu-lambda-aexp
     (formals (list-of id?))
     (runt id?)
@@ -1482,6 +1487,12 @@
 (define define-var^ (lambda (x) (untag-atom^ (cadr^ x))))
 (define define-docstring^ (lambda (x) (untag-atom^ (caddr^ x))))
 (define begin?^ (tagged-list^ 'begin >= 2))
+;; Plain (unnamed) let only -- named let, `(let name (...) body...)`, has
+;; cadr^ a symbol, not a list; that shape is deliberately excluded here (it
+;; keeps going through let-transformer^'s macro expansion, since it needs
+;; letrec's set!-based knot-tying, not this direct dispatch -- see aparse's
+;; ((let?^ adatum) ...) clause).
+(define let?^ (tagged-list^ 'let >= 3))
 (define lambda?^ (tagged-list-or^ 'lambda 'λ >= 3))
 (define lambda-no-defines?^ (tagged-list^ 'lambda-no-defines >= 3))
 ;;(define trace-lambda?^ (tagged-list^ 'trace-lambda >= 4))
@@ -1526,6 +1537,29 @@
 		   (aparse (replace-info expansion info) senv handler fail k)))))))
 	((unquote?^ adatum) (aparse-error "misplaced" adatum handler fail))
 	((unquote-splicing?^ adatum) (aparse-error "misplaced" adatum handler fail))
+	;; Plain (unnamed) `let` is parsed directly into a native let-aexp
+	;; instead of going through macro expansion to an IIFE -- see
+	;; JIT-IIFE-GAP.md. Named let (cadr^ is a symbol) still falls through
+	;; to syntactic-sugar?^ below, unchanged, since it needs letrec's
+	;; set!-based knot-tying. Guarded by an eq? check against the
+	;; original let-transformer^ so `(define-syntax let ...)` -- which
+	;; overwrites the binding in macro-env in place, confirmed to work
+	;; today -- still takes effect: if overridden, this clause's guard
+	;; fails and control falls through to syntactic-sugar?^ exactly as
+	;; before this change existed.
+	((and (let?^ adatum) (not (symbol?^ (cadr^ adatum)))
+	      (eq? (get-first-frame-value 'let macro-env) let-transformer^))
+	 (let* ((bindings (cadr^ adatum))
+		(vars (map^ car^ bindings))
+		(exps (map^ cadr^ bindings))
+		(bodies (cddr^ adatum)))
+	   (unannotate-cps vars
+	     (lambda-cont (vars-list)
+	       (aparse-all exps senv handler fail
+		 (lambda-cont2 (val-aexps fail)
+		   (aparse-all bodies (cons vars-list senv) handler fail
+		     (lambda-cont2 (body-aexps fail)
+		       (k (let-aexp vars-list val-aexps body-aexps info) fail)))))))))
 	((syntactic-sugar?^ adatum)
 	 (expand-once^ adatum handler fail
 	   (lambda-cont2 (expansion fail)
@@ -2538,6 +2572,8 @@
 	`(begin ,@(map aunparse exps)))
       (lambda-aexp (formals bodies info)
 	`(lambda ,formals ,@(map aunparse bodies)))
+      (let-aexp (vars val-aexps bodies info)
+	`(let ,(map list vars (map aunparse val-aexps)) ,@(map aunparse bodies)))
       (mu-lambda-aexp (formals runt bodies info)
 	`(lambda (,@formals . ,runt) ,@(map aunparse bodies)))
       (app-aexp (operator operands info)
@@ -3420,6 +3456,19 @@
 		 (else (runtime-error "bad exception type" info handler fail)))))))
       (choose-aexp (exps info)
 	(eval-choices exps env handler fail k))
+      ;; Native let: evaluates val-aexps in the current env, then bodies in
+      ;; one new frame -- no closure construction, no apply dispatch. See
+      ;; JIT-IIFE-GAP.md (this replaces the old IIFE desugaring
+      ;; `((lambda (v ...) body) e ...)` for plain let, and transitively
+      ;; for everything built on it -- or/and/cond/case/let*/named-let/
+      ;; letrec/internal-defines). m*/eval-sequence/extend are the same
+      ;; helpers try-catch-handler already composes this same way.
+      (let-aexp (vars val-aexps bodies info)
+	(m* val-aexps env handler fail
+	  (lambda-cont2 (args fail)
+	    (eval-sequence bodies
+	      (extend env vars args (make-empty-docstrings (length args)))
+	      handler fail k))))
       (app-aexp (operator operands info)
 	(m* operands env handler fail
 	  (lambda-cont2 (args fail)

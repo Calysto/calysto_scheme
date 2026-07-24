@@ -728,6 +728,20 @@ class _SchemeRuntimeError(Exception):
 ##   lambda-aexp:            (tag formals bodies info)
 ##                            formals = exp.cdr.car
 ##                            bodies  = exp.cdr.cdr.car
+##   let-aexp:               (tag vars val-aexps bodies info)
+##                            vars      = exp.cdr.car
+##                            val-aexps = exp.cdr.cdr.car
+##                            bodies    = exp.cdr.cdr.cdr.car
+##                            Native `let` -- see JIT-IIFE-GAP.md. Semantics
+##                            are exactly a lambda application (evaluate
+##                            val-aexps against the *current* env, evaluate
+##                            bodies against that plus one new frame), just
+##                            without ever constructing an intermediate
+##                            closure/proc value -- everything built on
+##                            `let` (or/and/cond/case/let*/named-let/
+##                            letrec/internal-defines) produces this tag
+##                            too, since they all bottom out by producing a
+##                            `(let ...)` form at the parser level.
 ##   app-aexp:               (tag operator operands info)
 ##                            operator = exp.cdr.car
 ##                            operands = exp.cdr.cdr.car
@@ -760,6 +774,48 @@ def _is_direct_eval_safe(bodies):
             return False
         cur = cur.cdr
     return True
+
+def _let_body_has_escaping_closure(body_aexps):
+    """True iff any of body_aexps' (recursively reachable) sub-expressions
+    creates a first-class procedure value -- lambda_aexp, mu_lambda_aexp,
+    trace_lambda_aexp, or mu_trace_lambda_aexp, the four aexp tags that
+    build a closure (interpreter-cps.ss's `m` dispatches all four to
+    closure/mu-closure/trace-closure/mu-trace-closure respectively).
+    Used by _JitCompiler to decide whether a let-aexp's bound variables can
+    be safely compiled as plain Python locals: if nothing inside can
+    capture them, nothing can outlive this call, so inlining is sound.
+
+    Deliberately does NOT stop at a nested let-aexp boundary (unlike
+    _is_direct_eval_safe's `_safe`, which stops at a lambda boundary since
+    inner lambdas get their own independent analysis) -- a nested let's own
+    escaping closure must make the OUTER let "real" (deferred to a genuine
+    closure) too, not just the inner one, because the outer let's fast path
+    would otherwise inline the inner let's bound variables as Python locals
+    that the escaping closure then can't correctly capture. Scanning
+    through nested lets instead of stopping at them is what makes
+    "does this let need a real frame" decidable per-let, with no need for
+    multi-level frame-chaining machinery: a "fast" let can never contain a
+    "real" let, since the outer scan already would have found whatever the
+    inner scan found. See JIT-IIFE-GAP.md's Fix B discussion."""
+    def _scan(exp):
+        if not isinstance(exp, cons):
+            return False
+        tag = exp.car
+        if (tag is symbol_lambda_aexp or tag is symbol_mu_lambda_aexp or
+                tag is symbol_trace_lambda_aexp or tag is symbol_mu_trace_lambda_aexp):
+            return True
+        cur = exp.cdr
+        while isinstance(cur, cons):
+            if _scan(cur.car):
+                return True
+            cur = cur.cdr
+        return False
+    cur = body_aexps
+    while isinstance(cur, cons):
+        if _scan(cur.car):
+            return True
+        cur = cur.cdr
+    return False
 
 _CACHE_MISS = object()   # sentinel distinct from any real cached value (incl. False/None)
 
@@ -956,6 +1012,32 @@ def _phase2_safe_walk(exp, env, visiting):
         # `else: raise _TrampolineFallback()` -- so treating it as safe
         # here would certify a closure Phase 2 cannot actually evaluate.
         # Falls through to the final `else: return False` below.
+    elif tag is symbol_let_aexp:
+        # Native let (see the canonical-reference comment above
+        # _is_direct_eval_safe and JIT-IIFE-GAP.md). val-aexps run against
+        # the current env; bodies run against a real placeholder frame
+        # pushed via _extend_direct -- same "push a real frame before
+        # recursing" discipline as _phase2_safe_walk_call's own
+        # literal-lambda-operator branch, needed so lexical-address depth
+        # is counted correctly for anything bodies reference more than one
+        # frame away. The dummy values are never read: a depth-0 reference
+        # to one of them used as an operator is unconditionally unsafe
+        # ('local'), and used as a plain value is unconditionally safe
+        # (the lexical_address_aexp case above) -- only the frame's shape
+        # needs to be right.
+        val_cur = exp.cdr.cdr.car
+        while isinstance(val_cur, cons):
+            if not _phase2_safe_walk(val_cur.car, env, visiting):
+                return False
+            val_cur = val_cur.cdr
+        vars_ = exp.cdr.car
+        dummy_args = []
+        cur = vars_
+        while isinstance(cur, cons):
+            dummy_args.append(False)
+            cur = cur.cdr
+        inner_env = _extend_direct(env, vars_, dummy_args)
+        return _phase2_safe_walk_seq(exp.cdr.cdr.cdr.car, inner_env, visiting)
     elif tag is symbol_begin_aexp:
         return _phase2_safe_walk_seq(exp.cdr, env, visiting)
     elif tag is symbol_app_aexp:
@@ -1148,6 +1230,25 @@ def _eval_direct(exp, env):
                 exp = exp.cdr.cdr.cdr.car   # tail: loop with else-branch
         elif tag is symbol_lambda_aexp:
             return closure(exp.cdr.car, exp.cdr.cdr.car, env)
+        elif tag is symbol_let_aexp:
+            # Native let -- see the canonical-reference comment above and
+            # JIT-IIFE-GAP.md. No closure construction, no apply dispatch:
+            # evaluate val-aexps against the current env, extend with one
+            # new frame, then run bodies in that frame exactly like
+            # begin_aexp's own inline tail-loop just below.
+            vars_ = exp.cdr.car
+            args = []
+            val_cur = exp.cdr.cdr.car
+            while isinstance(val_cur, cons):
+                args.append(_eval_direct(val_cur.car, env))
+                val_cur = val_cur.cdr
+            new_env = _extend_direct(env, vars_, args)
+            cur = exp.cdr.cdr.cdr.car
+            while cur.cdr is not symbol_emptylist:
+                _eval_direct(cur.car, new_env)
+                cur = cur.cdr
+            exp = cur.car
+            env = new_env
         elif tag is symbol_begin_aexp:
             # Inline sequence: all but last for effect, last is tail (loop, no recursion).
             cur = exp.cdr
@@ -1411,6 +1512,66 @@ class _JitCompiler:
         self._const_count = 0     # counter for generated constant-capture names
         self._frame_var = None    # local var name holding this call's reconstructed
                                    # outer frame, once _lambda first needs one -- see _lambda
+        self._let_scopes = []     # open fast-path let-aexp scopes, innermost last --
+                                   # each entry is (vars_list, py_names_list); see
+                                   # _resolve_scoped/expr's symbol_let_aexp case
+        self._let_count = 0       # counter for fast-path let-binding names (_jc_let_%d)
+
+    def _scope_at_depth(self, depth):
+        """If lexical-address `depth` (0 = innermost) falls within the
+        currently-open fast-path let-scopes, return that scope's
+        (vars_list, py_names_list); else None. Scopes are pushed
+        innermost-last onto self._let_scopes, so depth 0 is the last
+        entry, depth 1 the one before it, etc."""
+        n = len(self._let_scopes)
+        if 0 <= depth < n:
+            return self._let_scopes[n - 1 - depth]
+        return None
+
+    def _scope_lookup_by_name(self, sym):
+        """Innermost-first name-keyed lookup against open fast-path
+        let-scopes, for (use-lexical-address #f) mode, where aparse
+        produces name-based var-aexp nodes instead of lexical addresses.
+        Returns the synthetic Python local name, or None."""
+        for vars_list, py_names in reversed(self._let_scopes):
+            cur = vars_list
+            i = 0
+            while isinstance(cur, cons):
+                if cur.car is sym:
+                    return py_names[i]
+                cur = cur.cdr
+                i += 1
+        return None
+
+    def _resolve_operator_scoped(self, op_exp):
+        """Like the module-level _resolve_operator(op_exp, self._env), but
+        aware of currently-open fast-path let-scopes: a reference into one
+        is a let-bound Python local, never resolvable to a real
+        environment value -- returns ('scoped', None) for that case,
+        distinguishable from _resolve_operator's own
+        ('local'/'unresolved'/'value', ...) results, so callers
+        (_is_self_ref, _is_unshadowed_primitive) can treat it as a hard
+        'no' without needing the resolved value itself (a let-bound
+        variable can never be self._self, nor an unshadowed primitive --
+        it's always some ordinary runtime value). A reference past all
+        open scopes has its depth adjusted (by the open-scope count)
+        before delegating to the real depth-counting lookup, so it's
+        resolved exactly as if no scopes were open."""
+        if not isinstance(op_exp, cons):
+            return ('unresolved', None)
+        tag = op_exp.car
+        if tag is symbol_lexical_address_aexp:
+            depth = op_exp.cdr.car
+            if self._scope_at_depth(depth) is not None:
+                return ('scoped', None)
+            return _resolve_lexical_address(
+                depth - len(self._let_scopes), op_exp.cdr.cdr.car, self._env)
+        if tag is symbol_var_aexp:
+            sym = op_exp.cdr.car
+            if self._scope_lookup_by_name(sym) is not None:
+                return ('scoped', None)
+            return _resolve_var(sym, self._env)
+        return ('unresolved', None)
 
     def expr(self, exp):
         # Raw cons-cell field access throughout -- see the "canonical
@@ -1436,6 +1597,17 @@ class _JitCompiler:
             depth  = exp.cdr.car
             offset = exp.cdr.cdr.car
             name   = exp.cdr.cdr.cdr.car
+            # A depth within the currently-open fast-path let-scopes
+            # resolves directly to that scope's synthetic Python local --
+            # no real frame, no capture, no env walk at all (this is the
+            # whole performance win of the fast path). Otherwise, subtract
+            # the open-scope count so the existing depth==0/depth>0 logic
+            # below sees the same depth it would have without any open
+            # scopes. See _scope_at_depth and JIT-IIFE-GAP.md's Fix B.
+            scope = self._scope_at_depth(depth)
+            if scope is not None:
+                return scope[1][offset]
+            depth -= len(self._let_scopes)
             m = _jit_mangle(name)
             if depth == 0:
                 return m   # local parameter — already in function signature
@@ -1473,8 +1645,128 @@ class _JitCompiler:
             # layout: (tag formals bodies info)
             return self._lambda(exp.cdr.car, exp.cdr.cdr.car)
 
+        elif tag is symbol_let_aexp:
+            # layout: (tag vars val-aexps bodies info)
+            # Fast path: if nothing in the body can capture-and-outlive a
+            # bound variable (no nested lambda/mu-lambda/trace-lambda
+            # anywhere in it), compile as plain Python locals -- no
+            # closure, no frame, no runtime dispatch at all. Falls back to
+            # the deferred path (below) if the body escapes, or if the
+            # fast-path attempt itself hits something expr() can't compile
+            # (caught locally by _try_let_fast_expr, not allowed to abort
+            # this whole function's compile). See JIT-IIFE-GAP.md.
+            vars_ = exp.cdr.car
+            val_aexps = exp.cdr.cdr.car
+            body_aexps = exp.cdr.cdr.cdr.car
+            if not _let_body_has_escaping_closure(body_aexps):
+                fast_src = self._try_let_fast_expr(vars_, val_aexps, body_aexps)
+                if fast_src is not None:
+                    return fast_src
+            # Deferred/fallback path: build a real closure via _lambda (the
+            # same machinery an ordinary lambda-as-value already uses) and
+            # call it via _jit_call -- exactly the codegen shape _app's own
+            # literal-lambda-operator branch already used pre-refactor for
+            # this exact case (a let/or/and/cond/case IIFE).
+            val_cur = val_aexps
+            val_srcs = []
+            while isinstance(val_cur, cons):
+                val_srcs.append(self.expr(val_cur.car))
+                val_cur = val_cur.cdr
+            closure_src = self._lambda(vars_, body_aexps)
+            self._free['_jit_call'] = _jit_call
+            return f'_jit_call({closure_src}, [{", ".join(val_srcs)}])'
+
         else:
             raise _TrampolineFallback()
+
+    def _let_fast_bindings(self, val_aexps, vars_):
+        """Shared setup for both fast-path let-aexp compilers: compile
+        val-aexps as expressions in the *current* (pre-push) scope, mint a
+        fresh synthetic Python local per var (following _capture_const's
+        freshness convention, so there's never a shadowing collision --
+        real Scheme name shadowing is instead handled by scope-stack
+        lookup order, not by Python variable identity). Returns
+        (py_names, val_srcs); does not push the scope -- callers do that
+        themselves so they can wrap body compilation in their own
+        try/finally."""
+        val_srcs = []
+        cur = val_aexps
+        while isinstance(cur, cons):
+            val_srcs.append(self.expr(cur.car))
+            cur = cur.cdr
+        py_names = []
+        cur = vars_
+        while isinstance(cur, cons):
+            py_names.append('_jc_let_%d' % self._let_count)
+            self._let_count += 1
+            cur = cur.cdr
+        return py_names, val_srcs
+
+    def _try_let_fast_expr(self, vars_, val_aexps, body_aexps):
+        """Attempt the fast (Python-locals) path for a let-aexp already
+        proven escape-free, in expression (non-tail) position: reduces the
+        whole thing to a single Python expression via a walrus-operator
+        tuple, e.g. (_jc_let_0 := val0, _jc_let_1 := val1, ..., body0,
+        body1)[-1] -- valid, standard Python (tuple elements evaluate
+        left-to-right; a walrus assignment inside a tuple both assigns and
+        yields the assigned value). A trailing comma is added when there's
+        exactly one part so single-binding/single-body-expression lets
+        still produce a real one-element tuple, not a parenthesized
+        expression indexing error.
+
+        Returns the compiled source, or None if any part can't be
+        expressed this way (e.g. a body statement uses a tag expr() has no
+        case for, like begin_aexp) -- caught locally here and treated as
+        "use the deferred path for this let" rather than letting
+        _TrampolineFallback propagate and abort the *enclosing* function's
+        whole compile, which would be a real regression versus today
+        (where a let's body is never inline-compiled at all). See
+        JIT-IIFE-GAP.md."""
+        try:
+            py_names, val_srcs = self._let_fast_bindings(val_aexps, vars_)
+            assigns = [f'({py} := {src})' for py, src in zip(py_names, val_srcs)]
+            self._let_scopes.append((vars_, py_names))
+            try:
+                body_srcs = []
+                cur = body_aexps
+                while isinstance(cur, cons):
+                    body_srcs.append(self.expr(cur.car))
+                    cur = cur.cdr
+            finally:
+                self._let_scopes.pop()
+            parts = assigns + body_srcs
+            tail_comma = ',' if len(parts) == 1 else ''
+            return '(' + ', '.join(parts) + tail_comma + ')[-1]'
+        except _TrampolineFallback:
+            return None
+
+    def _try_let_fast_stmts(self, vars_, val_aexps, body_aexps, indent):
+        """Tail-position counterpart to _try_let_fast_expr: real Python
+        assignment statements (not the walrus-tuple expression form)
+        followed by body statements, with the *last* body expression
+        compiled via a recursive tail_stmts() call -- this is what lets a
+        self-recursive tail call inside the let's body keep participating
+        in the enclosing while True:/continue rewrite (Phase 4's tail-loop
+        flattening) instead of becoming an ordinary, non-tail-optimized
+        recursive Python call. Same local-catch-and-fall-back-to-None
+        discipline as _try_let_fast_expr."""
+        try:
+            py_names, val_srcs = self._let_fast_bindings(val_aexps, vars_)
+            assign_lines = [indent + f'{py} = {src}' for py, src in zip(py_names, val_srcs)]
+            self._let_scopes.append((vars_, py_names))
+            try:
+                body_list = []
+                cur = body_aexps
+                while isinstance(cur, cons):
+                    body_list.append(cur.car)
+                    cur = cur.cdr
+                stmt_lines = [indent + self.expr(e) for e in body_list[:-1]]
+                tail_lines = self.tail_stmts(body_list[-1], indent)
+            finally:
+                self._let_scopes.pop()
+            return assign_lines + stmt_lines + tail_lines
+        except _TrampolineFallback:
+            return None
 
     def _capture_const(self, val):
         """Stash an arbitrary Scheme object (AST fragment, environment, ...)
@@ -1643,6 +1935,11 @@ class _JitCompiler:
         #  - a nested call, e.g. ((make-adder n) 0)
         #  - an immediately-invoked lambda (how `let`/`or`/`and` commonly
         #    desugar), e.g. ((lambda (x) ...) e)
+        #  - a fast-path let-aexp-bound variable (e.g. `(let ((f (lambda
+        #    (x) x))) (f 5))`, where the let's own body never lets f
+        #    escape, so the whole let compiles as plain Python locals --
+        #    but f's *value* is still whatever its binding expression
+        #    evaluated to, which could genuinely be a Scheme proc tuple)
         # self.expr() on any of these can yield a Scheme proc *tuple* (via
         # _jit_make_closure, or simply an un-JIT'd proc passed through as an
         # argument), not a plain Python callable, so a bare op_src(...) call
@@ -1650,7 +1947,10 @@ class _JitCompiler:
         # handles both.
         if isinstance(op_exp, cons) and (
                 op_exp.car in (symbol_app_aexp, symbol_lambda_aexp) or
-                (op_exp.car is symbol_lexical_address_aexp and op_exp.cdr.car == 0)):
+                (op_exp.car is symbol_lexical_address_aexp and
+                 (op_exp.cdr.car == 0 or self._scope_at_depth(op_exp.cdr.car) is not None)) or
+                (op_exp.car is symbol_var_aexp and
+                 self._scope_lookup_by_name(op_exp.cdr.car) is not None)):
             op_src = self.expr(op_exp)
             self._free['_jit_call'] = _jit_call
             return f'_jit_call({op_src}, [{", ".join(args)}])'
@@ -1689,7 +1989,7 @@ class _JitCompiler:
         wrong answer.
         """
         global _fast_prim_map
-        kind, val = _resolve_operator(op_exp, self._env)
+        kind, val = self._resolve_operator_scoped(op_exp)
         if kind != 'value':
             return False
         if not (isinstance(val, tuple) and val[0] is symbol_procedure):
@@ -1700,7 +2000,13 @@ class _JitCompiler:
         return entry is not None and getattr(entry, '_fast_prim_name', None) == sym
 
     def _var(self, sym):
-        """Handle var-aexp: local param or captured free variable."""
+        """Handle var-aexp: a fast-path let-scoped local (name-keyed --
+        relevant under (use-lexical-address #f), where aparse produces
+        these instead of lexical addresses everywhere), an ordinary local
+        param, or a captured free variable."""
+        scoped_name = self._scope_lookup_by_name(sym)
+        if scoped_name is not None:
+            return scoped_name
         m = _jit_mangle(sym)
         if m in self._pset or m in self._free:
             return m
@@ -1738,7 +2044,7 @@ class _JitCompiler:
     def _is_self_ref(self, op_exp):
         """True iff op_exp resolves (by identity) to the proc being compiled —
         i.e. this application is a self-recursive call."""
-        kind, val = _resolve_operator(op_exp, self._env)
+        kind, val = self._resolve_operator_scoped(op_exp)
         return kind == 'value' and val is self._self
 
     def tail_stmts(self, exp, indent):
@@ -1771,6 +2077,23 @@ class _JitCompiler:
             targets = ', '.join(self._params)
             values  = ', '.join(arg_srcs)
             return [indent + f'{targets} = {values}', indent + 'continue']
+        if tag is symbol_let_aexp:
+            # layout: (tag vars val-aexps bodies info)
+            # Fast-path tail-position compilation, so a self-recursive
+            # tail call inside the let's body (e.g. mi-loop's own shape --
+            # see JIT-IIFE-GAP.md) still becomes a `continue`, not an
+            # ordinary recursive Python call. Falls through to the generic
+            # case below (which re-enters via expr(), trying the fast
+            # expression path again before the deferred/real path) if
+            # escaping or if this attempt fails -- see
+            # _try_let_fast_stmts's docstring.
+            vars_ = exp.cdr.car
+            val_aexps = exp.cdr.cdr.car
+            body_aexps = exp.cdr.cdr.cdr.car
+            if not _let_body_has_escaping_closure(body_aexps):
+                stmts = self._try_let_fast_stmts(vars_, val_aexps, body_aexps, indent)
+                if stmts is not None:
+                    return stmts
         return [indent + 'return ' + self.expr(exp)]
 
 ## Fast prim map: proc[1] function -> Python callable.
@@ -3216,6 +3539,7 @@ symbol_define_tests_aexp = make_symbol("define-tests-aexp")
 symbol_run_tests_aexp = make_symbol("run-tests-aexp")
 symbol_begin_aexp = make_symbol("begin-aexp")
 symbol_lambda_aexp = make_symbol("lambda-aexp")
+symbol_let_aexp = make_symbol("let-aexp")
 symbol_mu_lambda_aexp = make_symbol("mu-lambda-aexp")
 symbol_trace_lambda_aexp = make_symbol("trace-lambda-aexp")
 symbol_mu_trace_lambda_aexp = make_symbol("mu-trace-lambda-aexp")
@@ -3618,6 +3942,10 @@ def lambda_aexp(*args):
     args = List(*args)
     return cons(symbol_lambda_aexp, args)
 
+def let_aexp(*args):
+    args = List(*args)
+    return cons(symbol_let_aexp, args)
+
 def mu_lambda_aexp(*args):
     args = List(*args)
     return cons(symbol_mu_lambda_aexp, args)
@@ -3844,26 +4172,33 @@ def b_cont_11_d():
 
 def b_cont_12_d(adatum, senv, info, handler, fail, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    name = untag_atom_hat(cadr_hat(adatum))
     formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
-    k_reg = make_cont2(b_cont2_9_d, name, value_reg, info, k)
-    fail_reg = fail
-    handler_reg = handler
-    senv_reg = cons(formals_list, senv)
-    adatum_list_reg = cdddr_hat(adatum)
-    pc = aparse_all
-
-def b_cont_13_d(adatum, senv, info, handler, fail, k):
-    global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
-    k_reg = make_cont2(b_cont2_18_d, value_reg, info, k)
+    k_reg = make_cont2(b_cont2_16_d, value_reg, info, k)
     fail_reg = fail
     handler_reg = handler
     senv_reg = cons(formals_list, senv)
     adatum_list_reg = cddr_hat(adatum)
     pc = aparse_all
 
-def b_cont_14_d(senv, info, handler, fail, k):
+def b_cont_13_d(adatum, senv, info, handler, fail, k):
+    global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
+    name = untag_atom_hat(cadr_hat(adatum))
+    formals_list = (value_reg if (list_q(value_reg)) and (not(association_q(value_reg))) else cons(last(value_reg), head(value_reg)))
+    k_reg = make_cont2(b_cont2_17_d, name, value_reg, info, k)
+    fail_reg = fail
+    handler_reg = handler
+    senv_reg = cons(formals_list, senv)
+    adatum_list_reg = cdddr_hat(adatum)
+    pc = aparse_all
+
+def b_cont_14_d(aclauses, name, info, fail, k):
+    global k_reg, pc, value1_reg, value2_reg
+    value2_reg = fail
+    value1_reg = define_syntax_aexp(name, value_reg, aclauses, info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont_15_d(senv, info, handler, fail, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     k_reg = k
     fail_reg = fail
@@ -3872,21 +4207,23 @@ def b_cont_14_d(senv, info, handler, fail, k):
     adatum_reg = replace_info(value_reg, info)
     pc = aparse
 
-def b_cont_15_d(senv, info, handler, fail, k):
+def b_cont_16_d(senv, info, handler, fail, k):
     global info_reg, k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_14_d, senv, info, handler, fail, k)
+    k_reg = make_cont(b_cont_15_d, senv, info, handler, fail, k)
     info_reg = symbol_none
     x_reg = value_reg
     pc = annotate_cps
 
-def b_cont_16_d(aclauses, name, info, fail, k):
-    global k_reg, pc, value1_reg, value2_reg
-    value2_reg = fail
-    value1_reg = define_syntax_aexp(name, value_reg, aclauses, info)
-    k_reg = k
-    pc = apply_cont2
+def b_cont_17_d(bodies, exps, senv, info, handler, fail, k):
+    global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
+    k_reg = make_cont2(b_cont2_37_d, bodies, senv, value_reg, info, handler, k)
+    fail_reg = fail
+    handler_reg = handler
+    senv_reg = senv
+    adatum_list_reg = exps
+    pc = aparse_all
 
-def b_cont_17_d(adatum, senv, info, handler, fail, k):
+def b_cont_18_d(adatum, senv, info, handler, fail, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     if (original_source_info_q(adatum) is not False):
         k_reg = k
@@ -3903,54 +4240,54 @@ def b_cont_17_d(adatum, senv, info, handler, fail, k):
         adatum_reg = replace_info(value_reg, info)
         pc = aparse
 
-def b_cont_18_d(adatum, senv, info, handler, fail, k):
+def b_cont_19_d(adatum, senv, info, handler, fail, k):
     global info_reg, k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_17_d, adatum, senv, info, handler, fail, k)
+    k_reg = make_cont(b_cont_18_d, adatum, senv, info, handler, fail, k)
     info_reg = symbol_none
     x_reg = value_reg
     pc = annotate_cps
 
-def b_cont_19_d(info, fail, k):
+def b_cont_20_d(info, fail, k):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = fail
     value1_reg = lit_aexp(value_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont_20_d(info, fail, k):
+def b_cont_21_d(info, fail, k):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = fail
     value1_reg = lit_aexp((value_reg).cdr.car, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont_21_d(tests, fail, k):
+def b_cont_22_d(tests, fail, k):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = fail
     value1_reg = cons(value_reg, tests)
     k_reg = k
     pc = apply_cont2
 
-def b_cont_22_d(msg, info, handler, fail):
+def b_cont_23_d(msg, info, handler, fail):
     global exception_reg, fail_reg, handler_reg, pc
     fail_reg = fail
     exception_reg = make_exception("ParseError", format("~a ~a", msg, value_reg), get_srcfile(info), get_start_line(info), get_start_char(info))
     handler_reg = handler
     pc = apply_handler2
 
-def b_cont_23_d(bodies2, formals, k):
+def b_cont_24_d(bodies2, formals, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_lambda_no_defines), append(List(formals), List(append(List(symbol_letrec), append(List(value_reg), at_hat(bodies2))))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_24_d(bodies2, name, formals, k):
+def b_cont_25_d(bodies2, name, formals, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_trace_lambda_no_defines), append(List(name), append(List(formals), List(append(List(symbol_letrec), append(List(value_reg), at_hat(bodies2)))))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_25_d(adatum, bodies, handler, fail, k):
+def b_cont_26_d(adatum, bodies, handler, fail, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, msg_reg, pc, value1_reg, value2_reg
     if (value_reg is not False):
         fail_reg = fail
@@ -3964,22 +4301,22 @@ def b_cont_25_d(adatum, bodies, handler, fail, k):
         k_reg = k
         pc = apply_cont2
 
-def b_cont_26_d(defines, handler, fail, k):
-    return get_define_var_and_exp_hat((defines).car, handler, fail, make_cont2(b_cont2_45_d, value_reg, k))
+def b_cont_27_d(defines, handler, fail, k):
+    return get_define_var_and_exp_hat((defines).car, handler, fail, make_cont2(b_cont2_47_d, value_reg, k))
 
-def b_cont_27_d(bindings, k):
+def b_cont_28_d(bindings, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_let), append(List(List(car_hat(bindings))), List(value_reg)))
     k_reg = k
     pc = apply_cont
 
-def b_cont_28_d(exp, r, k):
+def b_cont_29_d(exp, r, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_let), append(List(List(append(List(r), List(exp)))), List(append(List(symbol_cond), value_reg))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_29_d(clauses, var, k):
+def b_cont_30_d(clauses, var, k):
     global k_reg, pc, value_reg
     clause = car_hat(clauses)
     if (eq_q_hat(car_hat(clause), symbol_else) is not False):
@@ -3996,7 +4333,7 @@ def b_cont_29_d(clauses, var, k):
             k_reg = k
             pc = apply_cont
 
-def b_cont_30_d(clauses, var, k):
+def b_cont_31_d(clauses, var, k):
     global k_reg, pc, value_reg
     clause = car_hat(clauses)
     if (eq_q_hat(car_hat(clause), symbol_else) is not False):
@@ -4013,7 +4350,7 @@ def b_cont_30_d(clauses, var, k):
             k_reg = k
             pc = apply_cont
 
-def b_cont_31_d(fields, name, k2):
+def b_cont_32_d(fields, name, k2):
     global k_reg, pc, value1_reg, value2_reg
     constructor_def = append(List(symbol_define), append(List(name), List(append(List(symbol_lambda), append(List(symbol_args), List(append(List(symbol_if), append(List(append(List(symbol_numeric_equal), append(List(append(List(symbol_length), List(symbol_args))), List(length_hat(fields))))), append(List(value_reg), List(append(List(symbol_error), append(List(append(List(symbol_quote), List(name))), List("wrong number of arguments")))))))))))))
     value2_reg = constructor_def
@@ -4021,19 +4358,19 @@ def b_cont_31_d(fields, name, k2):
     k_reg = k2
     pc = apply_cont2
 
-def b_cont_32_d(cdrs, fields, name, k):
+def b_cont_33_d(cdrs, fields, name, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_if), append(List(append(List(cadar_hat(fields)), List(append(List(symbol_car), List(cdrs))))), append(List(value_reg), List(append(List(symbol_error), append(List(append(List(symbol_quote), List(name))), append(List("~a is not of type ~a"), append(List(append(List(symbol_car), List(cdrs))), List(append(List(symbol_quote), List(cadar_hat(fields))))))))))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_33_d(exp, r, type_name, type_tester_name, k):
+def b_cont_34_d(exp, r, type_name, type_tester_name, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_let), append(List(List(append(List(r), List(exp)))), List(append(List(symbol_if), append(List(append(List(symbol_not), List(append(List(type_tester_name), List(r))))), append(List(append(List(symbol_error), append(List(append(List(symbol_quote), List(symbol_cases))), append(List("~a is not a valid ~a"), append(List(r), List(append(List(symbol_quote), List(type_name)))))))), List(append(List(symbol_cond), value_reg))))))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_34_d(adatum, macro_keyword, fail, k):
+def b_cont_35_d(adatum, macro_keyword, fail, k):
     global k_reg, pc, value1_reg, value2_reg
     if (has_source_info_q(value_reg) is not False):
         value2_reg = fail
@@ -4053,17 +4390,17 @@ def b_cont_34_d(adatum, macro_keyword, fail, k):
             k_reg = k
             pc = apply_cont2
 
-def b_cont_35_d(adatum, macro_keyword, fail, k):
+def b_cont_36_d(adatum, macro_keyword, fail, k):
     global info_reg, k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_34_d, adatum, macro_keyword, fail, k)
+    k_reg = make_cont(b_cont_35_d, adatum, macro_keyword, fail, k)
     info_reg = symbol_none
     x_reg = value_reg
     pc = annotate_cps
 
-def b_cont_36_d(aclauses, adatum, clauses, right_apattern, right_pattern, handler, fail, k):
+def b_cont_37_d(aclauses, adatum, clauses, right_apattern, right_pattern, handler, fail, k):
     global aclauses_reg, adatum_reg, ap_reg, clauses_reg, fail_reg, handler_reg, k2_reg, k_reg, pattern_reg, pc, s_reg
     if (value_reg is not False):
-        k2_reg = make_cont2(b_cont2_52_d, fail, k)
+        k2_reg = make_cont2(b_cont2_54_d, fail, k)
         ap_reg = right_apattern
         s_reg = value_reg
         pattern_reg = right_pattern
@@ -4077,87 +4414,87 @@ def b_cont_36_d(aclauses, adatum, clauses, right_apattern, right_pattern, handle
         clauses_reg = (clauses).cdr
         pc = process_macro_clauses_hat
 
-def b_cont_37_d(aclauses, adatum, clauses, left_apattern, left_pattern, right_apattern, right_pattern, handler, fail, k):
+def b_cont_38_d(aclauses, adatum, clauses, left_apattern, left_pattern, right_apattern, right_pattern, handler, fail, k):
     global ap1_reg, ap2_reg, k_reg, p1_reg, p2_reg, pc
-    k_reg = make_cont(b_cont_36_d, aclauses, adatum, clauses, right_apattern, right_pattern, handler, fail, k)
+    k_reg = make_cont(b_cont_37_d, aclauses, adatum, clauses, right_apattern, right_pattern, handler, fail, k)
     ap2_reg = adatum
     ap1_reg = left_apattern
     p2_reg = value_reg
     p1_reg = left_pattern
     pc = unify_patterns_hat
 
-def b_cont_38_d(v1, k):
+def b_cont_39_d(v1, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_append), append(List(v1), List(value_reg)))
     k_reg = k
     pc = apply_cont
 
-def b_cont_39_d(ax, depth, k):
+def b_cont_40_d(ax, depth, k):
     global ax_reg, depth_reg, k_reg, pc
-    k_reg = make_cont(b_cont_38_d, value_reg, k)
+    k_reg = make_cont(b_cont_39_d, value_reg, k)
     depth_reg = depth
     ax_reg = cdr_hat(ax)
     pc = qq_expand_cps
 
-def b_cont_40_d(k):
+def b_cont_41_d(k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_list_to_vector), List(value_reg))
     k_reg = k
     pc = apply_cont
 
-def b_cont_41_d(depth, k):
+def b_cont_42_d(depth, k):
     global ax_reg, depth_reg, k_reg, pc
-    k_reg = make_cont(b_cont_40_d, k)
+    k_reg = make_cont(b_cont_41_d, k)
     depth_reg = depth
     ax_reg = value_reg
     pc = qq_expand_cps
 
-def b_cont_42_d(k):
+def b_cont_43_d(k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_cons), append(List(append(List(symbol_quote), List(symbol_quasiquote))), List(value_reg)))
     k_reg = k
     pc = apply_cont
 
-def b_cont_43_d(ax, k):
+def b_cont_44_d(ax, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))
     k_reg = k
     pc = apply_cont
 
-def b_cont_44_d(k):
+def b_cont_45_d(k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_List), List(value_reg))
     k_reg = k
     pc = apply_cont
 
-def b_cont_45_d(v1, k):
+def b_cont_46_d(v1, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_List), List(append(List(symbol_append), append(List(v1), List(value_reg)))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_46_d(ax, depth, k):
+def b_cont_47_d(ax, depth, k):
     global ax_reg, depth_reg, k_reg, pc
-    k_reg = make_cont(b_cont_45_d, value_reg, k)
+    k_reg = make_cont(b_cont_46_d, value_reg, k)
     depth_reg = depth
     ax_reg = cdr_hat(ax)
     pc = qq_expand_cps
 
-def b_cont_47_d(k):
+def b_cont_48_d(k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_List), List(append(List(symbol_cons), append(List(append(List(symbol_quote), List(symbol_quasiquote))), List(value_reg)))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_48_d(ax, k):
+def b_cont_49_d(ax, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_List), List(append(List(symbol_cons), append(List(append(List(symbol_quote), List(car_hat(ax)))), List(value_reg)))))
     k_reg = k
     pc = apply_cont
 
-def b_cont_49_d(proc, env, info, handler, fail, k2):
+def b_cont_50_d(proc, env, info, handler, fail, k2):
     global args_reg, env2_reg, fail_reg, handler_reg, info_reg, k2_reg, pc, proc_reg
-    k2_reg = make_cont2(b_cont2_64_d, k2)
+    k2_reg = make_cont2(b_cont2_67_d, k2)
     fail_reg = fail
     handler_reg = handler
     info_reg = info
@@ -4166,25 +4503,25 @@ def b_cont_49_d(proc, env, info, handler, fail, k2):
     proc_reg = proc
     pc = apply_proc
 
-def b_cont_50_d(handler, fail, k2):
+def b_cont_51_d(handler, fail, k2):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_92_d, handler, k2)
+    k_reg = make_cont2(b_cont2_95_d, handler, k2)
     fail_reg = fail
     handler_reg = handler
     senv_reg = initial_contours(toplevel_env)
     adatum_reg = value_reg
     pc = aparse
 
-def b_cont_51_d(args, handler, fail, k2):
+def b_cont_52_d(args, handler, fail, k2):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_93_d, args, handler, k2)
+    k_reg = make_cont2(b_cont2_96_d, args, handler, k2)
     fail_reg = fail
     handler_reg = handler
     senv_reg = initial_contours((args).cdr.car)
     adatum_reg = value_reg
     pc = aparse
 
-def b_cont_52_d(handler, fail, k2):
+def b_cont_53_d(handler, fail, k2):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     k_reg = k2
     fail_reg = fail
@@ -4193,14 +4530,14 @@ def b_cont_52_d(handler, fail, k2):
     adatum_reg = value_reg
     pc = aparse
 
-def b_cont_53_d(fail, k2):
+def b_cont_54_d(fail, k2):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = fail
     value1_reg = value_reg
     k_reg = k2
     pc = apply_cont2
 
-def b_cont_54_d(x, y, k):
+def b_cont_55_d(x, y, k):
     global k_reg, pc, value_reg, x_reg, y_reg
     if (value_reg is not False):
         k_reg = k
@@ -4212,7 +4549,7 @@ def b_cont_54_d(x, y, k):
         k_reg = k
         pc = apply_cont
 
-def b_cont_55_d(i, v1, v2, k):
+def b_cont_56_d(i, v1, v2, k):
     global i_reg, k_reg, pc, v1_reg, v2_reg, value_reg
     if (value_reg is not False):
         k_reg = k
@@ -4225,7 +4562,7 @@ def b_cont_55_d(i, v1, v2, k):
         k_reg = k
         pc = apply_cont
 
-def b_cont_56_d(ls, x, y, info, handler, fail, k):
+def b_cont_57_d(ls, x, y, info, handler, fail, k):
     global fail_reg, handler_reg, info_reg, k_reg, ls_reg, pc, value1_reg, value2_reg, x_reg, y_reg
     if (value_reg is not False):
         value2_reg = fail
@@ -4242,7 +4579,7 @@ def b_cont_56_d(ls, x, y, info, handler, fail, k):
         x_reg = x
         pc = member_loop
 
-def b_cont_57_d(pattern, var, k):
+def b_cont_58_d(pattern, var, k):
     global k_reg, pattern_reg, pc, value_reg, var_reg
     if (value_reg is not False):
         value_reg = True
@@ -4254,7 +4591,7 @@ def b_cont_57_d(pattern, var, k):
         var_reg = var
         pc = occurs_q
 
-def b_cont_58_d(ap2, p1, p2, k):
+def b_cont_59_d(ap2, p1, p2, k):
     global k_reg, pc, value_reg
     if (value_reg is not False):
         value_reg = False
@@ -4265,7 +4602,7 @@ def b_cont_58_d(ap2, p1, p2, k):
         k_reg = k
         pc = apply_cont
 
-def b_cont_59_d(s_car, k):
+def b_cont_60_d(s_car, k):
     global k_reg, pc, value_reg
     if (not(value_reg) is not False):
         value_reg = False
@@ -4276,14 +4613,14 @@ def b_cont_59_d(s_car, k):
         k_reg = k
         pc = apply_cont
 
-def b_cont_60_d(apair1, apair2, pair1, pair2, k):
+def b_cont_61_d(apair1, apair2, pair1, pair2, k):
     global ap_reg, k2_reg, k_reg, pattern_reg, pc, s_reg, value_reg
     if (not(value_reg) is not False):
         value_reg = False
         k_reg = k
         pc = apply_cont
     else:
-        k2_reg = make_cont2(b_cont2_121_d, apair2, pair2, value_reg, k)
+        k2_reg = make_cont2(b_cont2_124_d, apair2, pair2, value_reg, k)
         ap_reg = cdr_hat(apair1)
         s_reg = value_reg
         pattern_reg = (pair1).cdr
@@ -4312,107 +4649,90 @@ def b_cont2_4_d(k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_5_d(v1, info, k):
+def b_cont2_5_d(info, k):
+    global k_reg, pc, value1_reg
+    value1_reg = choose_aexp(value1_reg, info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont2_6_d(v1, info, k):
     global k_reg, pc, value1_reg
     value1_reg = app_aexp(v1, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_6_d(adatum, senv, info, handler, k):
+def b_cont2_7_d(adatum, senv, info, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_5_d, value1_reg, info, k)
+    k_reg = make_cont2(b_cont2_6_d, value1_reg, info, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_list_reg = cdr_hat(adatum)
     pc = aparse_all
 
-def b_cont2_7_d(info, k):
-    global k_reg, pc, value1_reg
-    value1_reg = raise_aexp(value1_reg, info)
-    k_reg = k
-    pc = apply_cont2
-
-def b_cont2_8_d(info, k):
-    global k_reg, pc, value1_reg
-    value1_reg = choose_aexp(value1_reg, info)
-    k_reg = k
-    pc = apply_cont2
-
-def b_cont2_9_d(name, formals, info, k):
-    global k_reg, pc, value1_reg
-    if ((list_q(formals)) and (not(association_q(formals))) is not False):
-        value1_reg = trace_lambda_aexp(name, formals, value1_reg, info)
-        k_reg = k
-        pc = apply_cont2
-    else:
-        value1_reg = mu_trace_lambda_aexp(name, head(formals), last(formals), value1_reg, info)
-        k_reg = k
-        pc = apply_cont2
-
-def b_cont2_10_d(cexps, cvar, body, info, k):
+def b_cont2_8_d(cexps, cvar, body, info, k):
     global k_reg, pc, value1_reg
     value1_reg = try_catch_finally_aexp(body, cvar, cexps, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_11_d(adatum, cvar, senv, body, info, handler, k):
+def b_cont2_9_d(adatum, cvar, senv, body, info, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_10_d, value1_reg, cvar, body, info, k)
+    k_reg = make_cont2(b_cont2_8_d, value1_reg, cvar, body, info, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_list_reg = try_catch_finally_exps_hat(adatum)
     pc = aparse_all
 
-def b_cont2_12_d(adatum, senv, info, handler, k):
+def b_cont2_10_d(adatum, senv, info, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     cvar = catch_var_hat(adatum)
-    k_reg = make_cont2(b_cont2_11_d, adatum, cvar, senv, value1_reg, info, handler, k)
+    k_reg = make_cont2(b_cont2_9_d, adatum, cvar, senv, value1_reg, info, handler, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = cons(List(cvar), senv)
     adatum_list_reg = catch_exps_hat(adatum)
     pc = aparse_all
 
-def b_cont2_13_d(cvar, body, info, k):
+def b_cont2_11_d(cvar, body, info, k):
     global k_reg, pc, value1_reg
     value1_reg = try_catch_aexp(body, cvar, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_14_d(adatum, senv, info, handler, k):
+def b_cont2_12_d(adatum, senv, info, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     cvar = catch_var_hat(adatum)
-    k_reg = make_cont2(b_cont2_13_d, cvar, value1_reg, info, k)
+    k_reg = make_cont2(b_cont2_11_d, cvar, value1_reg, info, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = cons(List(cvar), senv)
     adatum_list_reg = catch_exps_hat(adatum)
     pc = aparse_all
 
-def b_cont2_15_d(body, info, k):
+def b_cont2_13_d(body, info, k):
     global k_reg, pc, value1_reg
     value1_reg = try_finally_aexp(body, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_16_d(adatum, senv, info, handler, k):
+def b_cont2_14_d(adatum, senv, info, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_15_d, value1_reg, info, k)
+    k_reg = make_cont2(b_cont2_13_d, value1_reg, info, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_list_reg = try_finally_exps_hat(adatum)
     pc = aparse_all
 
-def b_cont2_17_d(info, k):
+def b_cont2_15_d(info, k):
     global k_reg, pc, value1_reg
-    value1_reg = begin_aexp(value1_reg, info)
+    value1_reg = raise_aexp(value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_18_d(formals, info, k):
+def b_cont2_16_d(formals, info, k):
     global k_reg, pc, value1_reg
     if ((list_q(formals)) and (not(association_q(formals))) is not False):
         value1_reg = lambda_aexp(formals, value1_reg, info)
@@ -4423,114 +4743,116 @@ def b_cont2_18_d(formals, info, k):
         k_reg = k
         pc = apply_cont2
 
-def b_cont2_19_d(name, info, k):
+def b_cont2_17_d(name, formals, info, k):
     global k_reg, pc, value1_reg
-    value1_reg = define_tests_aexp(name, value1_reg, info)
-    k_reg = k
-    pc = apply_cont2
+    if ((list_q(formals)) and (not(association_q(formals))) is not False):
+        value1_reg = trace_lambda_aexp(name, formals, value1_reg, info)
+        k_reg = k
+        pc = apply_cont2
+    else:
+        value1_reg = mu_trace_lambda_aexp(name, head(formals), last(formals), value1_reg, info)
+        k_reg = k
+        pc = apply_cont2
 
-def b_cont2_20_d(k):
+def b_cont2_18_d(k):
     global k_reg, pc, value1_reg
     value1_reg = run_tests_aexp(value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_21_d(adatum, info, k):
+def b_cont2_19_d(info, k):
     global k_reg, pc, value1_reg
-    value1_reg = define_b_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
+    value1_reg = begin_aexp(value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_22_d(adatum, info, k):
-    global k_reg, pc, value1_reg
-    value1_reg = define_b_aexp(define_var_hat(adatum), "", value1_reg, info)
-    k_reg = k
-    pc = apply_cont2
-
-def b_cont2_23_d(name, info, k):
+def b_cont2_20_d(name, info, k):
     global k_reg, pc, value1_reg
     value1_reg = define_syntax_transformer_aexp(name, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_24_d(info, k):
+def b_cont2_21_d(name, info, k):
     global k_reg, pc, value1_reg
-    value1_reg = callback_aexp(value1_reg, info)
+    value1_reg = define_tests_aexp(name, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_25_d(adatum, info, k):
+def b_cont2_22_d(adatum, info, k):
     global k_reg, pc, value1_reg
     value1_reg = define_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_26_d(adatum, info, k):
+def b_cont2_23_d(adatum, info, k):
     global k_reg, pc, value1_reg
     value1_reg = define_aexp(define_var_hat(adatum), "", value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_27_d(adatum, info, k):
+def b_cont2_24_d(adatum, info, k):
     global k_reg, pc, value1_reg
-    var_info = get_source_info(cadr_hat(adatum))
-    value1_reg = association_aexp(untag_atom_hat(car_hat(adatum)), value1_reg, var_info, info)
+    value1_reg = define_b_aexp(define_var_hat(adatum), define_docstring_hat(adatum), value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_28_d(info, k):
+def b_cont2_25_d(adatum, info, k):
+    global k_reg, pc, value1_reg
+    value1_reg = define_b_aexp(define_var_hat(adatum), "", value1_reg, info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont2_26_d(info, k):
     global k_reg, pc, value1_reg
     value1_reg = func_aexp(value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_29_d(adatum, info, k):
+def b_cont2_27_d(info, k):
+    global k_reg, pc, value1_reg
+    value1_reg = callback_aexp(value1_reg, info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont2_28_d(adatum, info, k):
     global k_reg, pc, value1_reg
     var_info = get_source_info(cadr_hat(adatum))
     value1_reg = assign_aexp(untag_atom_hat(cadr_hat(adatum)), value1_reg, var_info, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_30_d(v1, info, k):
+def b_cont2_29_d(adatum, info, k):
     global k_reg, pc, value1_reg
-    value1_reg = if_aexp(v1, value1_reg, lit_aexp(False, symbol_none), info)
+    var_info = get_source_info(cadr_hat(adatum))
+    value1_reg = association_aexp(untag_atom_hat(car_hat(adatum)), value1_reg, var_info, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_31_d(adatum, senv, info, handler, k):
-    global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_30_d, value1_reg, info, k)
-    fail_reg = value2_reg
-    handler_reg = handler
-    senv_reg = senv
-    adatum_reg = caddr_hat(adatum)
-    pc = aparse
-
-def b_cont2_32_d(v1, v2, info, k):
+def b_cont2_30_d(v1, v2, info, k):
     global k_reg, pc, value1_reg
     value1_reg = if_aexp(v1, v2, value1_reg, info)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_33_d(adatum, senv, v1, info, handler, k):
+def b_cont2_31_d(adatum, senv, v1, info, handler, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_32_d, v1, value1_reg, info, k)
+    k_reg = make_cont2(b_cont2_30_d, v1, value1_reg, info, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_reg = cadddr_hat(adatum)
     pc = aparse
 
-def b_cont2_34_d(adatum, senv, info, handler, k):
+def b_cont2_32_d(adatum, senv, info, handler, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_33_d, adatum, senv, value1_reg, info, handler, k)
+    k_reg = make_cont2(b_cont2_31_d, adatum, senv, value1_reg, info, handler, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_reg = caddr_hat(adatum)
     pc = aparse
 
-def b_cont2_35_d(senv, handler, k):
+def b_cont2_33_d(senv, handler, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     k_reg = k
     fail_reg = value2_reg
@@ -4539,42 +4861,72 @@ def b_cont2_35_d(senv, handler, k):
     adatum_reg = value1_reg
     pc = aparse
 
-def b_cont2_36_d(args, k):
+def b_cont2_34_d(v1, info, k):
+    global k_reg, pc, value1_reg
+    value1_reg = if_aexp(v1, value1_reg, lit_aexp(False, symbol_none), info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont2_35_d(adatum, senv, info, handler, k):
+    global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
+    k_reg = make_cont2(b_cont2_34_d, value1_reg, info, k)
+    fail_reg = value2_reg
+    handler_reg = handler
+    senv_reg = senv
+    adatum_reg = caddr_hat(adatum)
+    pc = aparse
+
+def b_cont2_36_d(val_aexps, vars_list, info, k):
+    global k_reg, pc, value1_reg
+    value1_reg = let_aexp(vars_list, val_aexps, value1_reg, info)
+    k_reg = k
+    pc = apply_cont2
+
+def b_cont2_37_d(bodies, senv, vars_list, info, handler, k):
+    global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
+    k_reg = make_cont2(b_cont2_36_d, value1_reg, vars_list, info, k)
+    fail_reg = value2_reg
+    handler_reg = handler
+    senv_reg = cons(vars_list, senv)
+    adatum_list_reg = bodies
+    pc = aparse_all
+
+def b_cont2_38_d(args, k):
     global k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_21_d, value1_reg, value2_reg, k)
+    k_reg = make_cont(b_cont_22_d, value1_reg, value2_reg, k)
     x_reg = car_hat(args)
     pc = unannotate_cps
 
-def b_cont2_37_d(args, k):
+def b_cont2_39_d(args, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(List(untag_atom_hat(car_hat(args))), value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_38_d(a, k):
+def b_cont2_40_d(a, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(a, value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_39_d(adatum_list, senv, handler, k):
+def b_cont2_41_d(adatum_list, senv, handler, k):
     global adatum_list_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_38_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
     adatum_list_reg = cdr_hat(adatum_list)
     pc = aparse_all
 
-def b_cont2_40_d(v1, k):
+def b_cont2_42_d(v1, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(v1, value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_41_d(senv, src, tokens_left, handler, k):
+def b_cont2_43_d(senv, src, tokens_left, handler, k):
     global fail_reg, handler_reg, k_reg, pc, senv_reg, src_reg, tokens_reg
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     senv_reg = senv
@@ -4582,89 +4934,89 @@ def b_cont2_41_d(senv, src, tokens_left, handler, k):
     tokens_reg = tokens_left
     pc = aparse_sexps
 
-def b_cont2_42_d(formals, handler, fail, k):
+def b_cont2_44_d(formals, handler, fail, k):
     global k_reg, pc, value_reg
     if (((value1_reg) is symbol_emptylist) is not False):
         value_reg = append(List(symbol_lambda_no_defines), append(List(formals), at_hat(value2_reg)))
         k_reg = k
         pc = apply_cont
     else:
-        return create_letrec_bindings_hat(value1_reg, handler, fail, make_cont(b_cont_23_d, value2_reg, formals, k))
+        return create_letrec_bindings_hat(value1_reg, handler, fail, make_cont(b_cont_24_d, value2_reg, formals, k))
 
-def b_cont2_43_d(name, formals, handler, fail, k):
+def b_cont2_45_d(name, formals, handler, fail, k):
     global k_reg, pc, value_reg
     if (((value1_reg) is symbol_emptylist) is not False):
         value_reg = append(List(symbol_trace_lambda_no_defines), append(List(name), append(List(formals), at_hat(value2_reg))))
         k_reg = k
         pc = apply_cont
     else:
-        return create_letrec_bindings_hat(value1_reg, handler, fail, make_cont(b_cont_24_d, value2_reg, name, formals, k))
+        return create_letrec_bindings_hat(value1_reg, handler, fail, make_cont(b_cont_25_d, value2_reg, name, formals, k))
 
-def b_cont2_44_d(bodies, k):
+def b_cont2_46_d(bodies, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(car_hat(bodies), value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_45_d(bindings, k):
+def b_cont2_47_d(bindings, k):
     global k_reg, pc, value_reg
     value_reg = cons(append(List(value1_reg), List(value2_reg)), bindings)
     k_reg = k
     pc = apply_cont
 
-def b_cont2_46_d(bodies, k):
+def b_cont2_48_d(bodies, k):
     global k_reg, pc, value_reg
     value_reg = append(List(symbol_let), append(List(value1_reg), append(value2_reg, at_hat(bodies))))
     k_reg = k
     pc = apply_cont
 
-def b_cont2_47_d(procs, vars, k2):
+def b_cont2_49_d(procs, vars, k2):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = cons(append(List(symbol_set_b), append(List(car_hat(vars)), List(car_hat(procs)))), value2_reg)
     value1_reg = cons(append(List(car_hat(vars)), List(append(List(symbol_quote), List(symbol_undefined)))), value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_48_d(type_tester_name, k):
+def b_cont2_50_d(type_tester_name, k):
     global k_reg, pc, value_reg
     tester_def = append(List(symbol_define), append(List(type_tester_name), List(append(List(symbol_lambda), append(List(List(symbol_x)), List(append(List(symbol_and), append(List(append(List(symbol_pair_q), List(symbol_x))), List(append(List(symbol_not), List(append(List(symbol_not), List(append(List(symbol_memq), append(List(append(List(symbol_car), List(symbol_x))), List(append(List(symbol_quote), List(value1_reg))))))))))))))))))
     value_reg = append(List(symbol_begin), append(List(tester_def), value2_reg))
     k_reg = k
     pc = apply_cont
 
-def b_cont2_49_d(def_, name, k2):
+def b_cont2_51_d(def_, name, k2):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = cons(def_, value2_reg)
     value1_reg = cons(name, value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_50_d(variants, k2):
+def b_cont2_52_d(variants, k2):
     global k2_reg, pc, variants_reg
-    k2_reg = make_cont2(b_cont2_49_d, value2_reg, value1_reg, k2)
+    k2_reg = make_cont2(b_cont2_51_d, value2_reg, value1_reg, k2)
     variants_reg = cdr_hat(variants)
     pc = make_dd_variant_constructors_hat
 
-def b_cont2_51_d(macro_keyword, k):
+def b_cont2_53_d(macro_keyword, k):
     global k_reg, pc, value1_reg
     value1_reg = replace_info(value1_reg, snoc(macro_keyword, get_source_info(value1_reg)))
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_52_d(fail, k):
+def b_cont2_54_d(fail, k):
     global k_reg, pc, value1_reg, value2_reg
     value1_reg = value2_reg
     value2_reg = fail
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_53_d():
+def b_cont2_55_d():
     global _starlast_fail_star, final_reg, pc
     _starlast_fail_star = value2_reg
     final_reg = value1_reg
     pc = pc_halt_signal
 
-def b_cont2_54_d():
+def b_cont2_56_d():
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
     k_reg = REP_k
     fail_reg = value2_reg
@@ -4673,14 +5025,14 @@ def b_cont2_54_d():
     exp_reg = value1_reg
     pc = m
 
-def b_cont2_55_d():
+def b_cont2_57_d():
     global final_reg, pc
     final_reg = True
     pc = pc_halt_signal
 
-def b_cont2_56_d():
+def b_cont2_58_d():
     global fail_reg, handler_reg, k_reg, pc, senv_reg, src_reg, tokens_reg
-    k_reg = make_cont2(b_cont2_55_d)
+    k_reg = make_cont2(b_cont2_57_d)
     fail_reg = value2_reg
     handler_reg = try_parse_handler
     senv_reg = initial_contours(toplevel_env)
@@ -4688,19 +5040,19 @@ def b_cont2_56_d():
     tokens_reg = value1_reg
     pc = aparse_sexps
 
-def b_cont2_57_d(exp, k):
+def b_cont2_59_d(exp, k):
     global k_reg, pc
     handle_debug_info(exp, value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_58_d(exp, k):
+def b_cont2_60_d(exp, k):
     global k_reg, pc
     pop_stack_trace_b(exp)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_59_d(args, exp, env, info, handler, k):
+def b_cont2_61_d(args, exp, env, info, handler, k):
     global args_reg, env2_reg, fail_reg, handler_reg, info_reg, k2_reg, k_reg, msg_reg, pc, proc_reg, value1_reg
     if (_staruse_stack_trace_star is not False):
         push_stack_trace_b(exp)
@@ -4714,7 +5066,7 @@ def b_cont2_59_d(args, exp, env, info, handler, k):
     else:
         if (procedure_object_q(value1_reg) is not False):
             if (_staruse_stack_trace_star is not False):
-                k2_reg = make_cont2(b_cont2_58_d, exp, k)
+                k2_reg = make_cont2(b_cont2_60_d, exp, k)
                 fail_reg = value2_reg
                 handler_reg = handler
                 info_reg = info
@@ -4738,31 +5090,40 @@ def b_cont2_59_d(args, exp, env, info, handler, k):
             msg_reg = format("attempt to apply non-procedure '~a'", value1_reg)
             pc = runtime_error
 
-def b_cont2_60_d(exp, operator, env, info, handler, k):
+def b_cont2_62_d(exp, operator, env, info, handler, k):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_59_d, value1_reg, exp, env, info, handler, k)
+    k_reg = make_cont2(b_cont2_61_d, value1_reg, exp, env, info, handler, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
     exp_reg = operator
     pc = m
 
-def b_cont2_61_d(v, k):
+def b_cont2_63_d(bodies, vars, env, handler, k):
+    global env_reg, exps_reg, fail_reg, handler_reg, k_reg, pc
+    k_reg = k
+    fail_reg = value2_reg
+    handler_reg = handler
+    env_reg = extend(env, vars, value1_reg, make_empty_docstrings(length(value1_reg)))
+    exps_reg = bodies
+    pc = eval_sequence
+
+def b_cont2_64_d(v, k):
     global k_reg, pc, value1_reg
     value1_reg = v
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_62_d(fexps, env, handler, k):
+def b_cont2_65_d(fexps, env, handler, k):
     global env_reg, exps_reg, fail_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_61_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_64_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
     exps_reg = fexps
     pc = eval_sequence
 
-def b_cont2_63_d(info, handler):
+def b_cont2_66_d(info, handler):
     global exception_reg, fail_reg, handler_reg, info_reg, msg_reg, pc
     col = get_start_char(info)
     line = get_start_line(info)
@@ -4791,30 +5152,30 @@ def b_cont2_63_d(info, handler):
                 msg_reg = "bad exception type"
                 pc = runtime_error
 
-def b_cont2_64_d(k2):
+def b_cont2_67_d(k2):
     global k_reg, pc, value_reg
     value_reg = value1_reg
     k_reg = k2
     pc = apply_cont
 
-def b_cont2_65_d(macro_transformer, k):
+def b_cont2_68_d(macro_transformer, k):
     global k_reg, pc, value1_reg
     set_binding_value_b(value1_reg, macro_transformer)
     value1_reg = void_value
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_66_d(name, env, info, handler, k):
+def b_cont2_69_d(name, env, info, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, pc, var_reg
     macro_transformer = make_macro(b_macro_14_d, value1_reg, env, info)
-    k_reg = make_cont2(b_cont2_65_d, macro_transformer, k)
+    k_reg = make_cont2(b_cont2_68_d, macro_transformer, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = macro_env
     var_reg = name
     pc = lookup_binding_in_first_frame
 
-def b_cont2_67_d(docstring, var, k):
+def b_cont2_70_d(docstring, var, k):
     global k_reg, pc, value1_reg
     if (procedure_object_q(value1_reg) is not False):
         set_global_value_b(var, dlr_func(value1_reg))
@@ -4825,14 +5186,14 @@ def b_cont2_67_d(docstring, var, k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_68_d(aclauses, clauses, k):
+def b_cont2_71_d(aclauses, clauses, k):
     global k_reg, pc, value1_reg
     set_binding_value_b(value1_reg, make_pattern_macro_hat(clauses, aclauses))
     value1_reg = void_value
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_69_d(rhs_value, k):
+def b_cont2_72_d(rhs_value, k):
     global k_reg, pc, value1_reg, value2_reg
     old_value = binding_value(value1_reg)
     set_binding_value_b(value1_reg, rhs_value)
@@ -4842,7 +5203,7 @@ def b_cont2_69_d(rhs_value, k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_70_d(rhs_value, k):
+def b_cont2_73_d(rhs_value, k):
     global k_reg, pc, value1_reg, value2_reg
     old_value = dlr_env_lookup(value1_reg)
     set_global_value_b(value1_reg, rhs_value)
@@ -4852,11 +5213,11 @@ def b_cont2_70_d(rhs_value, k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_71_d(var, var_info, env, handler, k):
+def b_cont2_74_d(var, var_info, env, handler, k):
     global dk_reg, env_reg, fail_reg, gk_reg, handler_reg, pc, sk_reg, var_info_reg, var_reg
-    sk_reg = make_cont2(b_cont2_69_d, value1_reg, k)
+    sk_reg = make_cont2(b_cont2_72_d, value1_reg, k)
     dk_reg = make_cont3(b_cont3_4_d, value1_reg, k)
-    gk_reg = make_cont2(b_cont2_70_d, value1_reg, k)
+    gk_reg = make_cont2(b_cont2_73_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     var_info_reg = var_info
@@ -4864,7 +5225,7 @@ def b_cont2_71_d(var, var_info, env, handler, k):
     var_reg = var
     pc = lookup_variable
 
-def b_cont2_72_d(docstring, rhs_value, k):
+def b_cont2_75_d(docstring, rhs_value, k):
     global k_reg, pc, value1_reg
     set_binding_value_b(value1_reg, rhs_value)
     set_binding_docstring_b(value1_reg, docstring)
@@ -4872,40 +5233,40 @@ def b_cont2_72_d(docstring, rhs_value, k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_73_d(docstring, var, env, handler, k):
+def b_cont2_76_d(docstring, var, env, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, pc, var_reg
-    k_reg = make_cont2(b_cont2_72_d, docstring, value1_reg, k)
+    k_reg = make_cont2(b_cont2_75_d, docstring, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
     var_reg = var
     pc = lookup_binding_in_first_frame
 
-def b_cont2_74_d(k):
+def b_cont2_77_d(k):
     global k_reg, pc, value1_reg
     value1_reg = binding_docstring(value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_75_d(k):
+def b_cont2_78_d(k):
     global k_reg, pc, value1_reg
     value1_reg = help(dlr_env_lookup(value1_reg))
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_76_d(var, k):
+def b_cont2_79_d(var, k):
     global k_reg, pc, value1_reg
     value1_reg = association(var, value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_77_d(k):
+def b_cont2_80_d(k):
     global k_reg, pc, value1_reg
     value1_reg = callback(value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_78_d(else_exp, then_exp, env, handler, k):
+def b_cont2_81_d(else_exp, then_exp, env, handler, k):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
     if (value1_reg is not False):
         k_reg = k
@@ -4922,13 +5283,13 @@ def b_cont2_78_d(else_exp, then_exp, env, handler, k):
         exp_reg = else_exp
         pc = m
 
-def b_cont2_79_d(k):
+def b_cont2_82_d(k):
     global k_reg, pc, value1_reg
     value1_reg = dlr_func(value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_80_d(start_time, tests, handler, k):
+def b_cont2_83_d(start_time, tests, handler, k):
     global fail_reg, handler_reg, k_reg, pc, right_reg, start_time_reg, tests_reg, wrong_reg
     wrong2 = (value1_reg).cdr.car
     right2 = (value1_reg).car
@@ -4941,7 +5302,7 @@ def b_cont2_80_d(start_time, tests, handler, k):
     tests_reg = (tests).cdr
     pc = run_unit_tests
 
-def b_cont2_81_d(right, test_name, wrong, env, handler, k):
+def b_cont2_84_d(right, test_name, wrong, env, handler, k):
     global assertions_reg, env_reg, fail_reg, handler_reg, k_reg, pc, right_reg, test_name_reg, verbose_reg, wrong_reg
     k_reg = k
     fail_reg = value2_reg
@@ -4954,15 +5315,15 @@ def b_cont2_81_d(right, test_name, wrong, env, handler, k):
     test_name_reg = test_name
     pc = run_unit_test_cases
 
-def b_cont2_82_d(matched_exps, k):
+def b_cont2_85_d(matched_exps, k):
     global k_reg, pc, value1_reg
     value1_reg = append(matched_exps, value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_83_d(assertions, nums, test_name, handler, k):
+def b_cont2_86_d(assertions, nums, test_name, handler, k):
     global assertions_reg, fail_reg, handler_reg, k_reg, nums_reg, pc, test_name_reg
-    k_reg = make_cont2(b_cont2_82_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_85_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     assertions_reg = (assertions).cdr
@@ -4970,7 +5331,7 @@ def b_cont2_83_d(assertions, nums, test_name, handler, k):
     test_name_reg = test_name
     pc = filter_assertions
 
-def b_cont2_84_d(assertions, msg, proc_exp, result_val, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
+def b_cont2_87_d(assertions, msg, proc_exp, result_val, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k):
     global assertions_reg, env_reg, fail_reg, handler_reg, k_reg, pc, right_reg, test_name_reg, verbose_reg, wrong_reg
     if (verbose is not False):
         printf("~a\n", traceback)
@@ -4990,16 +5351,16 @@ def b_cont2_84_d(assertions, msg, proc_exp, result_val, right, test_exp, test_na
     test_name_reg = test_name
     pc = run_unit_test_cases
 
-def b_cont2_85_d(assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k):
+def b_cont2_88_d(assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_84_d, assertions, msg, proc_exp, value1_reg, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
+    k_reg = make_cont2(b_cont2_87_d, assertions, msg, proc_exp, value1_reg, right, test_exp, test_name, traceback, verbose, wrong, env, handler, k)
     fail_reg = value2_reg
     handler_reg = make_handler2(b_handler2_4_d, assertions, msg, right, test_name, verbose, where, wrong, env, handler, k)
     env_reg = env
     exp_reg = test_aexp
     pc = m
 
-def b_cont2_86_d(assertions, right, test_name, verbose, wrong, env, handler, k):
+def b_cont2_89_d(assertions, right, test_name, verbose, wrong, env, handler, k):
     global assertions_reg, env_reg, fail_reg, handler_reg, k_reg, pc, right_reg, test_name_reg, verbose_reg, wrong_reg
     make_test_callback(test_name, "test", True, "", "", "", "")
     k_reg = k
@@ -5013,16 +5374,16 @@ def b_cont2_86_d(assertions, right, test_name, verbose, wrong, env, handler, k):
     test_name_reg = test_name
     pc = run_unit_test_cases
 
-def b_cont2_87_d(exps, env, handler, k):
+def b_cont2_90_d(exps, env, handler, k):
     global env_reg, exps_reg, fail_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
     exps_reg = (exps).cdr
     pc = m_star
 
-def b_cont2_88_d(exps, env, handler, k):
+def b_cont2_91_d(exps, env, handler, k):
     global env_reg, exps_reg, fail_reg, handler_reg, k_reg, pc
     k_reg = k
     fail_reg = value2_reg
@@ -5031,27 +5392,27 @@ def b_cont2_88_d(exps, env, handler, k):
     exps_reg = (exps).cdr
     pc = eval_sequence
 
-def b_cont2_89_d(e, handler):
+def b_cont2_92_d(e, handler):
     global exception_reg, fail_reg, handler_reg, pc
     fail_reg = value2_reg
     exception_reg = e
     handler_reg = handler
     pc = apply_handler2
 
-def b_cont2_90_d(trace_depth, k2):
+def b_cont2_93_d(trace_depth, k2):
     global k_reg, pc
     trace_depth = (trace_depth) - (1)
     printf("~areturn: ~s~%", make_trace_depth_string(trace_depth), value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_91_d(items, sep, k2):
+def b_cont2_94_d(items, sep, k2):
     global k_reg, pc, value1_reg
     value1_reg = string_append(format("~a", (items).car), sep, value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_92_d(handler, k2):
+def b_cont2_95_d(handler, k2):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
     k_reg = k2
     fail_reg = value2_reg
@@ -5060,7 +5421,7 @@ def b_cont2_92_d(handler, k2):
     exp_reg = value1_reg
     pc = m
 
-def b_cont2_93_d(args, handler, k2):
+def b_cont2_96_d(args, handler, k2):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
     k_reg = k2
     fail_reg = value2_reg
@@ -5069,7 +5430,7 @@ def b_cont2_93_d(args, handler, k2):
     exp_reg = value1_reg
     pc = m
 
-def b_cont2_94_d(handler, k2):
+def b_cont2_97_d(handler, k2):
     global fail_reg, handler_reg, k_reg, pc, src_reg, tokens_reg
     k_reg = make_cont4(b_cont4_11_d, handler, k2)
     fail_reg = value2_reg
@@ -5078,7 +5439,7 @@ def b_cont2_94_d(handler, k2):
     tokens_reg = value1_reg
     pc = read_sexp
 
-def b_cont2_95_d(handler, k2):
+def b_cont2_98_d(handler, k2):
     global fail_reg, handler_reg, k_reg, pc, src_reg, tokens_reg
     k_reg = make_cont4(b_cont4_12_d, handler, k2)
     fail_reg = value2_reg
@@ -5087,7 +5448,7 @@ def b_cont2_95_d(handler, k2):
     tokens_reg = value1_reg
     pc = read_sexp
 
-def b_cont2_96_d(k):
+def b_cont2_99_d(k):
     global k_reg, load_stack, pc, value1_reg
     if (((load_stack) is symbol_emptylist) is not False):
         printf("WARNING: empty load-stack encountered!\n")
@@ -5097,9 +5458,9 @@ def b_cont2_96_d(k):
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_97_d(filename, env2, handler, k):
+def b_cont2_100_d(filename, env2, handler, k):
     global env2_reg, fail_reg, handler_reg, k_reg, pc, src_reg, tokens_reg
-    k_reg = make_cont2(b_cont2_96_d, k)
+    k_reg = make_cont2(b_cont2_99_d, k)
     fail_reg = value2_reg
     handler_reg = handler
     env2_reg = env2
@@ -5107,7 +5468,7 @@ def b_cont2_97_d(filename, env2, handler, k):
     tokens_reg = value1_reg
     pc = read_and_eval_asexps
 
-def b_cont2_98_d(src, tokens_left, env2, handler, k):
+def b_cont2_101_d(src, tokens_left, env2, handler, k):
     global env2_reg, fail_reg, handler_reg, k_reg, pc, src_reg, tokens_reg
     if (token_type_q(first(tokens_left), symbol_end_marker) is not False):
         k_reg = k
@@ -5121,16 +5482,16 @@ def b_cont2_98_d(src, tokens_left, env2, handler, k):
         tokens_reg = tokens_left
         pc = read_and_eval_asexps
 
-def b_cont2_99_d(src, tokens_left, env2, handler, k):
+def b_cont2_102_d(src, tokens_left, env2, handler, k):
     global env_reg, exp_reg, fail_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_98_d, src, tokens_left, env2, handler, k)
+    k_reg = make_cont2(b_cont2_101_d, src, tokens_left, env2, handler, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env2
     exp_reg = value1_reg
     pc = m
 
-def b_cont2_100_d(filenames, env2, info, handler, k):
+def b_cont2_103_d(filenames, env2, info, handler, k):
     global env2_reg, fail_reg, filenames_reg, handler_reg, info_reg, k_reg, pc
     k_reg = k
     fail_reg = value2_reg
@@ -5140,7 +5501,7 @@ def b_cont2_100_d(filenames, env2, info, handler, k):
     filenames_reg = (filenames).cdr
     pc = load_files
 
-def b_cont2_101_d(args, info, handler, k2):
+def b_cont2_104_d(args, info, handler, k2):
     global fail_reg, handler_reg, info_reg, k_reg, msg_reg, pc, value1_reg
     if ((value1_reg) is (True) is not False):
         value1_reg = symbol_ok
@@ -5160,7 +5521,7 @@ def b_cont2_101_d(args, info, handler, k2):
             msg_reg = (args).cdr.cdr.cdr.car
             pc = assertion_error
 
-def b_cont2_102_d(lst, k2):
+def b_cont2_105_d(lst, k2):
     global k_reg, pc, value1_reg
     if (member((lst).car, value1_reg) is not False):
         k_reg = k2
@@ -5170,7 +5531,7 @@ def b_cont2_102_d(lst, k2):
         k_reg = k2
         pc = apply_cont2
 
-def b_cont2_103_d(filename, info, handler, k2):
+def b_cont2_106_d(filename, info, handler, k2):
     global env2_reg, fail_reg, filename_reg, handler_reg, info_reg, k_reg, paths_reg, pc
     module = make_toplevel_env()
     set_binding_value_b(value1_reg, module)
@@ -5183,13 +5544,13 @@ def b_cont2_103_d(filename, info, handler, k2):
     paths_reg = SCHEMEPATH
     pc = find_file_and_load
 
-def b_cont2_104_d(ls1, k2):
+def b_cont2_107_d(ls1, k2):
     global k_reg, pc, value1_reg
     value1_reg = cons((ls1).car, value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_105_d(lists, k2):
+def b_cont2_108_d(lists, k2):
     global fail_reg, k2_reg, ls1_reg, ls2_reg, pc
     k2_reg = k2
     fail_reg = value2_reg
@@ -5197,7 +5558,7 @@ def b_cont2_105_d(lists, k2):
     ls1_reg = (lists).car
     pc = append2
 
-def b_cont2_106_d(iterator, proc, env, handler, k):
+def b_cont2_109_d(iterator, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, iterator_reg, k_reg, pc, proc_reg
     k_reg = k
     fail_reg = value2_reg
@@ -5207,9 +5568,9 @@ def b_cont2_106_d(iterator, proc, env, handler, k):
     proc_reg = proc
     pc = iterate_continue
 
-def b_cont2_107_d(iterator, proc, env, handler, k):
+def b_cont2_110_d(iterator, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, iterator_reg, k_reg, pc, proc_reg
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
@@ -5217,9 +5578,9 @@ def b_cont2_107_d(iterator, proc, env, handler, k):
     proc_reg = proc
     pc = iterate_collect_continue
 
-def b_cont2_108_d(list1, proc, env, handler, k):
+def b_cont2_111_d(list1, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, list1_reg, pc, proc_reg
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
@@ -5227,15 +5588,15 @@ def b_cont2_108_d(list1, proc, env, handler, k):
     proc_reg = proc
     pc = map1
 
-def b_cont2_109_d(list1, proc, k):
+def b_cont2_112_d(list1, proc, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(dlr_apply(proc, List((list1).car)), value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_110_d(list1, list2, proc, env, handler, k):
+def b_cont2_113_d(list1, list2, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, list1_reg, list2_reg, pc, proc_reg
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
@@ -5244,15 +5605,15 @@ def b_cont2_110_d(list1, list2, proc, env, handler, k):
     proc_reg = proc
     pc = map2
 
-def b_cont2_111_d(list1, list2, proc, k):
+def b_cont2_114_d(list1, list2, proc, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(dlr_apply(proc, List((list1).car, (list2).car)), value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_112_d(lists, proc, env, handler, k):
+def b_cont2_115_d(lists, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, lists_reg, pc, proc_reg
-    k_reg = make_cont2(b_cont2_40_d, value1_reg, k)
+    k_reg = make_cont2(b_cont2_42_d, value1_reg, k)
     fail_reg = value2_reg
     handler_reg = handler
     env_reg = env
@@ -5260,13 +5621,13 @@ def b_cont2_112_d(lists, proc, env, handler, k):
     proc_reg = proc
     pc = mapN
 
-def b_cont2_113_d(lists, proc, k):
+def b_cont2_116_d(lists, proc, k):
     global k_reg, pc, value1_reg
     value1_reg = cons(dlr_apply(proc, Map(car, lists)), value1_reg)
     k_reg = k
     pc = apply_cont2
 
-def b_cont2_114_d(arg_list, proc, env, handler, k):
+def b_cont2_117_d(arg_list, proc, env, handler, k):
     global env_reg, fail_reg, handler_reg, k_reg, lists_reg, pc, proc_reg
     k_reg = k
     fail_reg = value2_reg
@@ -5276,13 +5637,13 @@ def b_cont2_114_d(arg_list, proc, env, handler, k):
     proc_reg = proc
     pc = for_each_primitive
 
-def b_cont2_115_d(k2):
+def b_cont2_118_d(k2):
     global k_reg, pc, value1_reg
     value1_reg = apply_native(dict, List(value1_reg))
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_116_d(associations, k2):
+def b_cont2_119_d(associations, k2):
     global k_reg, pc, value1_reg
     value = ((associations).car).cdr.cdr.car
     key = to_string(((associations).car).car)
@@ -5290,7 +5651,7 @@ def b_cont2_116_d(associations, k2):
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_117_d(elements, pred, env2, info, handler, k2):
+def b_cont2_120_d(elements, pred, env2, info, handler, k2):
     global elements_reg, env2_reg, fail_reg, handler_reg, info_reg, k2_reg, pc, proc_reg, x_reg
     k2_reg = k2
     fail_reg = value2_reg
@@ -5302,20 +5663,20 @@ def b_cont2_117_d(elements, pred, env2, info, handler, k2):
     proc_reg = pred
     pc = insert_element
 
-def b_cont2_118_d(elements, k2):
+def b_cont2_121_d(elements, k2):
     global k_reg, pc, value1_reg
     value1_reg = cons((elements).car, value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_119_d(elements, proc, x, env2, info, handler, k2):
+def b_cont2_122_d(elements, proc, x, env2, info, handler, k2):
     global elements_reg, env2_reg, fail_reg, handler_reg, info_reg, k2_reg, k_reg, pc, proc_reg, value1_reg, x_reg
     if (value1_reg is not False):
         value1_reg = cons(x, elements)
         k_reg = k2
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_118_d, elements, k2)
+        k2_reg = make_cont2(b_cont2_121_d, elements, k2)
         fail_reg = value2_reg
         handler_reg = handler
         info_reg = info
@@ -5325,39 +5686,39 @@ def b_cont2_119_d(elements, proc, x, env2, info, handler, k2):
         proc_reg = proc
         pc = insert_element
 
-def b_cont2_120_d(new_acdr1, new_cdr1, s_car, k):
+def b_cont2_123_d(new_acdr1, new_cdr1, s_car, k):
     global ap1_reg, ap2_reg, k_reg, p1_reg, p2_reg, pc
-    k_reg = make_cont(b_cont_59_d, s_car, k)
+    k_reg = make_cont(b_cont_60_d, s_car, k)
     ap2_reg = value2_reg
     ap1_reg = new_acdr1
     p2_reg = value1_reg
     p1_reg = new_cdr1
     pc = unify_patterns_hat
 
-def b_cont2_121_d(apair2, pair2, s_car, k):
+def b_cont2_124_d(apair2, pair2, s_car, k):
     global ap_reg, k2_reg, pattern_reg, pc, s_reg
-    k2_reg = make_cont2(b_cont2_120_d, value2_reg, value1_reg, s_car, k)
+    k2_reg = make_cont2(b_cont2_123_d, value2_reg, value1_reg, s_car, k)
     ap_reg = cdr_hat(apair2)
     s_reg = s_car
     pattern_reg = (pair2).cdr
     pc = instantiate_hat
 
-def b_cont2_122_d(a, aa, ap, k2):
+def b_cont2_125_d(a, aa, ap, k2):
     global k_reg, pc, value1_reg, value2_reg
     value2_reg = cons_hat(aa, value2_reg, get_source_info(ap))
     value1_reg = cons(a, value1_reg)
     k_reg = k2
     pc = apply_cont2
 
-def b_cont2_123_d(ap, pattern, s, k2):
+def b_cont2_126_d(ap, pattern, s, k2):
     global ap_reg, k2_reg, pattern_reg, pc, s_reg
-    k2_reg = make_cont2(b_cont2_122_d, value1_reg, value2_reg, ap, k2)
+    k2_reg = make_cont2(b_cont2_125_d, value1_reg, value2_reg, ap, k2)
     ap_reg = cdr_hat(ap)
     s_reg = s
     pattern_reg = (pattern).cdr
     pc = instantiate_hat
 
-def b_cont2_124_d(s2, k2):
+def b_cont2_127_d(s2, k2):
     global ap_reg, k2_reg, pattern_reg, pc, s_reg
     k2_reg = k2
     ap_reg = value2_reg
@@ -5481,7 +5842,7 @@ def b_cont4_8_d():
 
 def b_cont4_9_d(senv, src, handler, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_41_d, senv, src, value3_reg, handler, k)
+    k_reg = make_cont2(b_cont2_43_d, senv, src, value3_reg, handler, k)
     fail_reg = value4_reg
     handler_reg = handler
     senv_reg = senv
@@ -5491,7 +5852,7 @@ def b_cont4_9_d(senv, src, handler, k):
 def b_cont4_10_d():
     global _startokens_left_star, adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
     _startokens_left_star = value3_reg
-    k_reg = make_cont2(b_cont2_54_d)
+    k_reg = make_cont2(b_cont2_56_d)
     fail_reg = value4_reg
     handler_reg = REP_handler
     senv_reg = initial_contours(toplevel_env)
@@ -5531,7 +5892,7 @@ def b_cont4_12_d(handler, k2):
 
 def b_cont4_13_d(src, env2, handler, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, pc, senv_reg
-    k_reg = make_cont2(b_cont2_99_d, src, value3_reg, env2, handler, k)
+    k_reg = make_cont2(b_cont2_102_d, src, value3_reg, env2, handler, k)
     fail_reg = value4_reg
     handler_reg = handler
     senv_reg = initial_contours(env2)
@@ -5640,7 +6001,7 @@ def b_handler2_5_d(assertions, right, test_name, verbose, wrong, env, handler, k
             else:
                 printf("  Error: ~a at ~a\n", test_name, where)
         initialize_stack_trace_b()
-        k_reg = make_cont2(b_cont2_85_d, assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k)
+        k_reg = make_cont2(b_cont2_88_d, assertions, msg, proc_exp, right, test_aexp, test_exp, test_name, traceback, verbose, where, wrong, env, handler, k)
         handler_reg = make_handler2(b_handler2_4_d, assertions, msg, right, test_name, verbose, where, wrong, env, handler, k)
         env_reg = env
         exp_reg = result_exp
@@ -5657,7 +6018,7 @@ def b_handler2_6_d(cexps, cvar, env, handler, k):
 
 def b_handler2_7_d(fexps, env, handler):
     global env_reg, exps_reg, handler_reg, k_reg, pc
-    k_reg = make_cont2(b_cont2_89_d, exception_reg, handler)
+    k_reg = make_cont2(b_cont2_92_d, exception_reg, handler)
     handler_reg = handler
     env_reg = env
     exps_reg = fexps
@@ -5667,7 +6028,7 @@ def b_handler2_8_d(cexps, cvar, fexps, env, handler, k):
     global env_reg, exps_reg, handler_reg, k_reg, pc
     new_env = extend(env, List(cvar), List(exception_reg), List("try-catch-finally handler"))
     catch_handler = try_finally_handler(fexps, env, handler)
-    k_reg = make_cont2(b_cont2_62_d, fexps, env, handler, k)
+    k_reg = make_cont2(b_cont2_65_d, fexps, env, handler, k)
     handler_reg = catch_handler
     env_reg = new_env
     exps_reg = cexps
@@ -5695,7 +6056,7 @@ def b_proc_3_d(bodies, name, trace_depth, formals, env):
     if (numeric_equal(length(new_args), length(new_formals)) is not False):
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
         trace_depth = (trace_depth) + (1)
-        k_reg = make_cont2(b_cont2_90_d, trace_depth, k2_reg)
+        k_reg = make_cont2(b_cont2_93_d, trace_depth, k2_reg)
         env_reg = extend(env, new_formals, new_args, make_empty_docstrings(length(new_formals)))
         exps_reg = bodies
         pc = eval_sequence
@@ -5711,7 +6072,7 @@ def b_proc_4_d(bodies, name, trace_depth, formals, runt, env):
         new_env = extend(env, cons(runt, new_formals), cons(list_tail(new_args, length(new_formals)), list_head(new_args, length(new_formals))), make_empty_docstrings((1) + (length(new_formals))))
         printf("~acall: ~s~%", make_trace_depth_string(trace_depth), cons(name, new_args))
         trace_depth = (trace_depth) + (1)
-        k_reg = make_cont2(b_cont2_90_d, trace_depth, k2_reg)
+        k_reg = make_cont2(b_cont2_93_d, trace_depth, k2_reg)
         env_reg = new_env
         exps_reg = bodies
         pc = eval_sequence
@@ -5796,12 +6157,12 @@ def b_proc_12_d():
 def b_proc_13_d():
     global k_reg, msg_reg, pc, x_reg
     if (length_one_q(args_reg) is not False):
-        k_reg = make_cont(b_cont_50_d, handler_reg, fail_reg, k2_reg)
+        k_reg = make_cont(b_cont_51_d, handler_reg, fail_reg, k2_reg)
         x_reg = (args_reg).car
         pc = annotate_cps
     else:
         if (length_two_q(args_reg) is not False):
-            k_reg = make_cont(b_cont_51_d, args_reg, handler_reg, fail_reg, k2_reg)
+            k_reg = make_cont(b_cont_52_d, args_reg, handler_reg, fail_reg, k2_reg)
             x_reg = (args_reg).car
             pc = annotate_cps
         else:
@@ -5825,7 +6186,7 @@ def b_proc_14_d():
 
 def b_proc_15_d():
     global k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_52_d, handler_reg, fail_reg, k2_reg)
+    k_reg = make_cont(b_cont_53_d, handler_reg, fail_reg, k2_reg)
     x_reg = (args_reg).car
     pc = annotate_cps
 
@@ -5879,14 +6240,14 @@ def b_proc_19_d():
 
 def b_proc_20_d():
     global input_reg, k_reg, pc, src_reg
-    k_reg = make_cont2(b_cont2_94_d, handler_reg, k2_reg)
+    k_reg = make_cont2(b_cont2_97_d, handler_reg, k2_reg)
     src_reg = "stdin"
     input_reg = (args_reg).car
     pc = scan_input
 
 def b_proc_21_d():
     global input_reg, k_reg, pc, src_reg
-    k_reg = make_cont2(b_cont2_95_d, handler_reg, k2_reg)
+    k_reg = make_cont2(b_cont2_98_d, handler_reg, k2_reg)
     src_reg = "stdin"
     input_reg = (args_reg).car
     pc = scan_input
@@ -6741,7 +7102,7 @@ def b_proc_86_d():
             expected_result = (args_reg).cdr.cdr.car
             expression_result = (args_reg).cdr.car
             proc = (args_reg).car
-            k2_reg = make_cont2(b_cont2_101_d, args_reg, info_reg, handler_reg, k2_reg)
+            k2_reg = make_cont2(b_cont2_104_d, args_reg, info_reg, handler_reg, k2_reg)
             args_reg = List(expression_result, expected_result)
             proc_reg = proc
             pc = apply_proc
@@ -6904,7 +7265,7 @@ def b_proc_101_d():
         msg_reg = "incorrect number of arguments to equal?"
         pc = runtime_error
     else:
-        k_reg = make_cont(b_cont_53_d, fail_reg, k2_reg)
+        k_reg = make_cont(b_cont_54_d, fail_reg, k2_reg)
         y_reg = (args_reg).cdr.car
         x_reg = (args_reg).car
         pc = equal_objects_q
@@ -7028,7 +7389,7 @@ def b_proc_112_d():
     else:
         module_name = (args_reg).cdr.car
         filename = (args_reg).car
-        k_reg = make_cont2(b_cont2_103_d, filename, info_reg, handler_reg, k2_reg)
+        k_reg = make_cont2(b_cont2_106_d, filename, info_reg, handler_reg, k2_reg)
         env_reg = env2_reg
         var_reg = module_name
         pc = lookup_binding_in_first_frame
@@ -7687,7 +8048,7 @@ def b_proc_172_d():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_115_d, k2_reg)
+        k2_reg = make_cont2(b_cont2_118_d, k2_reg)
         associations_reg = (args_reg).car
         pc = make_dict_tuples
 
@@ -7802,7 +8163,7 @@ def b_macro_1_d():
     else:
         bodies = cddr_hat(datum_reg)
         formals = cadr_hat(datum_reg)
-        return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_42_d, formals, handler_reg, fail_reg, k_reg))
+        return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_44_d, formals, handler_reg, fail_reg, k_reg))
 
 def b_macro_2_d():
     global adatum_reg, msg_reg, pc
@@ -7814,7 +8175,7 @@ def b_macro_2_d():
         bodies = cdddr_hat(datum_reg)
         formals = caddr_hat(datum_reg)
         name = cadr_hat(datum_reg)
-        return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_43_d, name, formals, handler_reg, fail_reg, k_reg))
+        return get_internal_defines_hat(bodies, datum_reg, handler_reg, fail_reg, make_cont2(b_cont2_45_d, name, formals, handler_reg, fail_reg, k_reg))
 
 def b_macro_3_d():
     global pc, value_reg
@@ -7840,7 +8201,7 @@ def b_macro_4_d():
     vars = map_hat(car_hat, decls)
     procs = map_hat(cadr_hat, decls)
     bodies = cddr_hat(datum_reg)
-    k2_reg = make_cont2(b_cont2_46_d, bodies, k_reg)
+    k2_reg = make_cont2(b_cont2_48_d, bodies, k_reg)
     procs_reg = procs
     vars_reg = vars
     pc = create_letrec_assignments_hat
@@ -7964,7 +8325,7 @@ def b_macro_10_d():
     r = gensym_hat("case")
     clauses = cddr_hat(datum_reg)
     exp = cadr_hat(datum_reg)
-    k_reg = make_cont(b_cont_28_d, exp, r, k_reg)
+    k_reg = make_cont(b_cont_29_d, exp, r, k_reg)
     clauses_reg = clauses
     var_reg = r
     pc = case_clauses_to_cond_clauses_hat
@@ -7974,7 +8335,7 @@ def b_macro_11_d():
     r = gensym_hat("record-case")
     clauses = cddr_hat(datum_reg)
     exp = cadr_hat(datum_reg)
-    k_reg = make_cont(b_cont_28_d, exp, r, k_reg)
+    k_reg = make_cont(b_cont_29_d, exp, r, k_reg)
     clauses_reg = clauses
     var_reg = r
     pc = record_case_clauses_to_cond_clauses_hat
@@ -7989,7 +8350,7 @@ def b_macro_12_d():
         pc = amacro_error
     else:
         variants = cdddr_hat(datum_reg)
-        k2_reg = make_cont2(b_cont2_48_d, type_tester_name, k_reg)
+        k2_reg = make_cont2(b_cont2_50_d, type_tester_name, k_reg)
         variants_reg = variants
         pc = make_dd_variant_constructors_hat
 
@@ -8000,14 +8361,14 @@ def b_macro_13_d():
     exp = caddr_hat(datum_reg)
     clauses = cdddr_hat(datum_reg)
     r = gensym_hat("cases")
-    k_reg = make_cont(b_cont_33_d, exp, r, type_name, type_tester_name, k_reg)
+    k_reg = make_cont(b_cont_34_d, exp, r, type_name, type_tester_name, k_reg)
     clauses_reg = clauses
     var_reg = r
     pc = record_case_clauses_to_cond_clauses_hat
 
 def b_macro_14_d(proc, env, info):
     global k_reg, pc, x_reg
-    k_reg = make_cont(b_cont_49_d, proc, env, info, handler_reg, fail_reg, k_reg)
+    k_reg = make_cont(b_cont_50_d, proc, env, info, handler_reg, fail_reg, k_reg)
     x_reg = datum_reg
     pc = unannotate_cps
 
@@ -9249,17 +9610,17 @@ def aparse():
                 pc = apply_cont2
         else:
             if (vector_q_hat(adatum_reg) is not False):
-                k_reg = make_cont(b_cont_19_d, info, fail_reg, k_reg)
+                k_reg = make_cont(b_cont_20_d, info, fail_reg, k_reg)
                 x_reg = adatum_reg
                 pc = unannotate_cps
             else:
                 if (quote_q_hat(adatum_reg) is not False):
-                    k_reg = make_cont(b_cont_20_d, info, fail_reg, k_reg)
+                    k_reg = make_cont(b_cont_21_d, info, fail_reg, k_reg)
                     x_reg = adatum_reg
                     pc = unannotate_cps
                 else:
                     if (quasiquote_q_hat(adatum_reg) is not False):
-                        k_reg = make_cont(b_cont_18_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
+                        k_reg = make_cont(b_cont_19_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
                         depth_reg = 0
                         ax_reg = cadr_hat(adatum_reg)
                         pc = qq_expand_cps
@@ -9272,181 +9633,190 @@ def aparse():
                                 msg_reg = "misplaced"
                                 pc = aparse_error
                             else:
-                                if (syntactic_sugar_q_hat(adatum_reg) is not False):
-                                    k_reg = make_cont2(b_cont2_35_d, senv_reg, handler_reg, k_reg)
-                                    pc = expand_once_hat
+                                if ((let_q_hat(adatum_reg)) and (not(symbol_q_hat(cadr_hat(adatum_reg)))) and ((get_first_frame_value(symbol_let, macro_env)) is (let_transformer_hat)) is not False):
+                                    bindings = cadr_hat(adatum_reg)
+                                    vars = map_hat(car_hat, bindings)
+                                    exps = map_hat(cadr_hat, bindings)
+                                    bodies = cddr_hat(adatum_reg)
+                                    k_reg = make_cont(b_cont_17_d, bodies, exps, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                    x_reg = vars
+                                    pc = unannotate_cps
                                 else:
-                                    if (if_then_q_hat(adatum_reg) is not False):
-                                        k_reg = make_cont2(b_cont2_31_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
-                                        adatum_reg = cadr_hat(adatum_reg)
-                                        pc = aparse
+                                    if (syntactic_sugar_q_hat(adatum_reg) is not False):
+                                        k_reg = make_cont2(b_cont2_33_d, senv_reg, handler_reg, k_reg)
+                                        pc = expand_once_hat
                                     else:
-                                        if (if_else_q_hat(adatum_reg) is not False):
-                                            k_reg = make_cont2(b_cont2_34_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                        if (if_then_q_hat(adatum_reg) is not False):
+                                            k_reg = make_cont2(b_cont2_35_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                             adatum_reg = cadr_hat(adatum_reg)
                                             pc = aparse
                                         else:
-                                            if (help_q_hat(adatum_reg) is not False):
-                                                var_info = get_source_info(cadr_hat(adatum_reg))
-                                                value2_reg = fail_reg
-                                                value1_reg = help_aexp(untag_atom_hat(cadr_hat(adatum_reg)), var_info, info)
-                                                pc = apply_cont2
+                                            if (if_else_q_hat(adatum_reg) is not False):
+                                                k_reg = make_cont2(b_cont2_32_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                adatum_reg = cadr_hat(adatum_reg)
+                                                pc = aparse
                                             else:
-                                                if (assignment_q_hat(adatum_reg) is not False):
-                                                    k_reg = make_cont2(b_cont2_29_d, adatum_reg, info, k_reg)
-                                                    adatum_reg = caddr_hat(adatum_reg)
-                                                    pc = aparse
+                                                if (help_q_hat(adatum_reg) is not False):
+                                                    var_info = get_source_info(cadr_hat(adatum_reg))
+                                                    value2_reg = fail_reg
+                                                    value1_reg = help_aexp(untag_atom_hat(cadr_hat(adatum_reg)), var_info, info)
+                                                    pc = apply_cont2
                                                 else:
-                                                    if (association_q_hat(adatum_reg) is not False):
-                                                        k_reg = make_cont2(b_cont2_27_d, adatum_reg, info, k_reg)
+                                                    if (assignment_q_hat(adatum_reg) is not False):
+                                                        k_reg = make_cont2(b_cont2_28_d, adatum_reg, info, k_reg)
                                                         adatum_reg = caddr_hat(adatum_reg)
                                                         pc = aparse
                                                     else:
-                                                        if (func_q_hat(adatum_reg) is not False):
-                                                            k_reg = make_cont2(b_cont2_28_d, info, k_reg)
-                                                            adatum_reg = cadr_hat(adatum_reg)
+                                                        if (association_q_hat(adatum_reg) is not False):
+                                                            k_reg = make_cont2(b_cont2_29_d, adatum_reg, info, k_reg)
+                                                            adatum_reg = caddr_hat(adatum_reg)
                                                             pc = aparse
                                                         else:
-                                                            if (callback_q_hat(adatum_reg) is not False):
-                                                                k_reg = make_cont2(b_cont2_24_d, info, k_reg)
+                                                            if (func_q_hat(adatum_reg) is not False):
+                                                                k_reg = make_cont2(b_cont2_26_d, info, k_reg)
                                                                 adatum_reg = cadr_hat(adatum_reg)
                                                                 pc = aparse
                                                             else:
-                                                                if (define_q_hat(adatum_reg) is not False):
-                                                                    if (mit_style_define_q_hat(adatum_reg) is not False):
-                                                                        k_reg = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
-                                                                        datum_reg = adatum_reg
-                                                                        macro_reg = mit_define_transformer_hat
-                                                                        pc = apply_macro
-                                                                    else:
-                                                                        if ((numeric_equal(length_hat(adatum_reg), 3)) and (symbol_q_hat(cadr_hat(adatum_reg))) is not False):
-                                                                            k_reg = make_cont2(b_cont2_26_d, adatum_reg, info, k_reg)
-                                                                            adatum_reg = caddr_hat(adatum_reg)
-                                                                            pc = aparse
-                                                                        else:
-                                                                            if ((numeric_equal(length_hat(adatum_reg), 4)) and (symbol_q_hat(cadr_hat(adatum_reg))) and (string_q_hat(caddr_hat(adatum_reg))) is not False):
-                                                                                k_reg = make_cont2(b_cont2_25_d, adatum_reg, info, k_reg)
-                                                                                adatum_reg = cadddr_hat(adatum_reg)
-                                                                                pc = aparse
-                                                                            else:
-                                                                                msg_reg = "bad concrete syntax:"
-                                                                                pc = aparse_error
+                                                                if (callback_q_hat(adatum_reg) is not False):
+                                                                    k_reg = make_cont2(b_cont2_27_d, info, k_reg)
+                                                                    adatum_reg = cadr_hat(adatum_reg)
+                                                                    pc = aparse
                                                                 else:
-                                                                    if (define_b_q_hat(adatum_reg) is not False):
+                                                                    if (define_q_hat(adatum_reg) is not False):
                                                                         if (mit_style_define_q_hat(adatum_reg) is not False):
-                                                                            k_reg = make_cont(b_cont_15_d, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                                                            k_reg = make_cont(b_cont_16_d, senv_reg, info, handler_reg, fail_reg, k_reg)
                                                                             datum_reg = adatum_reg
                                                                             macro_reg = mit_define_transformer_hat
                                                                             pc = apply_macro
                                                                         else:
-                                                                            if (numeric_equal(length_hat(adatum_reg), 3) is not False):
-                                                                                k_reg = make_cont2(b_cont2_22_d, adatum_reg, info, k_reg)
+                                                                            if ((numeric_equal(length_hat(adatum_reg), 3)) and (symbol_q_hat(cadr_hat(adatum_reg))) is not False):
+                                                                                k_reg = make_cont2(b_cont2_23_d, adatum_reg, info, k_reg)
                                                                                 adatum_reg = caddr_hat(adatum_reg)
                                                                                 pc = aparse
                                                                             else:
-                                                                                if ((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg))) is not False):
-                                                                                    k_reg = make_cont2(b_cont2_21_d, adatum_reg, info, k_reg)
+                                                                                if ((numeric_equal(length_hat(adatum_reg), 4)) and (symbol_q_hat(cadr_hat(adatum_reg))) and (string_q_hat(caddr_hat(adatum_reg))) is not False):
+                                                                                    k_reg = make_cont2(b_cont2_22_d, adatum_reg, info, k_reg)
                                                                                     adatum_reg = cadddr_hat(adatum_reg)
                                                                                     pc = aparse
                                                                                 else:
                                                                                     msg_reg = "bad concrete syntax:"
                                                                                     pc = aparse_error
                                                                     else:
-                                                                        if (define_syntax_q_hat(adatum_reg) is not False):
-                                                                            name = define_var_hat(adatum_reg)
-                                                                            if (lambda_q_hat(caddr_hat(adatum_reg)) is not False):
-                                                                                k_reg = make_cont2(b_cont2_23_d, name, info, k_reg)
-                                                                                adatum_reg = caddr_hat(adatum_reg)
-                                                                                pc = aparse
+                                                                        if (define_b_q_hat(adatum_reg) is not False):
+                                                                            if (mit_style_define_q_hat(adatum_reg) is not False):
+                                                                                k_reg = make_cont(b_cont_16_d, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                                                                datum_reg = adatum_reg
+                                                                                macro_reg = mit_define_transformer_hat
+                                                                                pc = apply_macro
                                                                             else:
-                                                                                aclauses = cddr_hat(adatum_reg)
-                                                                                k_reg = make_cont(b_cont_16_d, aclauses, name, info, fail_reg, k_reg)
-                                                                                x_reg = aclauses
-                                                                                pc = unannotate_cps
-                                                                        else:
-                                                                            if (define_tests_q_hat(adatum_reg) is not False):
-                                                                                aclauses = cddr_hat(adatum_reg)
-                                                                                name = define_var_hat(adatum_reg)
-                                                                                k_reg = make_cont2(b_cont2_19_d, name, info, k_reg)
-                                                                                adatum_list_reg = aclauses
-                                                                                pc = aparse_all
-                                                                            else:
-                                                                                if (run_tests_q_hat(adatum_reg) is not False):
-                                                                                    args = cdr_hat(adatum_reg)
-                                                                                    if (null_q_hat(args) is not False):
-                                                                                        value2_reg = fail_reg
-                                                                                        value1_reg = run_tests_aexp(symbol_emptylist)
-                                                                                        pc = apply_cont2
-                                                                                    else:
-                                                                                        if ((symbol_q_hat(car_hat(args))) and (list_of_test_groups_q_hat(cdr_hat(args))) is not False):
-                                                                                            k_reg = make_cont2(b_cont2_20_d, k_reg)
-                                                                                            args_reg = list_hat(args)
-                                                                                            pc = aparse_unit_tests
-                                                                                        else:
-                                                                                            k_reg = make_cont2(b_cont2_20_d, k_reg)
-                                                                                            args_reg = args
-                                                                                            pc = aparse_unit_tests
+                                                                                if (numeric_equal(length_hat(adatum_reg), 3) is not False):
+                                                                                    k_reg = make_cont2(b_cont2_25_d, adatum_reg, info, k_reg)
+                                                                                    adatum_reg = caddr_hat(adatum_reg)
+                                                                                    pc = aparse
                                                                                 else:
-                                                                                    if (begin_q_hat(adatum_reg) is not False):
-                                                                                        if (null_q_hat(cdr_hat(adatum_reg)) is not False):
-                                                                                            msg_reg = "bad concrete syntax:"
-                                                                                            pc = aparse_error
-                                                                                        else:
-                                                                                            if (null_q_hat(cddr_hat(adatum_reg)) is not False):
-                                                                                                adatum_reg = cadr_hat(adatum_reg)
-                                                                                                pc = aparse
-                                                                                            else:
-                                                                                                k_reg = make_cont2(b_cont2_17_d, info, k_reg)
-                                                                                                adatum_list_reg = cdr_hat(adatum_reg)
-                                                                                                pc = aparse_all
+                                                                                    if ((numeric_equal(length_hat(adatum_reg), 4)) and (string_q_hat(caddr_hat(adatum_reg))) is not False):
+                                                                                        k_reg = make_cont2(b_cont2_24_d, adatum_reg, info, k_reg)
+                                                                                        adatum_reg = cadddr_hat(adatum_reg)
+                                                                                        pc = aparse
                                                                                     else:
-                                                                                        if (lambda_no_defines_q_hat(adatum_reg) is not False):
-                                                                                            k_reg = make_cont(b_cont_13_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
-                                                                                            x_reg = cadr_hat(adatum_reg)
-                                                                                            pc = unannotate_cps
+                                                                                        msg_reg = "bad concrete syntax:"
+                                                                                        pc = aparse_error
+                                                                        else:
+                                                                            if (define_syntax_q_hat(adatum_reg) is not False):
+                                                                                name = define_var_hat(adatum_reg)
+                                                                                if (lambda_q_hat(caddr_hat(adatum_reg)) is not False):
+                                                                                    k_reg = make_cont2(b_cont2_20_d, name, info, k_reg)
+                                                                                    adatum_reg = caddr_hat(adatum_reg)
+                                                                                    pc = aparse
+                                                                                else:
+                                                                                    aclauses = cddr_hat(adatum_reg)
+                                                                                    k_reg = make_cont(b_cont_14_d, aclauses, name, info, fail_reg, k_reg)
+                                                                                    x_reg = aclauses
+                                                                                    pc = unannotate_cps
+                                                                            else:
+                                                                                if (define_tests_q_hat(adatum_reg) is not False):
+                                                                                    aclauses = cddr_hat(adatum_reg)
+                                                                                    name = define_var_hat(adatum_reg)
+                                                                                    k_reg = make_cont2(b_cont2_21_d, name, info, k_reg)
+                                                                                    adatum_list_reg = aclauses
+                                                                                    pc = aparse_all
+                                                                                else:
+                                                                                    if (run_tests_q_hat(adatum_reg) is not False):
+                                                                                        args = cdr_hat(adatum_reg)
+                                                                                        if (null_q_hat(args) is not False):
+                                                                                            value2_reg = fail_reg
+                                                                                            value1_reg = run_tests_aexp(symbol_emptylist)
+                                                                                            pc = apply_cont2
                                                                                         else:
-                                                                                            if (trace_lambda_no_defines_q_hat(adatum_reg) is not False):
+                                                                                            if ((symbol_q_hat(car_hat(args))) and (list_of_test_groups_q_hat(cdr_hat(args))) is not False):
+                                                                                                k_reg = make_cont2(b_cont2_18_d, k_reg)
+                                                                                                args_reg = list_hat(args)
+                                                                                                pc = aparse_unit_tests
+                                                                                            else:
+                                                                                                k_reg = make_cont2(b_cont2_18_d, k_reg)
+                                                                                                args_reg = args
+                                                                                                pc = aparse_unit_tests
+                                                                                    else:
+                                                                                        if (begin_q_hat(adatum_reg) is not False):
+                                                                                            if (null_q_hat(cdr_hat(adatum_reg)) is not False):
+                                                                                                msg_reg = "bad concrete syntax:"
+                                                                                                pc = aparse_error
+                                                                                            else:
+                                                                                                if (null_q_hat(cddr_hat(adatum_reg)) is not False):
+                                                                                                    adatum_reg = cadr_hat(adatum_reg)
+                                                                                                    pc = aparse
+                                                                                                else:
+                                                                                                    k_reg = make_cont2(b_cont2_19_d, info, k_reg)
+                                                                                                    adatum_list_reg = cdr_hat(adatum_reg)
+                                                                                                    pc = aparse_all
+                                                                                        else:
+                                                                                            if (lambda_no_defines_q_hat(adatum_reg) is not False):
                                                                                                 k_reg = make_cont(b_cont_12_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
-                                                                                                x_reg = caddr_hat(adatum_reg)
+                                                                                                x_reg = cadr_hat(adatum_reg)
                                                                                                 pc = unannotate_cps
                                                                                             else:
-                                                                                                if (try_q_hat(adatum_reg) is not False):
-                                                                                                    if ((numeric_equal(length_hat(adatum_reg), 3)) and (catch_q_hat(caddr_hat(adatum_reg))) is not False):
-                                                                                                        k_reg = make_cont2(b_cont2_14_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
-                                                                                                        adatum_reg = try_body_hat(adatum_reg)
-                                                                                                        pc = aparse
-                                                                                                    else:
-                                                                                                        if ((numeric_equal(length_hat(adatum_reg), 3)) and (finally_q_hat(caddr_hat(adatum_reg))) is not False):
-                                                                                                            k_reg = make_cont2(b_cont2_16_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                if (trace_lambda_no_defines_q_hat(adatum_reg) is not False):
+                                                                                                    k_reg = make_cont(b_cont_13_d, adatum_reg, senv_reg, info, handler_reg, fail_reg, k_reg)
+                                                                                                    x_reg = caddr_hat(adatum_reg)
+                                                                                                    pc = unannotate_cps
+                                                                                                else:
+                                                                                                    if (try_q_hat(adatum_reg) is not False):
+                                                                                                        if ((numeric_equal(length_hat(adatum_reg), 3)) and (catch_q_hat(caddr_hat(adatum_reg))) is not False):
+                                                                                                            k_reg = make_cont2(b_cont2_12_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                             adatum_reg = try_body_hat(adatum_reg)
                                                                                                             pc = aparse
                                                                                                         else:
-                                                                                                            if ((numeric_equal(length_hat(adatum_reg), 4)) and (catch_q_hat(caddr_hat(adatum_reg))) and (finally_q_hat(cadddr_hat(adatum_reg))) is not False):
-                                                                                                                k_reg = make_cont2(b_cont2_12_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                            if ((numeric_equal(length_hat(adatum_reg), 3)) and (finally_q_hat(caddr_hat(adatum_reg))) is not False):
+                                                                                                                k_reg = make_cont2(b_cont2_14_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
                                                                                                                 adatum_reg = try_body_hat(adatum_reg)
                                                                                                                 pc = aparse
                                                                                                             else:
-                                                                                                                k_reg = make_cont2(b_cont2_6_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
-                                                                                                                adatum_reg = car_hat(adatum_reg)
-                                                                                                                pc = aparse
-                                                                                                else:
-                                                                                                    if (raise_q_hat(adatum_reg) is not False):
-                                                                                                        k_reg = make_cont2(b_cont2_7_d, info, k_reg)
-                                                                                                        adatum_reg = cadr_hat(adatum_reg)
-                                                                                                        pc = aparse
+                                                                                                                if ((numeric_equal(length_hat(adatum_reg), 4)) and (catch_q_hat(caddr_hat(adatum_reg))) and (finally_q_hat(cadddr_hat(adatum_reg))) is not False):
+                                                                                                                    k_reg = make_cont2(b_cont2_10_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                                    adatum_reg = try_body_hat(adatum_reg)
+                                                                                                                    pc = aparse
+                                                                                                                else:
+                                                                                                                    k_reg = make_cont2(b_cont2_7_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                                    adatum_reg = car_hat(adatum_reg)
+                                                                                                                    pc = aparse
                                                                                                     else:
-                                                                                                        if (choose_q_hat(adatum_reg) is not False):
-                                                                                                            k_reg = make_cont2(b_cont2_8_d, info, k_reg)
-                                                                                                            adatum_list_reg = cdr_hat(adatum_reg)
-                                                                                                            pc = aparse_all
+                                                                                                        if (raise_q_hat(adatum_reg) is not False):
+                                                                                                            k_reg = make_cont2(b_cont2_15_d, info, k_reg)
+                                                                                                            adatum_reg = cadr_hat(adatum_reg)
+                                                                                                            pc = aparse
                                                                                                         else:
-                                                                                                            if (application_q_hat(adatum_reg) is not False):
-                                                                                                                k_reg = make_cont2(b_cont2_6_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
-                                                                                                                adatum_reg = car_hat(adatum_reg)
-                                                                                                                pc = aparse
+                                                                                                            if (choose_q_hat(adatum_reg) is not False):
+                                                                                                                k_reg = make_cont2(b_cont2_5_d, info, k_reg)
+                                                                                                                adatum_list_reg = cdr_hat(adatum_reg)
+                                                                                                                pc = aparse_all
                                                                                                             else:
-                                                                                                                msg_reg = "bad concrete syntax:"
-                                                                                                                pc = aparse_error
+                                                                                                                if (application_q_hat(adatum_reg) is not False):
+                                                                                                                    k_reg = make_cont2(b_cont2_7_d, adatum_reg, senv_reg, info, handler_reg, k_reg)
+                                                                                                                    adatum_reg = car_hat(adatum_reg)
+                                                                                                                    pc = aparse
+                                                                                                                else:
+                                                                                                                    msg_reg = "bad concrete syntax:"
+                                                                                                                    pc = aparse_error
 
 def aparse_unit_tests():
     global adatum_reg, args_reg, k_reg, msg_reg, pc, value1_reg, value2_reg
@@ -9456,12 +9826,12 @@ def aparse_unit_tests():
         pc = apply_cont2
     else:
         if (symbol_q_hat(car_hat(args_reg)) is not False):
-            k_reg = make_cont2(b_cont2_37_d, args_reg, k_reg)
+            k_reg = make_cont2(b_cont2_39_d, args_reg, k_reg)
             args_reg = cdr_hat(args_reg)
             pc = aparse_unit_tests
         else:
             if ((list_q_hat(car_hat(args_reg))) and (not(null_q_hat(car_hat(args_reg)))) and (symbol_q_hat(caar_hat(args_reg))) and (list_of_test_groups_q_hat(cdar_hat(args_reg))) is not False):
-                k_reg = make_cont2(b_cont2_36_d, args_reg, k_reg)
+                k_reg = make_cont2(b_cont2_38_d, args_reg, k_reg)
                 args_reg = cdr_hat(args_reg)
                 pc = aparse_unit_tests
             else:
@@ -9476,14 +9846,14 @@ def aparse_all():
         value1_reg = symbol_emptylist
         pc = apply_cont2
     else:
-        k_reg = make_cont2(b_cont2_39_d, adatum_list_reg, senv_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_41_d, adatum_list_reg, senv_reg, handler_reg, k_reg)
         adatum_reg = car_hat(adatum_list_reg)
         pc = aparse
 
 def aparse_error():
     global k_reg, pc, x_reg
     info = get_source_info(adatum_reg)
-    k_reg = make_cont(b_cont_22_d, msg_reg, info, handler_reg, fail_reg)
+    k_reg = make_cont(b_cont_23_d, msg_reg, info, handler_reg, fail_reg)
     x_reg = adatum_reg
     pc = unannotate_cps
 
@@ -9534,9 +9904,9 @@ def get_internal_defines_hat(bodies, adatum, handler, fail, k):
         pc = aparse_error
     else:
         if (define_q_hat(car_hat(bodies)) is not False):
-            return get_internal_defines_hat(cdr_hat(bodies), adatum, handler, fail, make_cont2(b_cont2_44_d, bodies, k))
+            return get_internal_defines_hat(cdr_hat(bodies), adatum, handler, fail, make_cont2(b_cont2_46_d, bodies, k))
         else:
-            return any_internal_defines_q_hat(cdr_hat(bodies), make_cont(b_cont_25_d, adatum, bodies, handler, fail, k))
+            return any_internal_defines_q_hat(cdr_hat(bodies), make_cont(b_cont_26_d, adatum, bodies, handler, fail, k))
 
 def any_internal_defines_q_hat(exps, k):
     global k_reg, pc, value_reg
@@ -9559,7 +9929,7 @@ def create_letrec_bindings_hat(defines, handler, fail, k):
         k_reg = k
         pc = apply_cont
     else:
-        return create_letrec_bindings_hat((defines).cdr, handler, fail, make_cont(b_cont_26_d, defines, handler, fail, k))
+        return create_letrec_bindings_hat((defines).cdr, handler, fail, make_cont(b_cont_27_d, defines, handler, fail, k))
 
 def get_define_var_and_exp_hat(adatum, handler, fail, k):
     global adatum_reg, fail_reg, handler_reg, k_reg, msg_reg, pc, value1_reg, value2_reg
@@ -9602,7 +9972,7 @@ def create_letrec_assignments_hat():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_47_d, procs_reg, vars_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_49_d, procs_reg, vars_reg, k2_reg)
         procs_reg = cdr_hat(procs_reg)
         vars_reg = cdr_hat(vars_reg)
         pc = create_letrec_assignments_hat
@@ -9624,7 +9994,7 @@ def nest_let_star_bindings_hat():
         value_reg = append(List(symbol_let), append(List(bindings_reg), at_hat(bodies_reg)))
         pc = apply_cont
     else:
-        k_reg = make_cont(b_cont_27_d, bindings_reg, k_reg)
+        k_reg = make_cont(b_cont_28_d, bindings_reg, k_reg)
         bindings_reg = cdr_hat(bindings_reg)
         pc = nest_let_star_bindings_hat
 
@@ -9634,7 +10004,7 @@ def case_clauses_to_cond_clauses_hat():
         value_reg = symbol_emptylist
         pc = apply_cont
     else:
-        k_reg = make_cont(b_cont_29_d, clauses_reg, var_reg, k_reg)
+        k_reg = make_cont(b_cont_30_d, clauses_reg, var_reg, k_reg)
         clauses_reg = cdr_hat(clauses_reg)
         pc = case_clauses_to_cond_clauses_hat
 
@@ -9644,7 +10014,7 @@ def record_case_clauses_to_cond_clauses_hat():
         value_reg = symbol_emptylist
         pc = apply_cont
     else:
-        k_reg = make_cont(b_cont_30_d, clauses_reg, var_reg, k_reg)
+        k_reg = make_cont(b_cont_31_d, clauses_reg, var_reg, k_reg)
         clauses_reg = cdr_hat(clauses_reg)
         pc = record_case_clauses_to_cond_clauses_hat
 
@@ -9656,7 +10026,7 @@ def make_dd_variant_constructors_hat():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_50_d, variants_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_52_d, variants_reg, k2_reg)
         variant_reg = car_hat(variants_reg)
         pc = make_dd_variant_constructor_hat
 
@@ -9664,7 +10034,7 @@ def make_dd_variant_constructor_hat():
     global cdrs_reg, fields_reg, k_reg, name_reg, pc
     fields = cdr_hat(variant_reg)
     name = car_hat(variant_reg)
-    k_reg = make_cont(b_cont_31_d, fields, name, k2_reg)
+    k_reg = make_cont(b_cont_32_d, fields, name, k2_reg)
     cdrs_reg = symbol_args
     fields_reg = fields
     name_reg = name
@@ -9676,7 +10046,7 @@ def verify_dd_constructor_fields_hat():
         value_reg = append(List(symbol_cons), append(List(append(List(symbol_quote), List(name_reg))), List(symbol_args)))
         pc = apply_cont
     else:
-        k_reg = make_cont(b_cont_32_d, cdrs_reg, fields_reg, name_reg, k_reg)
+        k_reg = make_cont(b_cont_33_d, cdrs_reg, fields_reg, name_reg, k_reg)
         cdrs_reg = append(List(symbol_cdr), List(cdrs_reg))
         fields_reg = cdr_hat(fields_reg)
         pc = verify_dd_constructor_fields_hat
@@ -9713,12 +10083,12 @@ def expand_once_hat():
     macro_keyword = untag_atom_hat(car_hat(adatum_reg))
     macro = get_first_frame_value(macro_keyword, macro_env)
     if (pattern_macro_q(macro) is not False):
-        k_reg = make_cont2(b_cont2_51_d, macro_keyword, k_reg)
+        k_reg = make_cont2(b_cont2_53_d, macro_keyword, k_reg)
         aclauses_reg = macro_aclauses(macro)
         clauses_reg = macro_clauses(macro)
         pc = process_macro_clauses_hat
     else:
-        k_reg = make_cont(b_cont_35_d, adatum_reg, macro_keyword, fail_reg, k_reg)
+        k_reg = make_cont(b_cont_36_d, adatum_reg, macro_keyword, fail_reg, k_reg)
         datum_reg = adatum_reg
         macro_reg = macro
         pc = apply_macro
@@ -9733,21 +10103,21 @@ def process_macro_clauses_hat():
         left_apattern = caar_hat(aclauses_reg)
         right_pattern = (clauses_reg).car.cdr.car
         left_pattern = (clauses_reg).car.car
-        k_reg = make_cont(b_cont_37_d, aclauses_reg, adatum_reg, clauses_reg, left_apattern, left_pattern, right_apattern, right_pattern, handler_reg, fail_reg, k_reg)
+        k_reg = make_cont(b_cont_38_d, aclauses_reg, adatum_reg, clauses_reg, left_apattern, left_pattern, right_apattern, right_pattern, handler_reg, fail_reg, k_reg)
         x_reg = adatum_reg
         pc = unannotate_cps
 
 def qq_expand_cps():
     global ax_reg, depth_reg, info_reg, k_reg, pc, value_reg, x_reg
     if (quasiquote_q_hat(ax_reg) is not False):
-        k_reg = make_cont(b_cont_42_d, k_reg)
+        k_reg = make_cont(b_cont_43_d, k_reg)
         depth_reg = (depth_reg) + (1)
         ax_reg = cdr_hat(ax_reg)
         pc = qq_expand_cps
     else:
         if ((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg)) is not False):
             if (GreaterThan(depth_reg, 0) is not False):
-                k_reg = make_cont(b_cont_43_d, ax_reg, k_reg)
+                k_reg = make_cont(b_cont_44_d, ax_reg, k_reg)
                 depth_reg = (depth_reg) - (1)
                 ax_reg = cdr_hat(ax_reg)
                 pc = qq_expand_cps
@@ -9760,7 +10130,7 @@ def qq_expand_cps():
                     pc = apply_cont
         else:
             if (vector_q_hat(ax_reg) is not False):
-                k_reg = make_cont(b_cont_41_d, depth_reg, k_reg)
+                k_reg = make_cont(b_cont_42_d, depth_reg, k_reg)
                 info_reg = symbol_none
                 x_reg = vector_to_list_hat(ax_reg)
                 pc = annotate_cps
@@ -9773,21 +10143,21 @@ def qq_expand_cps():
                         ax_reg = car_hat(ax_reg)
                         pc = qq_expand_list_cps
                     else:
-                        k_reg = make_cont(b_cont_39_d, ax_reg, depth_reg, k_reg)
+                        k_reg = make_cont(b_cont_40_d, ax_reg, depth_reg, k_reg)
                         ax_reg = car_hat(ax_reg)
                         pc = qq_expand_list_cps
 
 def qq_expand_list_cps():
     global ax_reg, depth_reg, k_reg, pc, value_reg
     if (quasiquote_q_hat(ax_reg) is not False):
-        k_reg = make_cont(b_cont_47_d, k_reg)
+        k_reg = make_cont(b_cont_48_d, k_reg)
         depth_reg = (depth_reg) + (1)
         ax_reg = cdr_hat(ax_reg)
         pc = qq_expand_cps
     else:
         if ((unquote_q_hat(ax_reg)) or (unquote_splicing_q_hat(ax_reg)) is not False):
             if (GreaterThan(depth_reg, 0) is not False):
-                k_reg = make_cont(b_cont_48_d, ax_reg, k_reg)
+                k_reg = make_cont(b_cont_49_d, ax_reg, k_reg)
                 depth_reg = (depth_reg) - (1)
                 ax_reg = cdr_hat(ax_reg)
                 pc = qq_expand_cps
@@ -9804,7 +10174,7 @@ def qq_expand_list_cps():
                         pc = apply_cont
         else:
             if (vector_q_hat(ax_reg) is not False):
-                k_reg = make_cont(b_cont_44_d, k_reg)
+                k_reg = make_cont(b_cont_45_d, k_reg)
                 pc = qq_expand_cps
             else:
                 if (not(pair_q_hat(ax_reg)) is not False):
@@ -9812,11 +10182,11 @@ def qq_expand_list_cps():
                     pc = apply_cont
                 else:
                     if (null_q_hat(cdr_hat(ax_reg)) is not False):
-                        k_reg = make_cont(b_cont_44_d, k_reg)
+                        k_reg = make_cont(b_cont_45_d, k_reg)
                         ax_reg = car_hat(ax_reg)
                         pc = qq_expand_list_cps
                     else:
-                        k_reg = make_cont(b_cont_46_d, ax_reg, depth_reg, k_reg)
+                        k_reg = make_cont(b_cont_47_d, ax_reg, depth_reg, k_reg)
                         ax_reg = car_hat(ax_reg)
                         pc = qq_expand_list_cps
 
@@ -9893,44 +10263,50 @@ def aunparse(aexp):
                                                     formals = ((aexp)).cdr.car
                                                     return append(List(symbol_lambda), append(List(formals), Map(aunparse, bodies)))
                                                 else:
-                                                    if (((aexp).car) is (symbol_mu_lambda_aexp) is not False):
+                                                    if (((aexp).car) is (symbol_let_aexp) is not False):
                                                         bodies = ((((aexp)).cdr).cdr).cdr.car
-                                                        runt = (((aexp)).cdr).cdr.car
-                                                        formals = ((aexp)).cdr.car
-                                                        return append(List(symbol_lambda), append(List(append(formals, runt)), Map(aunparse, bodies)))
+                                                        val_aexps = (((aexp)).cdr).cdr.car
+                                                        vars = ((aexp)).cdr.car
+                                                        return append(List(symbol_let), append(List(Map(List, vars, Map(aunparse, val_aexps))), Map(aunparse, bodies)))
                                                     else:
-                                                        if (((aexp).car) is (symbol_app_aexp) is not False):
-                                                            operands = (((aexp)).cdr).cdr.car
-                                                            operator = ((aexp)).cdr.car
-                                                            return append(List(aunparse(operator)), Map(aunparse, operands))
+                                                        if (((aexp).car) is (symbol_mu_lambda_aexp) is not False):
+                                                            bodies = ((((aexp)).cdr).cdr).cdr.car
+                                                            runt = (((aexp)).cdr).cdr.car
+                                                            formals = ((aexp)).cdr.car
+                                                            return append(List(symbol_lambda), append(List(append(formals, runt)), Map(aunparse, bodies)))
                                                         else:
-                                                            if (((aexp).car) is (symbol_try_catch_aexp) is not False):
-                                                                catch_exps = ((((aexp)).cdr).cdr).cdr.car
-                                                                catch_var = (((aexp)).cdr).cdr.car
-                                                                body = ((aexp)).cdr.car
-                                                                return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps))))))
+                                                            if (((aexp).car) is (symbol_app_aexp) is not False):
+                                                                operands = (((aexp)).cdr).cdr.car
+                                                                operator = ((aexp)).cdr.car
+                                                                return append(List(aunparse(operator)), Map(aunparse, operands))
                                                             else:
-                                                                if (((aexp).car) is (symbol_try_finally_aexp) is not False):
-                                                                    finally_exps = (((aexp)).cdr).cdr.car
+                                                                if (((aexp).car) is (symbol_try_catch_aexp) is not False):
+                                                                    catch_exps = ((((aexp)).cdr).cdr).cdr.car
+                                                                    catch_var = (((aexp)).cdr).cdr.car
                                                                     body = ((aexp)).cdr.car
-                                                                    return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_finally), Map(aunparse, finally_exps)))))
+                                                                    return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps))))))
                                                                 else:
-                                                                    if (((aexp).car) is (symbol_try_catch_finally_aexp) is not False):
-                                                                        finally_exps = (((((aexp)).cdr).cdr).cdr).cdr.car
-                                                                        catch_exps = ((((aexp)).cdr).cdr).cdr.car
-                                                                        catch_var = (((aexp)).cdr).cdr.car
+                                                                    if (((aexp).car) is (symbol_try_finally_aexp) is not False):
+                                                                        finally_exps = (((aexp)).cdr).cdr.car
                                                                         body = ((aexp)).cdr.car
-                                                                        return append(List(symbol_try), append(List(aunparse(body)), append(List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps)))), List(append(List(symbol_finally), Map(aunparse, finally_exps))))))
+                                                                        return append(List(symbol_try), append(List(aunparse(body)), List(append(List(symbol_finally), Map(aunparse, finally_exps)))))
                                                                     else:
-                                                                        if (((aexp).car) is (symbol_raise_aexp) is not False):
-                                                                            exp = ((aexp)).cdr.car
-                                                                            return append(List(symbol_raise), List(aunparse(exp)))
+                                                                        if (((aexp).car) is (symbol_try_catch_finally_aexp) is not False):
+                                                                            finally_exps = (((((aexp)).cdr).cdr).cdr).cdr.car
+                                                                            catch_exps = ((((aexp)).cdr).cdr).cdr.car
+                                                                            catch_var = (((aexp)).cdr).cdr.car
+                                                                            body = ((aexp)).cdr.car
+                                                                            return append(List(symbol_try), append(List(aunparse(body)), append(List(append(List(symbol_catch), append(List(catch_var), Map(aunparse, catch_exps)))), List(append(List(symbol_finally), Map(aunparse, finally_exps))))))
                                                                         else:
-                                                                            if (((aexp).car) is (symbol_choose_aexp) is not False):
-                                                                                exps = ((aexp)).cdr.car
-                                                                                return append(List(symbol_choose), Map(aunparse, exps))
+                                                                            if (((aexp).car) is (symbol_raise_aexp) is not False):
+                                                                                exp = ((aexp)).cdr.car
+                                                                                return append(List(symbol_raise), List(aunparse(exp)))
                                                                             else:
-                                                                                raise Exception("symbol_aunparse: " + format("bad abstract syntax: ~s", *[aexp]))
+                                                                                if (((aexp).car) is (symbol_choose_aexp) is not False):
+                                                                                    exps = ((aexp)).cdr.car
+                                                                                    return append(List(symbol_choose), Map(aunparse, exps))
+                                                                                else:
+                                                                                    raise Exception("symbol_aunparse: " + format("bad abstract syntax: ~s", *[aexp]))
 
 def exception_q(x):
     return (pair_q(x)) and (((x).car) is (symbol_exception))
@@ -10061,7 +10437,7 @@ def execute_next_expression_rm(src):
 def try_parse(input_):
     global fail_reg, handler_reg, input_reg, k_reg, load_stack, pc, src_reg
     load_stack = symbol_emptylist
-    k_reg = make_cont2(b_cont2_56_d)
+    k_reg = make_cont2(b_cont2_58_d)
     fail_reg = _starlast_fail_star
     handler_reg = try_parse_handler
     src_reg = "stdin"
@@ -10082,7 +10458,7 @@ def initialize_globals():
     _starlast_fail_star = REP_fail
 
 def make_debugging_k(exp, k):
-    return make_cont2(b_cont2_57_d, exp, k)
+    return make_cont2(b_cont2_59_d, exp, k)
 
 def handle_debug_info(exp, result):
     printf("~s => ~a~%", aunparse(exp), make_safe(result))
@@ -10148,13 +10524,13 @@ def m():
             else:
                 if (((exp_reg).car) is (symbol_func_aexp) is not False):
                     exp = ((exp_reg)).cdr.car
-                    k_reg = make_cont2(b_cont2_79_d, k)
+                    k_reg = make_cont2(b_cont2_82_d, k)
                     exp_reg = exp
                     pc = m
                 else:
                     if (((exp_reg).car) is (symbol_callback_aexp) is not False):
                         exp = ((exp_reg)).cdr.car
-                        k_reg = make_cont2(b_cont2_77_d, k)
+                        k_reg = make_cont2(b_cont2_80_d, k)
                         exp_reg = exp
                         pc = m
                     else:
@@ -10162,16 +10538,16 @@ def m():
                             else_exp = ((((exp_reg)).cdr).cdr).cdr.car
                             then_exp = (((exp_reg)).cdr).cdr.car
                             test_exp = ((exp_reg)).cdr.car
-                            k_reg = make_cont2(b_cont2_78_d, else_exp, then_exp, env_reg, handler_reg, k)
+                            k_reg = make_cont2(b_cont2_81_d, else_exp, then_exp, env_reg, handler_reg, k)
                             exp_reg = test_exp
                             pc = m
                         else:
                             if (((exp_reg).car) is (symbol_help_aexp) is not False):
                                 var_info = (((exp_reg)).cdr).cdr.car
                                 var = ((exp_reg)).cdr.car
-                                sk_reg = make_cont2(b_cont2_74_d, k)
+                                sk_reg = make_cont2(b_cont2_77_d, k)
                                 dk_reg = make_cont3(b_cont3_5_d, k)
-                                gk_reg = make_cont2(b_cont2_75_d, k)
+                                gk_reg = make_cont2(b_cont2_78_d, k)
                                 var_info_reg = var_info
                                 var_reg = var
                                 pc = lookup_variable
@@ -10179,7 +10555,7 @@ def m():
                                 if (((exp_reg).car) is (symbol_association_aexp) is not False):
                                     exp = (((exp_reg)).cdr).cdr.car
                                     var = ((exp_reg)).cdr.car
-                                    k_reg = make_cont2(b_cont2_76_d, var, k)
+                                    k_reg = make_cont2(b_cont2_79_d, var, k)
                                     exp_reg = exp
                                     pc = m
                                 else:
@@ -10187,7 +10563,7 @@ def m():
                                         var_info = ((((exp_reg)).cdr).cdr).cdr.car
                                         rhs_exp = (((exp_reg)).cdr).cdr.car
                                         var = ((exp_reg)).cdr.car
-                                        k_reg = make_cont2(b_cont2_71_d, var, var_info, env_reg, handler_reg, k)
+                                        k_reg = make_cont2(b_cont2_74_d, var, var_info, env_reg, handler_reg, k)
                                         exp_reg = rhs_exp
                                         pc = m
                                     else:
@@ -10195,7 +10571,7 @@ def m():
                                             rhs_exp = ((((exp_reg)).cdr).cdr).cdr.car
                                             docstring = (((exp_reg)).cdr).cdr.car
                                             var = ((exp_reg)).cdr.car
-                                            k_reg = make_cont2(b_cont2_73_d, docstring, var, env_reg, handler_reg, k)
+                                            k_reg = make_cont2(b_cont2_76_d, docstring, var, env_reg, handler_reg, k)
                                             exp_reg = rhs_exp
                                             pc = m
                                         else:
@@ -10203,7 +10579,7 @@ def m():
                                                 rhs_exp = ((((exp_reg)).cdr).cdr).cdr.car
                                                 docstring = (((exp_reg)).cdr).cdr.car
                                                 var = ((exp_reg)).cdr.car
-                                                k_reg = make_cont2(b_cont2_67_d, docstring, var, k)
+                                                k_reg = make_cont2(b_cont2_70_d, docstring, var, k)
                                                 exp_reg = rhs_exp
                                                 pc = m
                                             else:
@@ -10211,7 +10587,7 @@ def m():
                                                     aclauses = ((((exp_reg)).cdr).cdr).cdr.car
                                                     clauses = (((exp_reg)).cdr).cdr.car
                                                     name = ((exp_reg)).cdr.car
-                                                    k_reg = make_cont2(b_cont2_68_d, aclauses, clauses, k)
+                                                    k_reg = make_cont2(b_cont2_71_d, aclauses, clauses, k)
                                                     env_reg = macro_env
                                                     var_reg = name
                                                     pc = lookup_binding_in_first_frame
@@ -10220,7 +10596,7 @@ def m():
                                                         info = ((((exp_reg)).cdr).cdr).cdr.car
                                                         rhs_exp = (((exp_reg)).cdr).cdr.car
                                                         name = ((exp_reg)).cdr.car
-                                                        k_reg = make_cont2(b_cont2_66_d, name, env_reg, info, handler_reg, k)
+                                                        k_reg = make_cont2(b_cont2_69_d, name, env_reg, info, handler_reg, k)
                                                         exp_reg = rhs_exp
                                                         pc = m
                                                     else:
@@ -10312,7 +10688,7 @@ def m():
                                                                                             fexps = (((exp_reg)).cdr).cdr.car
                                                                                             body = ((exp_reg)).cdr.car
                                                                                             new_handler = try_finally_handler(fexps, env_reg, handler_reg)
-                                                                                            k_reg = make_cont2(b_cont2_62_d, fexps, env_reg, handler_reg, k)
+                                                                                            k_reg = make_cont2(b_cont2_65_d, fexps, env_reg, handler_reg, k)
                                                                                             handler_reg = new_handler
                                                                                             exp_reg = body
                                                                                             pc = m
@@ -10323,7 +10699,7 @@ def m():
                                                                                                 cvar = (((exp_reg)).cdr).cdr.car
                                                                                                 body = ((exp_reg)).cdr.car
                                                                                                 new_handler = try_catch_finally_handler(cvar, cexps, fexps, env_reg, handler_reg, k)
-                                                                                                k_reg = make_cont2(b_cont2_62_d, fexps, env_reg, handler_reg, k)
+                                                                                                k_reg = make_cont2(b_cont2_65_d, fexps, env_reg, handler_reg, k)
                                                                                                 handler_reg = new_handler
                                                                                                 exp_reg = body
                                                                                                 pc = m
@@ -10331,7 +10707,7 @@ def m():
                                                                                                 if (((exp_reg).car) is (symbol_raise_aexp) is not False):
                                                                                                     info = (((exp_reg)).cdr).cdr.car
                                                                                                     exp = ((exp_reg)).cdr.car
-                                                                                                    k_reg = make_cont2(b_cont2_63_d, info, handler_reg)
+                                                                                                    k_reg = make_cont2(b_cont2_66_d, info, handler_reg)
                                                                                                     exp_reg = exp
                                                                                                     pc = m
                                                                                                 else:
@@ -10341,17 +10717,25 @@ def m():
                                                                                                         exps_reg = exps
                                                                                                         pc = eval_choices
                                                                                                     else:
-                                                                                                        if (((exp_reg).car) is (symbol_app_aexp) is not False):
-                                                                                                            info = ((((exp_reg)).cdr).cdr).cdr.car
-                                                                                                            operands = (((exp_reg)).cdr).cdr.car
-                                                                                                            operator = ((exp_reg)).cdr.car
-                                                                                                            k_reg = make_cont2(b_cont2_60_d, exp_reg, operator, env_reg, info, handler_reg, k)
-                                                                                                            exps_reg = operands
+                                                                                                        if (((exp_reg).car) is (symbol_let_aexp) is not False):
+                                                                                                            bodies = ((((exp_reg)).cdr).cdr).cdr.car
+                                                                                                            val_aexps = (((exp_reg)).cdr).cdr.car
+                                                                                                            vars = ((exp_reg)).cdr.car
+                                                                                                            k_reg = make_cont2(b_cont2_63_d, bodies, vars, env_reg, handler_reg, k)
+                                                                                                            exps_reg = val_aexps
                                                                                                             pc = m_star
                                                                                                         else:
-                                                                                                            info_reg = info
-                                                                                                            msg_reg = format("unknown abstract syntax type: ~a", (exp_reg).car)
-                                                                                                            pc = runtime_error
+                                                                                                            if (((exp_reg).car) is (symbol_app_aexp) is not False):
+                                                                                                                info = ((((exp_reg)).cdr).cdr).cdr.car
+                                                                                                                operands = (((exp_reg)).cdr).cdr.car
+                                                                                                                operator = ((exp_reg)).cdr.car
+                                                                                                                k_reg = make_cont2(b_cont2_62_d, exp_reg, operator, env_reg, info, handler_reg, k)
+                                                                                                                exps_reg = operands
+                                                                                                                pc = m_star
+                                                                                                            else:
+                                                                                                                info_reg = info
+                                                                                                                msg_reg = format("unknown abstract syntax type: ~a", (exp_reg).car)
+                                                                                                                pc = runtime_error
 
 def run_unit_tests():
     global k_reg, pc, test_reg, value1_reg, value2_reg
@@ -10368,7 +10752,7 @@ def run_unit_tests():
         value1_reg = void_value
         pc = apply_cont2
     else:
-        k_reg = make_cont2(b_cont2_80_d, start_time_reg, tests_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_83_d, start_time_reg, tests_reg, handler_reg, k_reg)
         test_reg = (tests_reg).car
         pc = run_unit_test
 
@@ -10392,7 +10776,7 @@ def run_unit_test():
             test_name_reg = test_name
             pc = run_unit_test_cases
         else:
-            k_reg = make_cont2(b_cont2_81_d, right_reg, test_name, wrong_reg, env, handler_reg, k_reg)
+            k_reg = make_cont2(b_cont2_84_d, right_reg, test_name, wrong_reg, env, handler_reg, k_reg)
             assertions_reg = assertions
             nums_reg = nums
             test_name_reg = test_name
@@ -10409,7 +10793,7 @@ def filter_assertions():
             case_name = format("case ~a", (nums_reg).car)
         else:
             case_name = (nums_reg).car
-        return lookup_assertions(test_name_reg, case_name, assertions_reg, symbol_emptylist, handler_reg, fail_reg, make_cont2(b_cont2_83_d, assertions_reg, nums_reg, test_name_reg, handler_reg, k_reg))
+        return lookup_assertions(test_name_reg, case_name, assertions_reg, symbol_emptylist, handler_reg, fail_reg, make_cont2(b_cont2_86_d, assertions_reg, nums_reg, test_name_reg, handler_reg, k_reg))
 
 def lookup_assertions(test_name, case_name, assertions, accum, handler, fail, k):
     global fail_reg, handler_reg, info_reg, k_reg, msg_reg, pc, value1_reg, value2_reg
@@ -10464,7 +10848,7 @@ def run_unit_test_cases():
     else:
         test_case_handler = make_handler2(b_handler2_5_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         initialize_stack_trace_b()
-        k_reg = make_cont2(b_cont2_86_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_89_d, assertions_reg, right_reg, test_name_reg, verbose_reg, wrong_reg, env_reg, handler_reg, k_reg)
         handler_reg = test_case_handler
         exp_reg = (assertions_reg).car
         pc = m
@@ -10561,7 +10945,7 @@ def m_star():
         value1_reg = symbol_emptylist
         pc = apply_cont2
     else:
-        k_reg = make_cont2(b_cont2_87_d, exps_reg, env_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_90_d, exps_reg, env_reg, handler_reg, k_reg)
         exp_reg = (exps_reg).car
         pc = m
 
@@ -10571,7 +10955,7 @@ def eval_sequence():
         exp_reg = (exps_reg).car
         pc = m
     else:
-        k_reg = make_cont2(b_cont2_88_d, exps_reg, env_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_91_d, exps_reg, env_reg, handler_reg, k_reg)
         exp_reg = (exps_reg).car
         pc = m
 
@@ -10646,7 +11030,7 @@ def string_join():
             k_reg = k2_reg
             pc = apply_cont2
         else:
-            k2_reg = make_cont2(b_cont2_91_d, items_reg, sep_reg, k2_reg)
+            k2_reg = make_cont2(b_cont2_94_d, items_reg, sep_reg, k2_reg)
             items_reg = (items_reg).cdr
             pc = string_join
 
@@ -10685,7 +11069,7 @@ def load_file():
                 pc = runtime_error
             else:
                 load_stack = cons(filename_reg, load_stack)
-                k_reg = make_cont2(b_cont2_97_d, filename_reg, env2_reg, handler_reg, k_reg)
+                k_reg = make_cont2(b_cont2_100_d, filename_reg, env2_reg, handler_reg, k_reg)
                 src_reg = filename_reg
                 input_reg = read_content(filename_reg)
                 pc = scan_input
@@ -10707,7 +11091,7 @@ def load_files():
         value1_reg = void_value
         pc = apply_cont2
     else:
-        k_reg = make_cont2(b_cont2_100_d, filenames_reg, env2_reg, info_reg, handler_reg, k_reg)
+        k_reg = make_cont2(b_cont2_103_d, filenames_reg, env2_reg, info_reg, handler_reg, k_reg)
         filename_reg = (filenames_reg).car
         paths_reg = SCHEMEPATH
         pc = find_file_and_load
@@ -10753,7 +11137,7 @@ def make_set():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_102_d, lst_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_105_d, lst_reg, k2_reg)
         lst_reg = (lst_reg).cdr
         pc = make_set
 
@@ -10764,7 +11148,7 @@ def equal_objects_q():
         pc = apply_cont
     else:
         if ((pair_q(x_reg)) and (pair_q(y_reg)) is not False):
-            k_reg = make_cont(b_cont_54_d, x_reg, y_reg, k_reg)
+            k_reg = make_cont(b_cont_55_d, x_reg, y_reg, k_reg)
             y_reg = (y_reg).car
             x_reg = (x_reg).car
             pc = equal_objects_q
@@ -10789,7 +11173,7 @@ def equal_vectors_q():
         value_reg = True
         pc = apply_cont
     else:
-        k_reg = make_cont(b_cont_55_d, i_reg, v1_reg, v2_reg, k_reg)
+        k_reg = make_cont(b_cont_56_d, i_reg, v1_reg, v2_reg, k_reg)
         y_reg = vector_ref(v2_reg, i_reg)
         x_reg = vector_ref(v1_reg, i_reg)
         pc = equal_objects_q
@@ -10805,7 +11189,7 @@ def member_loop():
             msg_reg = format("member called on improper list ~s", ls_reg)
             pc = runtime_error
         else:
-            k_reg = make_cont(b_cont_56_d, ls_reg, x_reg, y_reg, info_reg, handler_reg, fail_reg, k_reg)
+            k_reg = make_cont(b_cont_57_d, ls_reg, x_reg, y_reg, info_reg, handler_reg, fail_reg, k_reg)
             y_reg = (y_reg).car
             pc = equal_objects_q
 
@@ -10817,7 +11201,7 @@ def append2():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_104_d, ls1_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_107_d, ls1_reg, k2_reg)
         ls1_reg = (ls1_reg).cdr
         pc = append2
 
@@ -10839,7 +11223,7 @@ def append_all():
                 msg_reg = format("append called on incorrect list structure ~s", (lists_reg).car)
                 pc = runtime_error
             else:
-                k2_reg = make_cont2(b_cont2_105_d, lists_reg, k2_reg)
+                k2_reg = make_cont2(b_cont2_108_d, lists_reg, k2_reg)
                 lists_reg = (lists_reg).cdr
                 pc = append_all
 
@@ -10930,7 +11314,7 @@ def iterate_continue():
         value1_reg = symbol_emptylist
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_106_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        k2_reg = make_cont2(b_cont2_109_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         info_reg = symbol_none
         env2_reg = env_reg
         args_reg = List(item)
@@ -10950,7 +11334,7 @@ def iterate_collect_continue():
         value1_reg = symbol_emptylist
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_107_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
+        k2_reg = make_cont2(b_cont2_110_d, iterator_reg, proc_reg, env_reg, handler_reg, k_reg)
         info_reg = symbol_none
         env2_reg = env_reg
         args_reg = List(item)
@@ -10964,11 +11348,11 @@ def map1():
         pc = apply_cont2
     else:
         if (dlr_proc_q(proc_reg) is not False):
-            k_reg = make_cont2(b_cont2_109_d, list1_reg, proc_reg, k_reg)
+            k_reg = make_cont2(b_cont2_112_d, list1_reg, proc_reg, k_reg)
             list1_reg = (list1_reg).cdr
             pc = map1
         else:
-            k2_reg = make_cont2(b_cont2_108_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
+            k2_reg = make_cont2(b_cont2_111_d, list1_reg, proc_reg, env_reg, handler_reg, k_reg)
             info_reg = symbol_none
             env2_reg = env_reg
             args_reg = List((list1_reg).car)
@@ -10982,12 +11366,12 @@ def map2():
         pc = apply_cont2
     else:
         if (dlr_proc_q(proc_reg) is not False):
-            k_reg = make_cont2(b_cont2_111_d, list1_reg, list2_reg, proc_reg, k_reg)
+            k_reg = make_cont2(b_cont2_114_d, list1_reg, list2_reg, proc_reg, k_reg)
             list2_reg = (list2_reg).cdr
             list1_reg = (list1_reg).cdr
             pc = map2
         else:
-            k2_reg = make_cont2(b_cont2_110_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
+            k2_reg = make_cont2(b_cont2_113_d, list1_reg, list2_reg, proc_reg, env_reg, handler_reg, k_reg)
             info_reg = symbol_none
             env2_reg = env_reg
             args_reg = List((list1_reg).car, (list2_reg).car)
@@ -11001,11 +11385,11 @@ def mapN():
         pc = apply_cont2
     else:
         if (dlr_proc_q(proc_reg) is not False):
-            k_reg = make_cont2(b_cont2_113_d, lists_reg, proc_reg, k_reg)
+            k_reg = make_cont2(b_cont2_116_d, lists_reg, proc_reg, k_reg)
             lists_reg = Map(cdr, lists_reg)
             pc = mapN
         else:
-            k2_reg = make_cont2(b_cont2_112_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
+            k2_reg = make_cont2(b_cont2_115_d, lists_reg, proc_reg, env_reg, handler_reg, k_reg)
             info_reg = symbol_none
             env2_reg = env_reg
             args_reg = Map(car, lists_reg)
@@ -11028,7 +11412,7 @@ def for_each_primitive():
                 lists_reg = Map(cdr, arg_list)
                 pc = for_each_primitive
             else:
-                k2_reg = make_cont2(b_cont2_114_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
+                k2_reg = make_cont2(b_cont2_117_d, arg_list, proc_reg, env_reg, handler_reg, k_reg)
                 info_reg = symbol_none
                 env2_reg = env_reg
                 args_reg = Map(car, arg_list)
@@ -11042,7 +11426,7 @@ def make_dict_tuples():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_116_d, associations_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_119_d, associations_reg, k2_reg)
         associations_reg = (associations_reg).cdr
         pc = make_dict_tuples
 
@@ -11066,7 +11450,7 @@ def insert_element():
         k_reg = k2_reg
         pc = apply_cont2
     else:
-        k2_reg = make_cont2(b_cont2_119_d, elements_reg, proc_reg, x_reg, env2_reg, info_reg, handler_reg, k2_reg)
+        k2_reg = make_cont2(b_cont2_122_d, elements_reg, proc_reg, x_reg, env2_reg, info_reg, handler_reg, k2_reg)
         args_reg = List(x_reg, (elements_reg).car)
         pc = apply_proc
 
@@ -11172,7 +11556,7 @@ def occurs_q():
             value_reg = equal_q(var_reg, pattern_reg)
             pc = apply_cont
         else:
-            k_reg = make_cont(b_cont_57_d, pattern_reg, var_reg, k_reg)
+            k_reg = make_cont(b_cont_58_d, pattern_reg, var_reg, k_reg)
             pattern_reg = (pattern_reg).car
             pc = occurs_q
 
@@ -11183,7 +11567,7 @@ def unify_patterns_hat():
             value_reg = make_sub(symbol_unit, p1_reg, p2_reg, ap2_reg)
             pc = apply_cont
         else:
-            k_reg = make_cont(b_cont_58_d, ap2_reg, p1_reg, p2_reg, k_reg)
+            k_reg = make_cont(b_cont_59_d, ap2_reg, p1_reg, p2_reg, k_reg)
             pattern_reg = p2_reg
             var_reg = p1_reg
             pc = occurs_q
@@ -11215,7 +11599,7 @@ def unify_patterns_hat():
 
 def unify_pairs_hat():
     global ap1_reg, ap2_reg, k_reg, p1_reg, p2_reg, pc
-    k_reg = make_cont(b_cont_60_d, apair1_reg, apair2_reg, pair1_reg, pair2_reg, k_reg)
+    k_reg = make_cont(b_cont_61_d, apair1_reg, apair2_reg, pair1_reg, pair2_reg, k_reg)
     ap2_reg = car_hat(apair2_reg)
     ap1_reg = car_hat(apair1_reg)
     p2_reg = (pair2_reg).car
@@ -11236,7 +11620,7 @@ def instantiate_hat():
             pc = apply_sub_hat
         else:
             if (pair_q(pattern_reg) is not False):
-                k2_reg = make_cont2(b_cont2_123_d, ap_reg, pattern_reg, s_reg, k2_reg)
+                k2_reg = make_cont2(b_cont2_126_d, ap_reg, pattern_reg, s_reg, k2_reg)
                 ap_reg = car_hat(ap_reg)
                 pattern_reg = (pattern_reg).car
                 pc = instantiate_hat
@@ -11274,7 +11658,7 @@ def apply_sub_hat():
             if (((temp_1).car) is (symbol_composite) is not False):
                 s2 = (((temp_1)).cdr).cdr.car
                 s1 = ((temp_1)).cdr.car
-                k2_reg = make_cont2(b_cont2_124_d, s2, k2_reg)
+                k2_reg = make_cont2(b_cont2_127_d, s2, k2_reg)
                 s_reg = s1
                 pc = apply_sub_hat
             else:
@@ -11311,6 +11695,7 @@ define_q_hat = tagged_list_hat(symbol_define, GreaterThanEqual, 3)
 define_b_q_hat = tagged_list_hat(symbol_define_b, GreaterThanEqual, 3)
 define_syntax_q_hat = tagged_list_hat(symbol_define_syntax, GreaterThanEqual, 3)
 begin_q_hat = tagged_list_hat(symbol_begin, GreaterThanEqual, 2)
+let_q_hat = tagged_list_hat(symbol_let, GreaterThanEqual, 3)
 lambda_q_hat = tagged_list_or_hat(symbol_lambda, symbol_λ, GreaterThanEqual, 3)
 lambda_no_defines_q_hat = tagged_list_hat(symbol_lambda_no_defines, GreaterThanEqual, 3)
 trace_lambda_no_defines_q_hat = tagged_list_hat(symbol_trace_lambda_no_defines, GreaterThanEqual, 4)
@@ -11336,7 +11721,7 @@ record_case_transformer_hat = make_macro(b_macro_11_d)
 define_datatype_transformer_hat = make_macro(b_macro_12_d)
 cases_transformer_hat = make_macro(b_macro_13_d)
 macro_env = symbol_undefined
-REP_k = make_cont2(b_cont2_53_d)
+REP_k = make_cont2(b_cont2_55_d)
 REP_handler = make_handler2(b_handler2_2_d)
 REP_fail = make_fail(b_fail_1_d)
 _starlast_fail_star = REP_fail

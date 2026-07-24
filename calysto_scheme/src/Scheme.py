@@ -720,6 +720,20 @@ class _SchemeRuntimeError(Exception):
 ##   lambda-aexp:            (tag formals bodies info)
 ##                            formals = exp.cdr.car
 ##                            bodies  = exp.cdr.cdr.car
+##   let-aexp:               (tag vars val-aexps bodies info)
+##                            vars      = exp.cdr.car
+##                            val-aexps = exp.cdr.cdr.car
+##                            bodies    = exp.cdr.cdr.cdr.car
+##                            Native `let` -- see JIT-IIFE-GAP.md. Semantics
+##                            are exactly a lambda application (evaluate
+##                            val-aexps against the *current* env, evaluate
+##                            bodies against that plus one new frame), just
+##                            without ever constructing an intermediate
+##                            closure/proc value -- everything built on
+##                            `let` (or/and/cond/case/let*/named-let/
+##                            letrec/internal-defines) produces this tag
+##                            too, since they all bottom out by producing a
+##                            `(let ...)` form at the parser level.
 ##   app-aexp:               (tag operator operands info)
 ##                            operator = exp.cdr.car
 ##                            operands = exp.cdr.cdr.car
@@ -752,6 +766,48 @@ def _is_direct_eval_safe(bodies):
             return False
         cur = cur.cdr
     return True
+
+def _let_body_has_escaping_closure(body_aexps):
+    """True iff any of body_aexps' (recursively reachable) sub-expressions
+    creates a first-class procedure value -- lambda_aexp, mu_lambda_aexp,
+    trace_lambda_aexp, or mu_trace_lambda_aexp, the four aexp tags that
+    build a closure (interpreter-cps.ss's `m` dispatches all four to
+    closure/mu-closure/trace-closure/mu-trace-closure respectively).
+    Used by _JitCompiler to decide whether a let-aexp's bound variables can
+    be safely compiled as plain Python locals: if nothing inside can
+    capture them, nothing can outlive this call, so inlining is sound.
+
+    Deliberately does NOT stop at a nested let-aexp boundary (unlike
+    _is_direct_eval_safe's `_safe`, which stops at a lambda boundary since
+    inner lambdas get their own independent analysis) -- a nested let's own
+    escaping closure must make the OUTER let "real" (deferred to a genuine
+    closure) too, not just the inner one, because the outer let's fast path
+    would otherwise inline the inner let's bound variables as Python locals
+    that the escaping closure then can't correctly capture. Scanning
+    through nested lets instead of stopping at them is what makes
+    "does this let need a real frame" decidable per-let, with no need for
+    multi-level frame-chaining machinery: a "fast" let can never contain a
+    "real" let, since the outer scan already would have found whatever the
+    inner scan found. See JIT-IIFE-GAP.md's Fix B discussion."""
+    def _scan(exp):
+        if not isinstance(exp, cons):
+            return False
+        tag = exp.car
+        if (tag is symbol_lambda_aexp or tag is symbol_mu_lambda_aexp or
+                tag is symbol_trace_lambda_aexp or tag is symbol_mu_trace_lambda_aexp):
+            return True
+        cur = exp.cdr
+        while isinstance(cur, cons):
+            if _scan(cur.car):
+                return True
+            cur = cur.cdr
+        return False
+    cur = body_aexps
+    while isinstance(cur, cons):
+        if _scan(cur.car):
+            return True
+        cur = cur.cdr
+    return False
 
 _CACHE_MISS = object()   # sentinel distinct from any real cached value (incl. False/None)
 
@@ -948,6 +1004,32 @@ def _phase2_safe_walk(exp, env, visiting):
         # `else: raise _TrampolineFallback()` -- so treating it as safe
         # here would certify a closure Phase 2 cannot actually evaluate.
         # Falls through to the final `else: return False` below.
+    elif tag is symbol_let_aexp:
+        # Native let (see the canonical-reference comment above
+        # _is_direct_eval_safe and JIT-IIFE-GAP.md). val-aexps run against
+        # the current env; bodies run against a real placeholder frame
+        # pushed via _extend_direct -- same "push a real frame before
+        # recursing" discipline as _phase2_safe_walk_call's own
+        # literal-lambda-operator branch, needed so lexical-address depth
+        # is counted correctly for anything bodies reference more than one
+        # frame away. The dummy values are never read: a depth-0 reference
+        # to one of them used as an operator is unconditionally unsafe
+        # ('local'), and used as a plain value is unconditionally safe
+        # (the lexical_address_aexp case above) -- only the frame's shape
+        # needs to be right.
+        val_cur = exp.cdr.cdr.car
+        while isinstance(val_cur, cons):
+            if not _phase2_safe_walk(val_cur.car, env, visiting):
+                return False
+            val_cur = val_cur.cdr
+        vars_ = exp.cdr.car
+        dummy_args = []
+        cur = vars_
+        while isinstance(cur, cons):
+            dummy_args.append(False)
+            cur = cur.cdr
+        inner_env = _extend_direct(env, vars_, dummy_args)
+        return _phase2_safe_walk_seq(exp.cdr.cdr.cdr.car, inner_env, visiting)
     elif tag is symbol_begin_aexp:
         return _phase2_safe_walk_seq(exp.cdr, env, visiting)
     elif tag is symbol_app_aexp:
@@ -1140,6 +1222,25 @@ def _eval_direct(exp, env):
                 exp = exp.cdr.cdr.cdr.car   # tail: loop with else-branch
         elif tag is symbol_lambda_aexp:
             return closure(exp.cdr.car, exp.cdr.cdr.car, env)
+        elif tag is symbol_let_aexp:
+            # Native let -- see the canonical-reference comment above and
+            # JIT-IIFE-GAP.md. No closure construction, no apply dispatch:
+            # evaluate val-aexps against the current env, extend with one
+            # new frame, then run bodies in that frame exactly like
+            # begin_aexp's own inline tail-loop just below.
+            vars_ = exp.cdr.car
+            args = []
+            val_cur = exp.cdr.cdr.car
+            while isinstance(val_cur, cons):
+                args.append(_eval_direct(val_cur.car, env))
+                val_cur = val_cur.cdr
+            new_env = _extend_direct(env, vars_, args)
+            cur = exp.cdr.cdr.cdr.car
+            while cur.cdr is not symbol_emptylist:
+                _eval_direct(cur.car, new_env)
+                cur = cur.cdr
+            exp = cur.car
+            env = new_env
         elif tag is symbol_begin_aexp:
             # Inline sequence: all but last for effect, last is tail (loop, no recursion).
             cur = exp.cdr
@@ -1403,6 +1504,66 @@ class _JitCompiler:
         self._const_count = 0     # counter for generated constant-capture names
         self._frame_var = None    # local var name holding this call's reconstructed
                                    # outer frame, once _lambda first needs one -- see _lambda
+        self._let_scopes = []     # open fast-path let-aexp scopes, innermost last --
+                                   # each entry is (vars_list, py_names_list); see
+                                   # _resolve_scoped/expr's symbol_let_aexp case
+        self._let_count = 0       # counter for fast-path let-binding names (_jc_let_%d)
+
+    def _scope_at_depth(self, depth):
+        """If lexical-address `depth` (0 = innermost) falls within the
+        currently-open fast-path let-scopes, return that scope's
+        (vars_list, py_names_list); else None. Scopes are pushed
+        innermost-last onto self._let_scopes, so depth 0 is the last
+        entry, depth 1 the one before it, etc."""
+        n = len(self._let_scopes)
+        if 0 <= depth < n:
+            return self._let_scopes[n - 1 - depth]
+        return None
+
+    def _scope_lookup_by_name(self, sym):
+        """Innermost-first name-keyed lookup against open fast-path
+        let-scopes, for (use-lexical-address #f) mode, where aparse
+        produces name-based var-aexp nodes instead of lexical addresses.
+        Returns the synthetic Python local name, or None."""
+        for vars_list, py_names in reversed(self._let_scopes):
+            cur = vars_list
+            i = 0
+            while isinstance(cur, cons):
+                if cur.car is sym:
+                    return py_names[i]
+                cur = cur.cdr
+                i += 1
+        return None
+
+    def _resolve_operator_scoped(self, op_exp):
+        """Like the module-level _resolve_operator(op_exp, self._env), but
+        aware of currently-open fast-path let-scopes: a reference into one
+        is a let-bound Python local, never resolvable to a real
+        environment value -- returns ('scoped', None) for that case,
+        distinguishable from _resolve_operator's own
+        ('local'/'unresolved'/'value', ...) results, so callers
+        (_is_self_ref, _is_unshadowed_primitive) can treat it as a hard
+        'no' without needing the resolved value itself (a let-bound
+        variable can never be self._self, nor an unshadowed primitive --
+        it's always some ordinary runtime value). A reference past all
+        open scopes has its depth adjusted (by the open-scope count)
+        before delegating to the real depth-counting lookup, so it's
+        resolved exactly as if no scopes were open."""
+        if not isinstance(op_exp, cons):
+            return ('unresolved', None)
+        tag = op_exp.car
+        if tag is symbol_lexical_address_aexp:
+            depth = op_exp.cdr.car
+            if self._scope_at_depth(depth) is not None:
+                return ('scoped', None)
+            return _resolve_lexical_address(
+                depth - len(self._let_scopes), op_exp.cdr.cdr.car, self._env)
+        if tag is symbol_var_aexp:
+            sym = op_exp.cdr.car
+            if self._scope_lookup_by_name(sym) is not None:
+                return ('scoped', None)
+            return _resolve_var(sym, self._env)
+        return ('unresolved', None)
 
     def expr(self, exp):
         # Raw cons-cell field access throughout -- see the "canonical
@@ -1428,6 +1589,17 @@ class _JitCompiler:
             depth  = exp.cdr.car
             offset = exp.cdr.cdr.car
             name   = exp.cdr.cdr.cdr.car
+            # A depth within the currently-open fast-path let-scopes
+            # resolves directly to that scope's synthetic Python local --
+            # no real frame, no capture, no env walk at all (this is the
+            # whole performance win of the fast path). Otherwise, subtract
+            # the open-scope count so the existing depth==0/depth>0 logic
+            # below sees the same depth it would have without any open
+            # scopes. See _scope_at_depth and JIT-IIFE-GAP.md's Fix B.
+            scope = self._scope_at_depth(depth)
+            if scope is not None:
+                return scope[1][offset]
+            depth -= len(self._let_scopes)
             m = _jit_mangle(name)
             if depth == 0:
                 return m   # local parameter — already in function signature
@@ -1465,8 +1637,128 @@ class _JitCompiler:
             # layout: (tag formals bodies info)
             return self._lambda(exp.cdr.car, exp.cdr.cdr.car)
 
+        elif tag is symbol_let_aexp:
+            # layout: (tag vars val-aexps bodies info)
+            # Fast path: if nothing in the body can capture-and-outlive a
+            # bound variable (no nested lambda/mu-lambda/trace-lambda
+            # anywhere in it), compile as plain Python locals -- no
+            # closure, no frame, no runtime dispatch at all. Falls back to
+            # the deferred path (below) if the body escapes, or if the
+            # fast-path attempt itself hits something expr() can't compile
+            # (caught locally by _try_let_fast_expr, not allowed to abort
+            # this whole function's compile). See JIT-IIFE-GAP.md.
+            vars_ = exp.cdr.car
+            val_aexps = exp.cdr.cdr.car
+            body_aexps = exp.cdr.cdr.cdr.car
+            if not _let_body_has_escaping_closure(body_aexps):
+                fast_src = self._try_let_fast_expr(vars_, val_aexps, body_aexps)
+                if fast_src is not None:
+                    return fast_src
+            # Deferred/fallback path: build a real closure via _lambda (the
+            # same machinery an ordinary lambda-as-value already uses) and
+            # call it via _jit_call -- exactly the codegen shape _app's own
+            # literal-lambda-operator branch already used pre-refactor for
+            # this exact case (a let/or/and/cond/case IIFE).
+            val_cur = val_aexps
+            val_srcs = []
+            while isinstance(val_cur, cons):
+                val_srcs.append(self.expr(val_cur.car))
+                val_cur = val_cur.cdr
+            closure_src = self._lambda(vars_, body_aexps)
+            self._free['_jit_call'] = _jit_call
+            return f'_jit_call({closure_src}, [{", ".join(val_srcs)}])'
+
         else:
             raise _TrampolineFallback()
+
+    def _let_fast_bindings(self, val_aexps, vars_):
+        """Shared setup for both fast-path let-aexp compilers: compile
+        val-aexps as expressions in the *current* (pre-push) scope, mint a
+        fresh synthetic Python local per var (following _capture_const's
+        freshness convention, so there's never a shadowing collision --
+        real Scheme name shadowing is instead handled by scope-stack
+        lookup order, not by Python variable identity). Returns
+        (py_names, val_srcs); does not push the scope -- callers do that
+        themselves so they can wrap body compilation in their own
+        try/finally."""
+        val_srcs = []
+        cur = val_aexps
+        while isinstance(cur, cons):
+            val_srcs.append(self.expr(cur.car))
+            cur = cur.cdr
+        py_names = []
+        cur = vars_
+        while isinstance(cur, cons):
+            py_names.append('_jc_let_%d' % self._let_count)
+            self._let_count += 1
+            cur = cur.cdr
+        return py_names, val_srcs
+
+    def _try_let_fast_expr(self, vars_, val_aexps, body_aexps):
+        """Attempt the fast (Python-locals) path for a let-aexp already
+        proven escape-free, in expression (non-tail) position: reduces the
+        whole thing to a single Python expression via a walrus-operator
+        tuple, e.g. (_jc_let_0 := val0, _jc_let_1 := val1, ..., body0,
+        body1)[-1] -- valid, standard Python (tuple elements evaluate
+        left-to-right; a walrus assignment inside a tuple both assigns and
+        yields the assigned value). A trailing comma is added when there's
+        exactly one part so single-binding/single-body-expression lets
+        still produce a real one-element tuple, not a parenthesized
+        expression indexing error.
+
+        Returns the compiled source, or None if any part can't be
+        expressed this way (e.g. a body statement uses a tag expr() has no
+        case for, like begin_aexp) -- caught locally here and treated as
+        "use the deferred path for this let" rather than letting
+        _TrampolineFallback propagate and abort the *enclosing* function's
+        whole compile, which would be a real regression versus today
+        (where a let's body is never inline-compiled at all). See
+        JIT-IIFE-GAP.md."""
+        try:
+            py_names, val_srcs = self._let_fast_bindings(val_aexps, vars_)
+            assigns = [f'({py} := {src})' for py, src in zip(py_names, val_srcs)]
+            self._let_scopes.append((vars_, py_names))
+            try:
+                body_srcs = []
+                cur = body_aexps
+                while isinstance(cur, cons):
+                    body_srcs.append(self.expr(cur.car))
+                    cur = cur.cdr
+            finally:
+                self._let_scopes.pop()
+            parts = assigns + body_srcs
+            tail_comma = ',' if len(parts) == 1 else ''
+            return '(' + ', '.join(parts) + tail_comma + ')[-1]'
+        except _TrampolineFallback:
+            return None
+
+    def _try_let_fast_stmts(self, vars_, val_aexps, body_aexps, indent):
+        """Tail-position counterpart to _try_let_fast_expr: real Python
+        assignment statements (not the walrus-tuple expression form)
+        followed by body statements, with the *last* body expression
+        compiled via a recursive tail_stmts() call -- this is what lets a
+        self-recursive tail call inside the let's body keep participating
+        in the enclosing while True:/continue rewrite (Phase 4's tail-loop
+        flattening) instead of becoming an ordinary, non-tail-optimized
+        recursive Python call. Same local-catch-and-fall-back-to-None
+        discipline as _try_let_fast_expr."""
+        try:
+            py_names, val_srcs = self._let_fast_bindings(val_aexps, vars_)
+            assign_lines = [indent + f'{py} = {src}' for py, src in zip(py_names, val_srcs)]
+            self._let_scopes.append((vars_, py_names))
+            try:
+                body_list = []
+                cur = body_aexps
+                while isinstance(cur, cons):
+                    body_list.append(cur.car)
+                    cur = cur.cdr
+                stmt_lines = [indent + self.expr(e) for e in body_list[:-1]]
+                tail_lines = self.tail_stmts(body_list[-1], indent)
+            finally:
+                self._let_scopes.pop()
+            return assign_lines + stmt_lines + tail_lines
+        except _TrampolineFallback:
+            return None
 
     def _capture_const(self, val):
         """Stash an arbitrary Scheme object (AST fragment, environment, ...)
@@ -1635,6 +1927,11 @@ class _JitCompiler:
         #  - a nested call, e.g. ((make-adder n) 0)
         #  - an immediately-invoked lambda (how `let`/`or`/`and` commonly
         #    desugar), e.g. ((lambda (x) ...) e)
+        #  - a fast-path let-aexp-bound variable (e.g. `(let ((f (lambda
+        #    (x) x))) (f 5))`, where the let's own body never lets f
+        #    escape, so the whole let compiles as plain Python locals --
+        #    but f's *value* is still whatever its binding expression
+        #    evaluated to, which could genuinely be a Scheme proc tuple)
         # self.expr() on any of these can yield a Scheme proc *tuple* (via
         # _jit_make_closure, or simply an un-JIT'd proc passed through as an
         # argument), not a plain Python callable, so a bare op_src(...) call
@@ -1642,7 +1939,10 @@ class _JitCompiler:
         # handles both.
         if isinstance(op_exp, cons) and (
                 op_exp.car in (symbol_app_aexp, symbol_lambda_aexp) or
-                (op_exp.car is symbol_lexical_address_aexp and op_exp.cdr.car == 0)):
+                (op_exp.car is symbol_lexical_address_aexp and
+                 (op_exp.cdr.car == 0 or self._scope_at_depth(op_exp.cdr.car) is not None)) or
+                (op_exp.car is symbol_var_aexp and
+                 self._scope_lookup_by_name(op_exp.cdr.car) is not None)):
             op_src = self.expr(op_exp)
             self._free['_jit_call'] = _jit_call
             return f'_jit_call({op_src}, [{", ".join(args)}])'
@@ -1681,7 +1981,7 @@ class _JitCompiler:
         wrong answer.
         """
         global _fast_prim_map
-        kind, val = _resolve_operator(op_exp, self._env)
+        kind, val = self._resolve_operator_scoped(op_exp)
         if kind != 'value':
             return False
         if not (isinstance(val, tuple) and val[0] is symbol_procedure):
@@ -1692,7 +1992,13 @@ class _JitCompiler:
         return entry is not None and getattr(entry, '_fast_prim_name', None) == sym
 
     def _var(self, sym):
-        """Handle var-aexp: local param or captured free variable."""
+        """Handle var-aexp: a fast-path let-scoped local (name-keyed --
+        relevant under (use-lexical-address #f), where aparse produces
+        these instead of lexical addresses everywhere), an ordinary local
+        param, or a captured free variable."""
+        scoped_name = self._scope_lookup_by_name(sym)
+        if scoped_name is not None:
+            return scoped_name
         m = _jit_mangle(sym)
         if m in self._pset or m in self._free:
             return m
@@ -1730,7 +2036,7 @@ class _JitCompiler:
     def _is_self_ref(self, op_exp):
         """True iff op_exp resolves (by identity) to the proc being compiled —
         i.e. this application is a self-recursive call."""
-        kind, val = _resolve_operator(op_exp, self._env)
+        kind, val = self._resolve_operator_scoped(op_exp)
         return kind == 'value' and val is self._self
 
     def tail_stmts(self, exp, indent):
@@ -1763,6 +2069,23 @@ class _JitCompiler:
             targets = ', '.join(self._params)
             values  = ', '.join(arg_srcs)
             return [indent + f'{targets} = {values}', indent + 'continue']
+        if tag is symbol_let_aexp:
+            # layout: (tag vars val-aexps bodies info)
+            # Fast-path tail-position compilation, so a self-recursive
+            # tail call inside the let's body (e.g. mi-loop's own shape --
+            # see JIT-IIFE-GAP.md) still becomes a `continue`, not an
+            # ordinary recursive Python call. Falls through to the generic
+            # case below (which re-enters via expr(), trying the fast
+            # expression path again before the deferred/real path) if
+            # escaping or if this attempt fails -- see
+            # _try_let_fast_stmts's docstring.
+            vars_ = exp.cdr.car
+            val_aexps = exp.cdr.cdr.car
+            body_aexps = exp.cdr.cdr.cdr.car
+            if not _let_body_has_escaping_closure(body_aexps):
+                stmts = self._try_let_fast_stmts(vars_, val_aexps, body_aexps, indent)
+                if stmts is not None:
+                    return stmts
         return [indent + 'return ' + self.expr(exp)]
 
 ## Fast prim map: proc[1] function -> Python callable.

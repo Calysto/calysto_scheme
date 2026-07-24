@@ -4,15 +4,17 @@ test_fastprim_no_trampoline_fallback.py to a different asymmetry: the set
 of annotated-AST tags (aexp node types) each fast-path walker recognizes
 by name, rather than the set of primitives each treats as safe.
 
-The AST the classic trampoline supports is large -- 25 aexp tags exist as
+The AST the classic trampoline supports is large -- 27 aexp tags exist as
 of this writing (define-aexp, try-catch-aexp, raise-aexp, callback-aexp,
 choose-aexp, ...). Phase 2's own semantic reference, _eval_direct,
-whitelists only 7 of them (lit/lexical-address/var/if/lambda/begin/app)
+whitelists only 8 of them (lit/lexical-address/var/if/lambda/let/begin/app)
 and bails via _TrampolineFallback on everything else -- see the "canonical
 reference" comment block above _is_direct_eval_safe in Scheme.py.
-_JitCompiler.expr/tail_stmts whitelist a further-narrowed 6 (the same 7
-minus begin_aexp). _phase2_safe_walk whitelists the same 7 as
-_eval_direct.
+_JitCompiler.expr/tail_stmts whitelist a further-narrowed 7 (the same 8
+minus begin_aexp). _phase2_safe_walk whitelists the same 8 as
+_eval_direct. (let_aexp -- native `let`, replacing the old IIFE
+desugaring for let/or/and/cond/case/named-let/letrec, see
+JIT-IIFE-GAP.md -- is whitelisted by all three, the same as lambda_aexp.)
 
 Three walkers, three pairwise asymmetries are possible, with very
 different risk:
@@ -92,8 +94,8 @@ def test_eval_direct_and_jit_and_phase2_safe_walk_tag_sets_are_sane():
     # file's assertions would be vacuous rather than meaningful.
     assert _EVAL_DIRECT_TAGS == {
         'symbol_lit_aexp', 'symbol_lexical_address_aexp', 'symbol_var_aexp',
-        'symbol_if_aexp', 'symbol_lambda_aexp', 'symbol_begin_aexp',
-        'symbol_app_aexp',
+        'symbol_if_aexp', 'symbol_lambda_aexp', 'symbol_let_aexp',
+        'symbol_begin_aexp', 'symbol_app_aexp',
     }
     assert _JIT_TAGS == _EVAL_DIRECT_TAGS - {'symbol_begin_aexp'}
     assert _PHASE2_SAFE_WALK_TAGS == _EVAL_DIRECT_TAGS

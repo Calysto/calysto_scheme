@@ -724,12 +724,12 @@
 
   (assert equal?
 	  (car (parse '(let ((- +)(+ -)) (+ 1 2))))
-	  'app-aexp
+	  'let-aexp
 	  "parse")
 
   (assert equal?
 	  (length (parse-string "(let ((- +)) (- 7 8))"))
-	  4
+	  5
 	  "parse-string")
 
   (assert eq?

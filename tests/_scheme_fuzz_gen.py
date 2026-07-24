@@ -12,13 +12,17 @@ self/mutual recursion, closures returned from closures, a parameter
 called as a function, list ops, `begin` (deliberately, since `begin`
 is the one documented, intentional gap between _eval_direct and
 _JitCompiler -- see this file's `begin_body` case and
-test_jit_tag_parity.py's module docstring), and `let`/`or`/`and`/`cond`/
-named-`let` (which all desugar to a literal-lambda IIFE operator --
-`((lambda (v ...) body) e ...)` -- per JIT-IIFE-GAP.md; see this file's
-`let_wrapped_*`/`nested_let`/`or_and`/`cond`/`named_let` cases). The goal
-isn't broad language coverage, it's many random *shapes* of the specific
-patterns the three walkers' bug history (README-PERFORMANCE.md's Phases
-6-9) shows they can silently disagree about.
+test_jit_tag_parity.py's module docstring), and native `let` -- what
+`let`/`or`/`and`/`cond`/`case`/named-`let` all parse to directly as of
+Fix B (JIT-IIFE-GAP.md), replacing the old literal-lambda IIFE operator
+shape -- see this file's `let_wrapped_*`/`nested_let`/`or_and`/`cond`/
+`named_let` cases, plus `let_escaping_closure_rec`, which specifically
+stresses the JIT's escape-analysis fallback (a let-bound variable
+captured by a nested lambda must always defer to a real closure, never
+take the fast Python-locals path). The goal isn't broad language
+coverage, it's many random *shapes* of the specific patterns the three
+walkers' bug history (README-PERFORMANCE.md's Phases 6-9) shows they can
+silently disagree about.
 
 Every generated case is self-contained (its own uniquely-numbered
 function name(s), no shared mutable state) and constructed to always
@@ -369,6 +373,35 @@ def _case_named_let(rng, idx):
     return src
 
 
+def _case_let_escaping_closure_rec(rng, idx):
+    """Self-recursion whose body builds a let-bound closure that escapes
+    its own let (captured by a nested lambda one level further in) --
+    stresses the JIT's escape-analysis fallback path (Fix B/JIT-IIFE-GAP.md):
+    a let whose bound variable is captured by a nested lambda must always
+    defer to a real closure, never take the fast Python-locals path,
+    regardless of what the escape scan finds deeper in. Calling the
+    escaped closure immediately (rather than genuinely storing it
+    somewhere persistent) keeps this self-contained and fast to run while
+    still exercising the exact AST shape (a lambda inside a let's body
+    referencing an *outer* let's bound variable) the scan must catch --
+    the same "sticky real inheritance" shape as
+    test_jit_native_let.py's test_nested_escape_sticky_real_inheritance."""
+    fn = f"g_{idx}"
+    op = rng.choice(_NARY_OPS)
+    k = _rand_arg(rng, -10, 10)
+    base = rng.choice([0, 1])
+    combine = rng.choice(_NARY_OPS)
+    src = (
+        f"(define ({fn} n)\n"
+        f"  (let ((kk (- n {k})))\n"
+        f"    (let ((adder (lambda (x) ({op} x kk))))\n"
+        f"      (if (<= n {base}) (adder n)\n"
+        f"          ({combine} (adder 1) ({fn} (- n 1)))))))\n"
+        f"({fn} {_rand_arg(rng, 0, 12)})"
+    )
+    return src
+
+
 _CASE_KINDS = [
     _case_simple_rec,
     _case_tail_rec,
@@ -384,6 +417,7 @@ _CASE_KINDS = [
     _case_or_and_rec,
     _case_cond_rec,
     _case_named_let,
+    _case_let_escaping_closure_rec,
 ]
 
 

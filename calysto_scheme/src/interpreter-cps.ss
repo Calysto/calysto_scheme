@@ -578,6 +578,19 @@
 		 (else (runtime-error "bad exception type" info handler fail)))))))
       (choose-aexp (exps info)
 	(eval-choices exps env handler fail k))
+      ;; Native let: evaluates val-aexps in the current env, then bodies in
+      ;; one new frame -- no closure construction, no apply dispatch. See
+      ;; JIT-IIFE-GAP.md (this replaces the old IIFE desugaring
+      ;; `((lambda (v ...) body) e ...)` for plain let, and transitively
+      ;; for everything built on it -- or/and/cond/case/let*/named-let/
+      ;; letrec/internal-defines). m*/eval-sequence/extend are the same
+      ;; helpers try-catch-handler already composes this same way.
+      (let-aexp (vars val-aexps bodies info)
+	(m* val-aexps env handler fail
+	  (lambda-cont2 (args fail)
+	    (eval-sequence bodies
+	      (extend env vars args (make-empty-docstrings (length args)))
+	      handler fail k))))
       (app-aexp (operator operands info)
 	(m* operands env handler fail
 	  (lambda-cont2 (args fail)

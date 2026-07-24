@@ -1,26 +1,56 @@
 # Why `let` (and everything built on it) can shut off the JIT
 
-## Status: Fix A has landed
+## Status: Fix A and Fix B have both landed
 
-`_phase2_safe_walk_call` now resolves a literal-lambda operator instead of
-giving up on it — see "Fix A" below for what shipped and
-`test_jit_iife_operator.py`/`_scheme_fuzz_gen.py`'s IIFE-shaped cases for
-the regression/fuzz coverage. **This closes the dominant cost described
-below for `let`/`or`/`and`/`cond`/`case`**: a function whose body contains
-one of these no longer gets permanently excluded from Phase 2/JIT the way
-this document originally found — the `mi-loop` example in "Verified,
-directly" now reaches Phase 2 and JIT-compiles.
+**Fix A** (landed first) taught `_phase2_safe_walk_call` to resolve a
+literal-lambda operator instead of giving up on it, so a function
+containing a `let`/`or`/`and`/`cond`/`case` IIFE anywhere in its body could
+reach Phase 2/JIT at all. Benchmarking that fix against the exact
+motivating case here (`mi-loop`, below) found it didn't actually deliver a
+speedup: the `let`'s operator was still, structurally, a literal
+`lambda_aexp`, so the JIT still built a brand-new Scheme closure every time
+it ran — and inside a hot self-recursive loop, JIT-compiled into a Python
+`while True:`, that meant a real `compile()`/`exec()` call on *every tail
+iteration*, not just once. Measured: `mi-loop` ran ~640× slower than the
+`let`-free equivalent even after Fix A, because the thing actually costing
+the time was never the classic-trampoline dispatch cost Fix A addressed —
+it was this.
 
-**Fix A does not cover named-`let`** (or plain `letrec`/`letrec*`, or
-mutually-referential internal `define`s): its outer
-`(lambda (loop) (set! loop ...) (loop ...))` wrapper still contains a
-literal `set!`, which `_phase2_safe_walk` has no case for regardless of
-how its operator resolves — confirmed still excluded after Fix A landed.
-That gap, and the second, smaller repeated-compile cost described below,
-are exactly Fix B and Fix C, both still open. The rest of this document
-is preserved as originally written (including the now-historical
-"Verified, directly" numbers) since it's still the accurate account of
-what those two remaining fixes require and why.
+**Fix B** (landed second, superseding the "detect an IIFE, inline it"
+design originally sketched below) fixes this at the root instead of
+patching around it further: `let` — and everything built on it
+(`or`/`and`/`cond`/`case`/`let*`/named-`let`/`letrec`/internal-`define`s,
+all of which produce a `(let ...)` form at the parser level) — no longer
+desugars to an IIFE at all. It parses directly to a native `let-aexp` AST
+node, understood by the classic interpreter, Phase 2, and the JIT without
+ever constructing an intermediate closure for the common (non-escaping)
+case. Fixing this once at the parser, rather than teaching three separate
+execution-tier walkers to pattern-match the IIFE shape after the fact,
+means every macro built on `let` inherited the fix automatically, with
+zero changes to any of those other transformers. See "Fix B" below for
+what actually shipped (it differs in a few real ways from the original
+sketch — a Plan-agent research pass found and fixed several correctness
+gaps before implementation, documented there) and
+`test_jit_native_let.py`/`_scheme_fuzz_gen.py`'s escaping-closure case for
+the regression/fuzz coverage.
+
+**Result**: `mi-loop` now runs at essentially the same speed as the
+`let`-free equivalent — measured at 20–22 microseconds/pixel for *both*,
+no longer distinguishable within noise, down from ~16,680
+microseconds/pixel before Fix B (and ~14,770 before even Fix A). See Fix
+B's "Landed" section for the full before/after table.
+
+**Neither fix covers named-`let`'s own outer wrapper** (or plain
+`letrec`/`letrec*`, or mutually-referential internal `define`s reaching
+Phase 2/JIT *themselves*): the `set!` used to tie the recursive knot is
+still there — now inside the native `let-aexp`'s body instead of an IIFE's
+body, but `_phase2_safe_walk` still has no case for `assign_aexp` either
+way, so the outer wrapper stays correctly excluded, confirmed unchanged
+after Fix B landed. That's Fix C, still open — see below. The rest of this
+document (mechanism, the original IIFE-based analysis, Fix B's original
+"detect and inline" sketch) is preserved as originally written where it's
+still an accurate historical record of what was tried and why the shipped
+design ended up different.
 
 ---
 
@@ -372,7 +402,7 @@ Verified per the caveats above:
   using a monotonic threshold test instead, consistent with every other
   case in that file.
 
-### Fix B — inline non-escaping IIFEs directly as Python locals (addresses the *secondary*, repeated-compile cost)
+### Fix B — inline non-escaping IIFEs directly as Python locals (addresses the *secondary*, repeated-compile cost) — **Landed (superseded by a native `let-aexp` AST node)**
 
 Even with Fix A, a closure created fresh every iteration (`let`'s own
 IIFE, named-`let`'s inner loop) still pays one real `compile()`/`exec()`
@@ -404,6 +434,196 @@ True:` rewrite, not silently reintroduce a nested Python scope).
 (escape analysis) plus new code-generation paths in `_JitCompiler`,
 needing the same fuzzing-based verification discipline as Fix A, but with
 more surface area for a subtle miss.
+
+**Landed — but not as scoped above.** The plan above was "detect an IIFE
+in `_JitCompiler`, decide per-call whether to inline it." What actually
+shipped goes one level deeper, per explicit user direction after
+benchmarking Fix A: **`let` no longer produces an IIFE at all.** Rather
+than teaching `_eval_direct`/`_phase2_safe_walk`/`_JitCompiler` to each
+recognize and special-case a *pattern* in the AST (an application whose
+operator happens to be a literal lambda), `let`'s own parsing
+(`parser-cps.ss`) was changed to emit a genuine, first-class `let-aexp`
+node directly — the same kind of change as if `if` or `lambda` were core
+forms instead of sugar, which is exactly what they already are. Since
+`or`/`and`/`cond`/`case`/`let*`/named-`let`/`letrec`/internal-`define`s
+all bottom out by *producing* a `(let ...)` s-expression in their own
+macro expansions (not by desugaring some other, independent way), fixing
+`let` once fixed all of them, automatically, with zero changes to any of
+those other transformers.
+
+**What shipped, by file:**
+
+- `parser-cps.ss`: a new `let-aexp (vars val-aexps bodies info)` variant
+  of `define-datatype aexpression`. Plain (unnamed) `let` is parsed
+  directly in `aparse` — modeled line-for-line on how `lambda-no-defines?^`
+  already parses a lambda body (parse the binding value-expressions
+  against the current `senv`, extend `senv` with the new vars-frame, parse
+  the body against that) — instead of going through macro expansion to
+  build an IIFE. Named let is unchanged: it still expands through
+  `letrec-transformer^` into `(letrec ((name (lambda ...))) (name ...))`,
+  and `letrec` itself still just produces a plain, unnamed `(let ((name
+  'undefined)) (set! name proc) body...)` — which *is* now parsed as a
+  `let-aexp` too, `set!` and all, automatically and correctly (the safety
+  walkers still see the `assign_aexp` inside its body and still exclude it
+  from Phase 2/JIT, exactly as before — no accidental unlock, no
+  regression, confirmed against the existing pinned
+  `test_named_let_outer_wrapper_still_excluded_but_correct` test, unmodified,
+  now exercising the new node instead of the old IIFE shape). A gap found
+  during design and fixed before landing: `(define-syntax let ...)`
+  genuinely overrides `let` today (confirmed empirically) — the new direct
+  dispatch is guarded by an `eq?` check against the original
+  `let-transformer^` in `macro-env`, falling through to ordinary macro
+  expansion whenever `let` has been redefined, so this capability is
+  provably unaffected, not just assumed fine. A second gap: `aunparse`
+  (backing the documented `unparse` primitive, and used internally for
+  `*tracing-on?*` output and unit-test diagnostics — the exact tool this
+  document's own "Verified, directly" section used) had no case for the
+  new tag; added.
+- `interpreter-cps.ss`: one new `let-aexp` case in `m`'s CPS dispatch —
+  evaluate `val-aexps` against the current env (`m*`, left-to-right,
+  fail-threaded, the same helper `try-catch-handler` already composes this
+  way), extend the env with one new frame (`extend`, same helper an
+  ordinary function call already uses), evaluate `bodies` in that frame
+  (`eval-sequence`, tail-preserving). No closure construction, no
+  apply-dispatch layer — a genuine simplification even for the classic
+  trampoline, not just a JIT-only concern. Confirmed this needs no special
+  interaction with `amb`/`choose`/backtracking: `assign-aexp` is the only
+  place that wraps `fail` with undo logic, because `set!` mutates an
+  *existing*, potentially-shared binding cell — plain environment
+  extension has no shared mutable state to undo, so a native `let-aexp` is
+  structurally identical to an ordinary function call's frame extension in
+  this respect. `test_all.ss`'s own `floors2` test (five levels of nested
+  `let` binding to `(choose ...)`, with `(require ...)` between each) is a
+  real, pre-existing, comprehensive exercise of exactly this and passed
+  unmodified.
+- `Scheme.py`: `_eval_direct` gained a `symbol_let_aexp` case mirroring
+  `begin_aexp`'s existing inline tail-loop (no closure, no `apply_proc`).
+  `_phase2_safe_walk` gained a case reusing Fix A's own "push a real
+  placeholder frame via `_extend_direct` before recursing" discipline
+  (Fix A's original literal-lambda-operator branch in
+  `_phase2_safe_walk_call` is kept, unmodified, as a safety net for a user
+  directly hand-writing `((lambda (x) ...) e)`, still valid application
+  syntax — it's just no longer reached by macro-generated code). The JIT
+  (`_JitCompiler`) does the actual work:
+  - **Escape analysis**: a new `_let_body_has_escaping_closure` walker
+    scans a `let`'s body (not its binding *values* — see below) for any of
+    the four AST tags that create a first-class closure —
+    `lambda_aexp`/`mu_lambda_aexp`/`trace_lambda_aexp`/`mu_trace_lambda_aexp`
+    (the original sketch above only named the first two; the other two
+    were found and added before landing). It deliberately does **not**
+    stop at a nested `let-aexp` boundary — a closure escaping through a
+    nested `let` must mark the *outer* `let` "real" too, not just the
+    inner one. This gives a clean, provably-correct simplification found
+    during design review: since the scan already recurses through nested
+    `let`s, a "fast" (escape-free) `let` can never contain a "real"
+    (escaping) `let` as a descendant, so the fallback path never needs to
+    *compose* with the fast path's scope stack at all — it just defers the
+    entire `let` to a real closure via the **already-existing, unmodified**
+    `_lambda`/`_jit_make_closure`/`_jit_call` machinery (exactly the
+    pre-Fix-B IIFE codegen shape), with no multi-level frame-chaining
+    machinery needed. This was the single largest simplification made to
+    the original plan.
+  - **Fast path** (no escaping closure found): each binding value compiles
+    to a fresh, uniquely-suffixed synthetic Python local (`_jc_let_%d`,
+    following the existing `_capture_const` freshness convention, so
+    there's never a shadowing collision by construction — real Scheme name
+    shadowing is instead handled by scope-stack lookup order). In tail
+    position, this is plain Python assignment statements followed by the
+    body, with the *last* body expression compiled via a recursive
+    `tail_stmts()` call so a self-recursive tail call inside the `let`'s
+    body still becomes a `continue` in the enclosing `while True:` loop —
+    exactly `mi-loop`'s own case. In non-tail (expression) position — e.g.
+    `(+ 1 (let ((x 5)) (* x x)))`, which already compiled successfully
+    before Fix B via the generic IIFE-`_jit_call` path — the whole thing
+    reduces to a single Python expression via a walrus-operator tuple:
+    `(_jc_let_0 := val0, ..., body_expr)[-1]` (verified directly to be
+    valid, standard Python: tuple elements evaluate left-to-right, and a
+    walrus assignment inside a tuple both assigns and yields its value; a
+    trailing comma is added when there's exactly one element so a
+    single-binding, single-body-expression `let` still produces a real
+    tuple, not a parenthesized-expression indexing error). A gap found and
+    fixed before landing: unlike the old codegen (which only ever captured
+    a `let`'s body as an opaque constant, never tried to compile it), the
+    fast path *does* try to inline-compile the body — so a
+    `_TrampolineFallback` raised partway through (e.g. a body statement
+    using a tag `expr()` doesn't support, like `begin_aexp`) is now caught
+    **locally, at this `let`'s own compilation**, and treated as "use the
+    deferred path for this `let`" instead of being allowed to abort the
+    *entire enclosing function's* compile — preserving the invariant
+    (true both before and after Fix B) that adding a `let` anywhere in a
+    function's body never newly breaks that function's overall
+    JIT-compilability.
+  - **Reference resolution**: every call site that resolves a lexical
+    reference against the closure's captured environment —
+    `expr()`'s own `lexical_address_aexp`/`var_aexp` cases, `_var()`,
+    `_is_self_ref` (used by `tail_stmts` to detect a self-recursive tail
+    call), and `_is_unshadowed_primitive` (used by `_app` to decide
+    whether `+`/`<`/`car`/... can inline as raw Python operators) — first
+    checks the open fast-path scope stack before falling through to the
+    existing "depth 0 = own parameter, depth > 0 = capture from `self._env`"
+    logic (with the depth adjusted by the number of open scopes). Missing
+    `_is_self_ref` specifically was flagged during design review as a
+    silent-wrong-answer risk (a self-recursive tail call inside a `let`
+    could be misclassified) — caught before implementation, not after. A
+    further correctness requirement found *during* implementation, not in
+    the original design: a `let`-bound variable's *value* can itself be an
+    arbitrary runtime value, including a genuine closure that's created
+    and consumed entirely within the same `let`'s body without ever
+    escaping it — e.g. `(let ((f (lambda (x) (* x x)))) (f 5))`. The
+    escape scan only looks at the *body* for a closure-creating node (it
+    doesn't need to care about the binding *values* — nothing about
+    binding a closure to a local variable makes it escape by itself), so
+    this case correctly takes the fast path; but `_app`'s own "can this
+    operator be proven to yield a plain Python callable at compile time"
+    check (previously only recognizing a literal application/lambda, or a
+    depth-0 own-parameter reference) also needed to recognize a
+    fast-path-scoped operator reference at *any* depth within the open
+    scopes, or `(f 5)` would compile to a bare Python call on a Scheme
+    proc tuple and crash at runtime. Fixed and pinned directly (see
+    `test_let_bound_lambda_called_internally_never_escapes`).
+  - `(use-lexical-address #f)` — a live, user-toggleable runtime flag
+    under which `aparse` produces name-based `var-aexp` nodes everywhere
+    instead of lexical addresses — needed its own name-keyed,
+    innermost-first parallel lookup against the scope stack (not just the
+    depth-keyed one), or `let`-in-a-hot-loop under this mode would have
+    silently stayed on the slow path instead of the fast one. Not in the
+    original design; added and pinned
+    (`test_use_lexical_address_false_still_correct`).
+
+**Verified:**
+- Full project test suite (442 tests as of landing) green throughout a
+  staged rollout (AST+parser+classic-interpreter, then Phase 2, then JIT
+  structural support on the deferred path only, then escape analysis + the
+  fast path last) — each stage independently regenerated
+  (`cd calysto_scheme/src && make`, the full `.ss` → `scheme.py` pipeline,
+  since this touches `parser-cps.ss`/`interpreter-cps.ss`, not just
+  `Scheme.py`) and tested before moving to the next.
+- `test_jit_native_let.py`: fast path structurally confirmed in use (not
+  just correct) for `mi-loop`'s own shape; non-tail expression position;
+  three levels of nested `let`; a `let`-bound closure called internally
+  (never escaping); an escaping closure via the deferred path; the
+  "sticky real" nested-escape inheritance case; primitive-shadowing
+  (`(let ((- +)(+ -)) (+ 1 2))`); `or`/`and`/`cond` reaching the fast path;
+  `(use-lexical-address #f)`; backtracking through a native `let`.
+- Differential fuzzing (`test_jit_fuzz.py`): a new
+  `_case_let_escaping_closure_rec` generator (a self-recursive function
+  whose body builds a `let`-bound closure that captures an *outer* `let`'s
+  variable — the same "sticky real" shape) added alongside Fix A's
+  existing `let`-shaped generators, run across 5 different seeds at 1200
+  cases each (6000 generated programs total) with the existing
+  fast/slow/phase2-only three-way comparison — no mismatches.
+- Benchmark (the `mi-loop`/mandelbrot case from "Verified, directly",
+  N=5000 pixels):
+
+  | Variant | Before Fix A | After Fix A (before Fix B) | After Fix B |
+  |---|---|---|---|
+  | `let`-free `mi-loop` | — | — | 21.8 µs/pixel |
+  | `let`-wrapped `mi-loop` | ~14,770 µs/pixel (forced trampoline) | ~16,680 µs/pixel | 20.4 µs/pixel |
+
+  Fix B doesn't just improve on Fix A — it makes the `let`-wrapped version
+  statistically indistinguishable from (and, in this run, marginally
+  faster than) the hand-optimized `let`-free workaround this document's
+  own `mandelbrot.ss` example originally had to resort to.
 
 ### Fix C — a restricted, non-undoable internal `set!` for tying the letrec knot (necessary, not sufficient, for named-`let`'s *own* wrapper and internal `define`s — see correction below)
 
@@ -521,6 +741,23 @@ large win by itself (see Phase 5's own measured numbers for exactly this
 call shape). **Landed** — see "Fix A" above for the implementation and its
 verification.
 
+Fix B, as actually shipped (a native `let-aexp` AST node, not the
+"detect-and-inline the IIFE pattern" design originally sketched in this
+section), turned out to be both the *necessary* fix and, once reframed at
+the parser level instead of the JIT-compiler level, no riskier than doing
+it the originally-scoped way — arguably less risky, since fixing `let`
+once at its source means `or`/`and`/`cond`/`case`/`let*`/named-`let`/
+`letrec`/internal-defines all inherit the fix for free, rather than each
+needing independent verification that the JIT's IIFE-detection pattern
+still matches whatever shape their macro expansion happens to produce.
+**Landed** — see "Fix B" above for the full account, including the
+several real correctness gaps a design-review pass found and fixed before
+implementation (an original design flaw, not an implementation slip:
+patch-the-symptom approaches like the original Fix B sketch tend to
+accumulate exactly this kind of gap, one per call site that turns out to
+need updating — the root-cause fix instead needed the gaps found once,
+structurally, not per call site).
+
 Fix C is *not* a standalone follow-up the way it first looked — traced
 through directly, it produces zero observable benefit until it's paired
 with resolving the "own parameter, just assigned, called as operator"
@@ -529,16 +766,11 @@ together, specifically for named-`let`/`letrec`/internal-defines, and is
 still narrower and lower-risk than reviving general `set!` support. Fix A
 having landed removes one of its two preconditions — the *enclosing*
 function around a named-`let`/`letrec`/internal-define now benefits from
-Fix A on its own merits already, per the caveat noted in Fix A's own
-section above (an enclosing function that also happens to contain a
-named-`let` now reaches Phase 2 independently of named-let's own,
-narrower path through it). What's left, unchanged: Fix C plus the
+Fix A (and now Fix B) on its own merits already, per the caveat noted in
+Fix A's own section above (an enclosing function that also happens to
+contain a named-`let` now reaches Phase 2 independently of named-let's
+own, narrower path through it). What's left, unchanged: Fix C plus the
 "own parameter, just assigned, called as operator" resolution, still
 needed together before named-`let`'s *own* outer wrapper (as opposed to
-its enclosing function) can reach Phase 2/JIT.
-
-Fix B is the deepest and riskiest of the three, and only obviously worth
-its cost now that Fix A is in and its residual repeated-compile cost
-(the second, smaller effect described above — a fresh closure identity
-per loop iteration paying a real `compile()`/`exec()` every time) can
-actually be measured on real workloads instead of estimated.
+its enclosing function) can reach Phase 2/JIT. This is the only piece of
+this document's original analysis still fully open.
