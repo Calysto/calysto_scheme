@@ -6137,13 +6137,6 @@
 (define environment?
   (lambda (x) (and (pair? x) (eq? (car x) 'environment))))
 
-(define make-empty-environment
-  (lambda () (list 'environment (make-frame '() '() '()))))
-
-(define make-initial-environment
-  (lambda (vars vals docstrings)
-    (list 'environment (make-frame vars vals docstrings))))
-
 (define first-frame (lambda (env) (cadr env)))
 
 (define first-frame-vars
@@ -6161,15 +6154,6 @@
       (list
         (list->vector (append bindings (list new-binding)))
         (append vars (list new-var))))))
-
-(define set-first-frame!
-  (lambda (env new-frame) (set-car! (cdr env) new-frame)))
-
-(define extend
-  (lambda (env variables values docstrings)
-    (cons
-      'environment
-      (cons (make-frame variables values docstrings) (cdr env)))))
 
 (define search-env
   (lambda (env variable) (search-frames (cdr env) variable)))
@@ -6190,21 +6174,6 @@
 (define get-first-frame-value
   (lambda (var env)
     (binding-value (search-frame (first-frame env) var))))
-
-(define*
-  lookup-value-by-lexical-address
-  (lambda (depth offset frames fail k)
-    (let ((bindings (frame-bindings (list-ref frames depth))))
-      (apply-cont2
-        k
-        (binding-value (vector-ref bindings offset))
-        fail))))
-
-(define*
-  lookup-binding-by-lexical-address
-  (lambda (depth offset frames fail k)
-    (let ((bindings (frame-bindings (list-ref frames depth))))
-      (apply-cont2 k (vector-ref bindings offset) fail))))
 
 (define*
   lookup-value
@@ -9110,6 +9079,26 @@
 (define init-fail (make-fail <fail-1>))
 
 (define-native
+  make-empty-environment
+  (lambda () (list 'environment (make-frame '() '() '()))))
+
+(define-native
+  make-initial-environment
+  (lambda (vars vals docstrings)
+    (list 'environment (make-frame vars vals docstrings))))
+
+(define-native
+  set-first-frame!
+  (lambda (env new-frame) (set-car! (cdr env) new-frame)))
+
+(define-native
+  extend
+  (lambda (env variables values docstrings)
+    (cons
+      'environment
+      (cons (make-frame variables values docstrings) (cdr env)))))
+
+(define-native
   search-frame
   (lambda (frame var)
     (search-for-binding var (car frame) (cadr frame) 0)))
@@ -9126,6 +9115,21 @@
          bindings
          (cdr variables)
          (+ i 1))))))
+
+(define-native
+  lookup-value-by-lexical-address
+  (lambda (depth offset frames fail k)
+    (let ((bindings (frame-bindings (list-ref frames depth))))
+      (apply-cont2
+        k
+        (binding-value (vector-ref bindings offset))
+        fail))))
+
+(define-native
+  lookup-binding-by-lexical-address
+  (lambda (depth offset frames fail k)
+    (let ((bindings (frame-bindings (list-ref frames depth))))
+      (apply-cont2 k (vector-ref bindings offset) fail))))
 
 (define *use-lexical-address* #t)
 

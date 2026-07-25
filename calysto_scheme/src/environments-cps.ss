@@ -50,11 +50,14 @@
   (lambda (x)
     (and (pair? x) (eq? (car x) 'environment))))
 
-(define make-empty-environment
+;; native: also attaches _lexaddr_vec (a persistent vector, for O(1)
+;; lookup-value-by-lexical-address) to the frame chain -- see Scheme.py.
+(define-native make-empty-environment
   (lambda ()
     (list 'environment (make-frame '() '() '()))))
 
-(define make-initial-environment
+;; native: see make-empty-environment above.
+(define-native make-initial-environment
   (lambda (vars vals docstrings)
     (list 'environment (make-frame vars vals docstrings))))
 
@@ -83,11 +86,17 @@
       (list (list->vector (append bindings (list new-binding)))
 	    (append vars (list new-var))))))
 
-(define set-first-frame!
+;; native: also updates _lexaddr_vec's innermost entry -- see
+;; set_first_frame_b in Scheme.py; this is the only place a frame is
+;; replaced in an existing env without going through extend (every
+;; top-level `(define name ...)` for a not-yet-bound name goes through
+;; here via lookup-binding-in-first-frame -> add-binding).
+(define-native set-first-frame!
   (lambda (env new-frame)
     (set-car! (cdr env) new-frame)))
 
-(define extend
+;; native: also extends _lexaddr_vec -- see make-empty-environment above.
+(define-native extend
   (lambda (env variables values docstrings)
     (cons 'environment (cons (make-frame variables values docstrings) (cdr env)))))
 
@@ -127,12 +136,17 @@
   (lambda (var env)
     (binding-value (search-frame (first-frame env) var))))
 
-(define* lookup-value-by-lexical-address
+;; native: O(1) via _lexaddr_vec instead of list-ref's O(depth) walk --
+;; see Scheme.py's lookup_value_by_lexical_address and the persistent
+;; vector section above make_empty_environment.
+(define-native lookup-value-by-lexical-address
   (lambda (depth offset frames fail k)
     (let ((bindings (frame-bindings (list-ref frames depth))))
       (k (binding-value (vector-ref bindings offset)) fail))))
 
-(define* lookup-binding-by-lexical-address
+;; native: see lookup-value-by-lexical-address above. (No live caller
+;; today -- converted anyway for symmetry; zero risk either way.)
+(define-native lookup-binding-by-lexical-address
   (lambda (depth offset frames fail k)
     (let ((bindings (frame-bindings (list-ref frames depth))))
       (k (vector-ref bindings offset) fail))))

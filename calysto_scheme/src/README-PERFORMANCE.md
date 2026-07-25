@@ -1392,6 +1392,177 @@ where the same kind of wrapper is normally free.
 
 ---
 
+## Phase 10 — O(1) environment lookup by lexical address (persistent vector)
+
+Found via the PyPy JIT trace log (see "Running under PyPy" below): among
+the trampoline's hottest functions were `search_frame`/`search_frames`
+and `lookup_value_by_lexical_address`, alongside a long tail of distinct
+continuation-closure shapes. Digging into *why* those specific functions
+were hot led to a real architectural gap, independent of which Python
+runtime is involved.
+
+### The gap
+
+Environments are represented as a cons-linked list of frames
+(`environments-cps.ss`'s `<env> ::= (environment <frame> ...)`), and even
+the "fast," precomputed-at-parse-time lexical-address lookup path had to
+walk that list one cons cell at a time:
+
+```python
+# list_ref, Scheme.py -- called by lookup-value-by-lexical-address
+def list_ref(lyst, pos):
+    current = lyst
+    while pos != 0:
+        current = current.cdr   # one pointer-chase per level of nesting
+        pos = pos - 1
+    return current.car
+```
+
+Confirmed by direct measurement (nested `let`s, `use-jit #f` to isolate
+the classic trampoline): cost scales linearly with nesting depth, from
+19.16 µs/iteration at depth 1 to 45.46 µs/iteration at depth 800 — a
+clean linear fit (predicted-vs-measured within 1–2% across the whole
+range), confirming this is a real, structural O(depth) cost, not
+incidental noise. It's shared by Phase 2 as well: `_eval_direct`'s own
+`lexical_address_aexp` case does the identical `list_ref(frames(env), d)`
+walk. Only the JIT (Phase 3) is unaffected, since it resolves free
+variables to concrete values once at compile time and never walks an
+environment at runtime.
+
+Why a plain array/stack (the classic "display" technique) doesn't work
+as a replacement: closures capture their defining environment and can
+be called long after that scope "exited," and `call/cc` can resume a
+captured continuation any number of times — both need old environment
+states to remain valid indefinitely while new ones are created elsewhere,
+which a cons chain gives for free (immutable, trivially shared) and a
+mutable array does not.
+
+### The fix
+
+A **persistent vector** — a 32-way branching trie with a tail buffer,
+the same structure Clojure/Scala use for exactly this class of problem
+(fast indexed access *and* full structural sharing) — replacing only the
+lexical-address lookup path. Prototyped and benchmarked standalone first
+(correctness verified via structural-sharing tests against a plain-list
+ground truth) before touching the interpreter: lookup went from
+149,218 ns to 172.9 ns at depth 12,800 (**~863×**), while `extend`
+(building the structure) cost **~2×** more than a plain cons-prepend —
+a real, honest trade-off, not a free lunch.
+
+**Where it lives.** `extend`, `make-empty-environment`,
+`make-initial-environment`, `lookup-value-by-lexical-address`,
+`lookup-binding-by-lexical-address`, and `set-first-frame!` in
+`environments-cps.ss` are now `define-native` (the same mechanism
+`search-frame`'s dict-cache fast path already used), with the real logic
+moved into `Scheme.py`. The vector is attached as a `_lexaddr_vec`
+Python-only attribute on the frame-chain cons cell `frames`/`(cdr env)`
+already returns — the same trick `make_frame` already uses for
+`_search_cache` — so every other consumer (`search-env`,
+`get-variables-from-frames`, everything in `parser-cps.ss`/
+`interpreter-cps.ss`) is completely unaffected, since that cons chain is
+still built exactly as before.
+
+**Two things a naive port would have missed, both real bugs found while
+implementing this, not just theoretical:**
+
+1. **The register-machine compiler treats a `define-native` callee as
+   opaque and stops routing calls to it through the `pc =`/register
+   convention** — it emits a direct Python call with the original
+   CPS-style arguments instead (confirmed directly: `m`'s own
+   `lexical-address-aexp` case changed from setting
+   `depth_reg`/`frames_reg`/`k_reg` then `pc = lookup_value_by_lexical_address`
+   to `return lookup_value_by_lexical_address(depth, offset, frames(env_reg), fail_reg, k)`
+   the moment it was converted). The native replacement has to accept
+   those arguments explicitly and still apply the continuation via
+   `k_reg`/`apply_cont2`, which is unchanged and still reads `k_reg`.
+2. **Phase 2 has its own, separate environment constructor**
+   (`_extend_direct`), independent of the classic trampoline's `extend`.
+   Missing it would leave Phase-2-built environments without the fast
+   path, silently breaking a closure captured under Phase 2 and later
+   invoked via the classic trampoline.
+3. **A top-level `(define name ...)` for a not-yet-bound name replaces
+   the global frame in place** via `set-first-frame!`
+   (`lookup-binding-in-first-frame` → `add-binding` → `set-first-frame!`),
+   entirely bypassing `extend`. Without updating `_lexaddr_vec`'s
+   innermost entry here too, the vector goes stale the instant anyone
+   defines a new top-level name — caught by a real `IndexError` during
+   verification (a new global's binding offset fell outside the *old*,
+   cached frame's bounds), not found by inspection.
+
+**Threshold gating.** Building the vector on every single `extend()`
+measured as a **~13–15% regression** on naive, shallow-nesting recursion
+like `fib` (nesting depth 1–2, never deep enough for O(1) access to earn
+back the extra construction cost). Fixed by tracking depth with a cheap,
+always-maintained integer counter (`_depth`), but only building/extending
+the actual vector once depth exceeds `_ENV_VEC_THRESHOLD` (8) — below
+that, `extend` does exactly what it did before this phase, and lookups
+fall back to the plain `list_ref` walk (cheap anyway at that depth). The
+first `extend` to cross the threshold pays a one-time O(threshold) cost
+to bootstrap the vector from the existing chain; every subsequent
+`extend` on that lineage is incremental.
+
+### Measured impact
+
+| Benchmark | Before Phase 10 | After (no threshold) | After (threshold-gated) |
+|---|---|---|---|
+| Nested `let`s, depth 1–800, trampoline | climbed 1.9s → 4.5s (O(depth)) | flat ~1.8–2.1s | flat ~1.85–1.92s |
+| `fib(26)`, trampoline (`use-jit #f`) | 7.56s | 8.4–8.7s (+13-15%) | 7.9–8.3s (+5-10%) |
+| `fib(20)`, JIT enabled (default) | 0.00096s | 0.00096–0.00108s (unaffected) | 0.00095–0.00104s (unaffected) |
+
+The deep-nesting case (the original motivating scenario — mirrors
+`mi-loop`/mandelbrot from `JIT-IIFE-GAP.md`) has its O(depth) scaling
+eliminated entirely. `fib`'s residual regression under threshold-gating
+is the irreducible cost of maintaining `_depth` on every `extend()` call
+even when it never crosses the threshold (one attribute read, one add,
+one write) — judged not worth chasing further, since it only shows up
+under `(use-jit #f)`, a forced-worst-case synthetic benchmark, not how
+the interpreter runs by default. JIT-enabled code is unaffected in every
+configuration, confirmed empirically, not just by design: it never walks
+an environment at runtime at all.
+
+### What this does and doesn't cover
+
+- **Deliberately does not touch `search-env`/`search-frames`** — the
+  name-based fallback used for references that can't get a lexical
+  address (a function referencing itself, forward references, anything
+  with `(use-lexical-address #f)`). That path must check frames strictly
+  in order for shadowing correctness and can't jump to a known depth, so
+  it can't benefit the way `lookup-value-by-lexical-address` can.
+  Measured directly before deciding this: even a well-optimized
+  persistent-vector sequential iterator (re-descending only every 32
+  elements, not per index) was consistently ~2.5–2.7× *slower* than the
+  cons chain's raw `.cdr` chase at the same depths, so touching this path
+  would make it worse, not better.
+- Global/primitive references generally do get a lexical address (and
+  so do benefit) — confirmed by inspecting `fib`'s own compiled AST
+  directly: `+`/`-`/`<`/`n` all resolve to `lexical-address-aexp`, only
+  `fib`'s self-reference (not yet bound in the frame it's parsed against)
+  falls back to `var-aexp`/name search.
+- Threshold value (8) and branching factor (32, the same choice
+  Clojure/Scala use) were not exhaustively tuned — chosen from the
+  measured break-even point (~10–14 lookups for the vector to pay back
+  its own construction cost) and left with headroom, not fine-tuned
+  further given the marginal additional win available.
+
+### Verified
+
+- Full suite: 442 → 449 passing (7 new tests in
+  `tests/test_env_lexaddr_vec.py`, covering: repeated top-level
+  redefinition, many sequential new top-level defines, 40-level nesting
+  crossing both the trie's branching boundary and `_ENV_VEC_THRESHOLD`,
+  the threshold boundary itself at depths 7/8/9/10 exactly, a closure's
+  captured environment surviving later unrelated redefinitions,
+  `amb`/`choose` backtracking combined with deep lexical nesting, and
+  `call/cc` invoked through deep lexical nesting) — passing on both
+  CPython and PyPy 7.3.15.
+- The full `git worktree`/Chez Scheme pipeline (`compile-ds.ss` →
+  `compile-rm.ss` → `translate_rm.py`) was dry-run on unmodified source
+  first and confirmed byte-for-byte identical to the committed
+  `source-ds.ss`/`source-rm.ss`/`scheme.py`, before any real change was
+  made with it.
+
+---
+
 ## What real Scheme implementations do
 
 For reference, production Scheme systems use similar but deeper techniques:
@@ -1496,6 +1667,16 @@ a combined win larger than either alone (see the tail-loop JIT-on row above:
 ~17.6× on top of gains already in the hundreds-to-thousands-fold range over
 the original interpreter).
 
+**A concrete architectural lead came out of this, not just the
+comparison.** Capturing PyPy's own JIT trace log (`PYPYLOG=jit-log-opt`)
+for the trampoline and pulling out which of this project's functions it
+actually had to trace showed `search_frame`/`search_frames` and
+`lookup_value_by_lexical_address` among the hottest, alongside a long
+tail of distinct continuation-closure shapes. Chasing *why* those
+specifically were hot — not just "the trampoline is generically slow" —
+led to a real, fixable gap in how environments are represented, unrelated
+to which Python runtime is involved: see Phase 10 above.
+
 ### PyPy + JIT vs. the original v1.4.8
 
 To answer "how much faster is all of this, combined, than where the project
@@ -1562,6 +1743,7 @@ paths in `scheme.py` — not projected from the fib table.
 | ~~JIT: drop the forward-ref-cell indirection for self-recursive (non-tail) calls~~ | **Done — see Phase 7 above.** `fib`-shaped naive recursion **~2.3–2.8×** across three scales (`fib(20)`, `fib(30)`, `fib(37)`); tail/mutual-recursion/closure/HOF/`map`/`set!` benchmarks unaffected, as expected | ~~Low~~ |
 | ~~Interpreter: Phase 2's fallback re-executes a closure's entire body, including already-completed side effects, instead of resuming or staying on the trampoline from the point of failure~~ | **Done — see Phase 8 above.** `_is_phase2_safe` gates `apply_proc`'s Phase-2 attempt on a static, transitive proof of safety instead of discovering failure mid-execution; the old silent retry is gone (a soundness gap in the checker would now crash loudly instead). Costs Phase 5/6's speedup for dynamic-dispatch shapes (~1.1–1.85× slower, measured); naive/tail/mutual recursion unaffected. Recovering that speed safely is tracked as a separate follow-up, not bundled with the correctness fix | ~~Medium–High~~ |
 | ~~Run on PyPy~~ | **Measured — see "Running under PyPy" above.** Full test suite (442 tests) passes unmodified under PyPy 7.3.15; JIT-on steady-state gains **~2.1–2.4×** (`fib`, non-tail recursion) to **~60×** (tail loops); a user/deployment decision, not a code change | ~~Zero code changes~~ |
+| ~~O(1) environment lookup by lexical address (persistent vector, replacing the cons-chain's O(depth) walk)~~ | **Done — see Phase 10 above.** Found via PyPy's own JIT trace log, not on this list originally. Eliminates O(depth) scaling entirely for deeply nested `let`s/closures (flat regardless of depth, vs. climbing 1.9s → 4.5s at depth 800); threshold-gated (depth > 8) to avoid a measured ~13-15% regression on shallow naive recursion like `fib`, down to ~5-10% residual, zero effect on JIT'd code | ~~Medium~~ |
 
 **Bonus finding, not in the original list:** `(use-stack-trace #f)` — an
 *already-shipped*, zero-code-change toggle — gives **~10–13%** wall-clock and

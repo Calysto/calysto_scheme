@@ -51,7 +51,7 @@ PY3 = sys.version_info[0] == 3
 # Increase recursion limit for direct-eval fast path (deep Scheme recursion)
 sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
 
-__version__ = "2.1.8"
+__version__ = "2.1.9"
 
 #############################################################
 # Python implementation notes:
@@ -1200,7 +1200,15 @@ def _check_call_arity(op, args):
         raise _SchemeRuntimeError("incorrect number of arguments in application")
 
 def _extend_direct(env, formals, args_list):
-    """Extend environment from a Python list of arg values — no cons list construction."""
+    """Extend environment from a Python list of arg values — no cons list construction.
+
+    Must keep `_depth`/`_lexaddr_vec` (see their definitions above
+    `make_empty_environment`) in sync with `extend`'s: this is Phase 2's
+    own, separate environment constructor, and a closure captured while
+    running under Phase 2 can still be invoked later via the classic
+    trampoline's lookup-value-by-lexical-address, which requires every
+    frame-chain to carry correct tracking regardless of which tier built
+    it."""
     bindings = []
     cache = {}
     vars_cur = formals
@@ -1211,7 +1219,16 @@ def _extend_direct(env, formals, args_list):
         vars_cur = vars_cur.cdr
     frame = cons(Vector(bindings), cons(formals, symbol_emptylist))
     frame._search_cache = cache
-    return cons(symbol_environment, cons(frame, env.cdr))
+    parent_frames = env.cdr
+    frame_chain = cons(frame, parent_frames)
+    new_depth = parent_frames._depth + 1
+    frame_chain._depth = new_depth
+    if new_depth > _ENV_VEC_THRESHOLD:
+        parent_vec = getattr(parent_frames, '_lexaddr_vec', None)
+        if parent_vec is None:
+            parent_vec = _env_vec_build_from_chain(parent_frames)
+        frame_chain._lexaddr_vec = _env_vec_push(parent_vec, frame)
+    return cons(symbol_environment, frame_chain)
 
 def _eval_direct(exp, env):
     """Direct recursive AST interpreter. Raises _TrampolineFallback for unhandled cases.
@@ -1230,8 +1247,10 @@ def _eval_direct(exp, env):
         elif tag is symbol_lexical_address_aexp:
             d   = exp.cdr.car
             off = exp.cdr.cdr.car
-            return binding_value(
-                vector_ref(frame_bindings(list_ref(frames(env), d)), off))
+            frames_ = env.cdr
+            vec = getattr(frames_, '_lexaddr_vec', None)
+            frame = _env_vec_get_by_depth(vec, d) if vec is not None else list_ref(frames_, d)
+            return binding_value(vector_ref(frame_bindings(frame), off))
         elif tag is symbol_var_aexp:
             b = search_env(env, exp.cdr.car)
             if b is False:
@@ -2641,6 +2660,246 @@ def add_binding(new_var, new_binding, frame):
         new_cache[new_var] = new_binding
         new_frame._search_cache = new_cache
     return new_frame
+
+### Persistent vector (32-way trie, tail-buffered) for O(1) environment
+### lookup by lexical address -- see README-PERFORMANCE.md's "Running
+### under PyPy" section for the measurements and design discussion behind
+### this. `lookup-value-by-lexical-address`/`lookup-binding-by-lexical-
+### address` know their target frame's depth exactly (the parser computed
+### it), so a random-access structure helps them; `search-env`/
+### `search-frames` (the name-based fallback for a not-yet-resolvable
+### reference, e.g. a function referencing itself) must check frames
+### strictly in order for shadowing correctness and can't jump to a known
+### depth, and measured *slower* with this structure than the plain cons
+### chain they already use -- so this is deliberately not used there, or
+### anywhere else. It's attached as `_lexaddr_vec` on the frame-chain cons
+### cell `frames`/`(cdr env)` already returns, the same trick `make_frame`
+### already uses for `_search_cache`: every other consumer of that cons
+### chain (search-env, get-variables-from-frames, ...) is unaffected,
+### since the chain is still built exactly as before.
+
+_ENV_VEC_B = 32
+
+class _EnvVecNode(object):
+    __slots__ = ("children",)
+    def __init__(self, children):
+        self.children = children
+
+class _EnvVec(object):
+    __slots__ = ("root", "height", "tail", "count")
+    def __init__(self, root, height, tail, count):
+        self.root = root      # trie of complete B-element leaves, or None
+        self.height = height  # 0 = root is one leaf; N = N internal levels above leaves
+        self.tail = tail      # tuple of 0..B-1 frames not yet folded into root
+        self.count = count    # total frames (root's + len(tail))
+
+_ENV_VEC_EMPTY = _EnvVec(None, 0, (), 0)
+
+def _env_vec_new_leaf_path(height, leaf):
+    if height == 0:
+        return leaf
+    return _EnvVecNode((_env_vec_new_leaf_path(height - 1, leaf),))
+
+def _env_vec_insert_leaf(node, height, leaf_index, new_leaf):
+    if height == 0:
+        return new_leaf
+    sub_capacity = _ENV_VEC_B ** (height - 1)  # leaf-slots per child
+    child_index, rest = divmod(leaf_index, sub_capacity)
+    children = node.children
+    if child_index < len(children):
+        new_child = _env_vec_insert_leaf(children[child_index], height - 1, rest, new_leaf)
+        new_children = children[:child_index] + (new_child,) + children[child_index + 1:]
+    else:
+        new_child = _env_vec_new_leaf_path(height - 1, new_leaf)
+        new_children = children + (new_child,)
+    return _EnvVecNode(new_children)
+
+def _env_vec_push(v, frame):
+    new_tail = v.tail + (frame,)
+    if len(new_tail) < _ENV_VEC_B:
+        return _EnvVec(v.root, v.height, new_tail, v.count + 1)
+    # tail just became exactly full -- fold it into the trie as one leaf
+    new_leaf = _EnvVecNode(new_tail)
+    if v.root is None:
+        return _EnvVec(new_leaf, 0, (), v.count + 1)
+    trie_leaf_count = (v.count - len(v.tail)) // _ENV_VEC_B
+    capacity_leaves = _ENV_VEC_B ** v.height
+    if trie_leaf_count < capacity_leaves:
+        new_root = _env_vec_insert_leaf(v.root, v.height, trie_leaf_count, new_leaf)
+        new_height = v.height
+    else:
+        new_root = _EnvVecNode((v.root, _env_vec_new_leaf_path(v.height, new_leaf)))
+        new_height = v.height + 1
+    return _EnvVec(new_root, new_height, (), v.count + 1)
+
+def _env_vec_get(v, index):
+    trie_count = v.count - len(v.tail)
+    if index >= trie_count:
+        return v.tail[index - trie_count]
+    node = v.root
+    h = v.height
+    while h > 0:
+        sub_elem_capacity = _ENV_VEC_B ** h
+        child_index, index = divmod(index, sub_elem_capacity)
+        node = node.children[child_index]
+        h -= 1
+    return node.children[index]
+
+def _env_vec_get_by_depth(vec, depth):
+    """`depth` counts outward from the innermost frame (index count-1),
+    matching list_ref(frames, depth)'s convention -- depth 0 is the most
+    recently extended frame."""
+    return _env_vec_get(vec, vec.count - 1 - depth)
+
+def _env_vec_set_in_trie(node, height, index, new_value):
+    if height == 0:
+        new_children = node.children[:index] + (new_value,) + node.children[index + 1:]
+        return _EnvVecNode(new_children)
+    sub_elem_capacity = _ENV_VEC_B ** height
+    child_index, rest = divmod(index, sub_elem_capacity)
+    children = node.children
+    new_child = _env_vec_set_in_trie(children[child_index], height - 1, rest, new_value)
+    new_children = children[:child_index] + (new_child,) + children[child_index + 1:]
+    return _EnvVecNode(new_children)
+
+def _env_vec_set(v, index, new_value):
+    """Immutable update-at-index (path-copied, like _env_vec_push).
+    Needed because a frame's *identity* can change without extend()
+    ever running: `(define name ...)` for a not-yet-bound top-level name
+    goes through lookup-binding-in-first-frame -> add-binding (which
+    builds a whole new frame object, since frames are otherwise
+    immutable) -> set-first-frame!, which replaces the innermost frame
+    of an *existing* env in place via set-car! -- the frame-chain cons
+    cell (and therefore which _lexaddr_vec it carries) doesn't change,
+    but which frame object depth 0 refers to does. See
+    set_first_frame_b below, the only caller."""
+    trie_count = v.count - len(v.tail)
+    if index >= trie_count:
+        tail_idx = index - trie_count
+        new_tail = v.tail[:tail_idx] + (new_value,) + v.tail[tail_idx + 1:]
+        return _EnvVec(v.root, v.height, new_tail, v.count)
+    new_root = _env_vec_set_in_trie(v.root, v.height, index, new_value)
+    return _EnvVec(new_root, v.height, v.tail, v.count)
+
+def _env_vec_set_last(v, new_value):
+    return _env_vec_set(v, v.count - 1, new_value)
+
+### Below this depth, a plain list_ref walk is already cheap (a handful of
+### pointer hops) and building/extending the persistent vector would cost
+### more than it saves -- confirmed measured: forcing it on unconditionally
+### made naive-recursion code like `fib` (nesting depth 1-2, never anywhere
+### near this) about 13% *slower*, all of it extend()'s own construction
+### cost, for a lookup speedup it could never earn back. `_depth` is cheap
+### enough (one int, always maintained) to gate on unconditionally; only
+### `_lexaddr_vec` itself -- the more expensive structure -- is deferred.
+_ENV_VEC_THRESHOLD = 8
+
+def _env_vec_build_from_chain(frames_chain):
+    """Build a persistent vector from an existing plain cons-based frame
+    chain (innermost frame first, matching frames()/(cdr env)'s own
+    order) -- used exactly once per lineage, the first time it crosses
+    _ENV_VEC_THRESHOLD, to bootstrap tracking retroactively instead of
+    paying vector-push cost on every extend() from the very first frame."""
+    collected = []
+    cur = frames_chain
+    while isinstance(cur, cons):
+        collected.append(cur.car)
+        cur = cur.cdr
+    vec = _ENV_VEC_EMPTY
+    for frame in reversed(collected):
+        vec = _env_vec_push(vec, frame)
+    return vec
+
+### Native environment constructors -- extend, make_empty_environment,
+### make_initial_environment (the classic/trampoline tier) and
+### _extend_direct (Phase 2's own, separate constructor -- see its own
+### docstring) are the *only* places a new frame-chain is ever built
+### (confirmed by inspecting every environments-cps.ss definition and
+### every call site elsewhere), so keeping all of them in sync is what
+### makes `_depth` a safe, universal invariant (always present, so read
+### with direct attribute access below, not getattr-with-default -- if
+### that invariant is ever violated by a future change, this should fail
+### loudly, not silently fall back to _ENV_VEC_EMPTY and produce a wrong
+### depth count that resolves to silently-incorrect lexical addresses).
+### `_lexaddr_vec` is NOT always present -- see _ENV_VEC_THRESHOLD above
+### -- so it's read with getattr(..., None) everywhere, deliberately.
+
+def make_empty_environment():
+    frame = make_frame(symbol_emptylist, symbol_emptylist, symbol_emptylist)
+    frame_chain = cons(frame, symbol_emptylist)
+    frame_chain._depth = 1
+    return cons(symbol_environment, frame_chain)
+
+def make_initial_environment(vars, vals, docstrings):
+    frame = make_frame(vars, vals, docstrings)
+    frame_chain = cons(frame, symbol_emptylist)
+    frame_chain._depth = 1
+    return cons(symbol_environment, frame_chain)
+
+def extend(env, variables, values, docstrings):
+    new_frame = make_frame(variables, values, docstrings)
+    parent_frames = env.cdr
+    frame_chain = cons(new_frame, parent_frames)
+    new_depth = parent_frames._depth + 1
+    frame_chain._depth = new_depth
+    if new_depth > _ENV_VEC_THRESHOLD:
+        parent_vec = getattr(parent_frames, '_lexaddr_vec', None)
+        if parent_vec is None:
+            parent_vec = _env_vec_build_from_chain(parent_frames)
+        frame_chain._lexaddr_vec = _env_vec_push(parent_vec, new_frame)
+    return cons(symbol_environment, frame_chain)
+
+### Native: must also update _lexaddr_vec's innermost entry (see
+### _env_vec_set's docstring) -- this is the *only* place a frame gets
+### replaced in an existing env without going through extend, and it's
+### how every top-level `(define name ...)` for a not-yet-bound name
+### actually adds the binding (via lookup-binding-in-first-frame ->
+### add-binding -> set-first-frame!).
+def set_first_frame_b(env, new_frame):
+    frame_chain = env.cdr
+    set_car_b(frame_chain, new_frame)
+    vec = getattr(frame_chain, '_lexaddr_vec', None)
+    if vec is not None:
+        frame_chain._lexaddr_vec = _env_vec_set_last(vec, new_frame)
+
+### Native replacements for lookup-value-by-lexical-address/lookup-binding-
+### by-lexical-address. IMPORTANT: because the register-machine compiler
+### treats a define-native callee as opaque, it does NOT register-ize call
+### sites that invoke it -- it emits a direct Python call with the
+### original CPS-style arguments (depth, offset, frames, fail, k) instead
+### of setting depth_reg/offset_reg/frames_reg/fail_reg/k_reg and jumping
+### via `pc = ...` (confirmed directly: m's own lexical-address-aexp case
+### changed from the latter to the former the moment these were converted
+### to define-native). So these take explicit arguments, not zero args
+### reading globals -- and still go through the k_reg/apply_cont2 protocol
+### to actually invoke the continuation, since apply_cont2 itself is
+### unchanged and reads k_reg.
+###
+### lookup_binding_by_lexical_address has no live caller anywhere in the
+### interpreter today (confirmed: `lookup-binding-by-lexical-address`
+### appears nowhere in interpreter-cps.ss/parser-cps.ss/unifier-cps.ss
+### except its own definition) -- converted anyway, for symmetry, since
+### it's zero risk either way.
+
+def lookup_value_by_lexical_address(depth, offset, frames, fail, k):
+    global pc, value1_reg, value2_reg, k_reg
+    vec = getattr(frames, '_lexaddr_vec', None)
+    frame = _env_vec_get_by_depth(vec, depth) if vec is not None else list_ref(frames, depth)
+    bindings = frame_bindings(frame)
+    value2_reg = fail
+    value1_reg = binding_value(vector_ref(bindings, offset))
+    k_reg = k
+    pc = apply_cont2
+
+def lookup_binding_by_lexical_address(depth, offset, frames, fail, k):
+    global pc, value1_reg, value2_reg, k_reg
+    vec = getattr(frames, '_lexaddr_vec', None)
+    frame = _env_vec_get_by_depth(vec, depth) if vec is not None else list_ref(frames, depth)
+    bindings = frame_bindings(frame)
+    value2_reg = fail
+    value1_reg = vector_ref(bindings, offset)
+    k_reg = k
+    pc = apply_cont2
 
 def continuation_object_q(x):
     return (isinstance(x, tuple) and len(x) > 0 and

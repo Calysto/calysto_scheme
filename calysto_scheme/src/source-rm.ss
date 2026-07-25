@@ -104,7 +104,6 @@
 (define filename_reg 'undefined)
 (define filenames_reg 'undefined)
 (define final_reg 'undefined)
-(define frames_reg 'undefined)
 (define generator_reg 'undefined)
 (define gk_reg 'undefined)
 (define handler_reg 'undefined)
@@ -6509,15 +6508,6 @@
   (lambda (x)
     (return* (and (pair? x) (eq? (car x) 'environment)))))
 
-(define make-empty-environment
-  (lambda ()
-    (return* (list 'environment (make-frame '() '() '())))))
-
-(define make-initial-environment
-  (lambda (vars vals docstrings)
-    (return*
-      (list 'environment (make-frame vars vals docstrings)))))
-
 (define first-frame (lambda (env) (return* (cadr env))))
 
 (define first-frame-vars
@@ -6537,18 +6527,6 @@
         (list
           (list->vector (append bindings (list new-binding)))
           (append vars (list new-var)))))))
-
-(define set-first-frame!
-  (lambda (env new-frame) (set-car! (cdr env) new-frame)))
-
-(define extend
-  (lambda (env variables values docstrings)
-    (return*
-      (cons
-        'environment
-        (cons
-          (make-frame variables values docstrings)
-          (cdr env))))))
 
 (define search-env
   (lambda (env variable)
@@ -6572,27 +6550,6 @@
   (lambda (var env)
     (return*
       (binding-value (search-frame (first-frame env) var)))))
-
-(define*
-  lookup-value-by-lexical-address
-  (lambda ()
-    (let ((bindings 'undefined))
-      (set! bindings
-        (frame-bindings (list-ref frames_reg depth_reg)))
-      (set! value2_reg fail_reg)
-      (set! value1_reg
-        (binding-value (vector-ref bindings offset_reg)))
-      (set! pc apply-cont2))))
-
-(define*
-  lookup-binding-by-lexical-address
-  (lambda ()
-    (let ((bindings 'undefined))
-      (set! bindings
-        (frame-bindings (list-ref frames_reg depth_reg)))
-      (set! value2_reg fail_reg)
-      (set! value1_reg (vector-ref bindings offset_reg))
-      (set! pc apply-cont2))))
 
 (define*
   lookup-value
@@ -8146,11 +8103,9 @@
                   (let ((depth 'undefined) (offset 'undefined))
                     (set! offset (list-ref exp_reg 2))
                     (set! depth (list-ref exp_reg 1))
-                    (set! k_reg k)
-                    (set! frames_reg (frames env_reg))
-                    (set! offset_reg offset)
-                    (set! depth_reg depth)
-                    (set! pc lookup-value-by-lexical-address))
+                    (return*
+                      (lookup-value-by-lexical-address depth offset
+                        (frames env_reg) fail_reg k)))
                   (if (eq? (car exp_reg) 'func-aexp)
                       (let ((exp 'undefined))
                         (set! exp (list-ref exp_reg 1))
@@ -10420,6 +10375,26 @@
 (define init-fail (make-fail <fail-1>))
 
 (define-native
+  make-empty-environment
+  (lambda () (list 'environment (make-frame '() '() '()))))
+
+(define-native
+  make-initial-environment
+  (lambda (vars vals docstrings)
+    (list 'environment (make-frame vars vals docstrings))))
+
+(define-native
+  set-first-frame!
+  (lambda (env new-frame) (set-car! (cdr env) new-frame)))
+
+(define-native
+  extend
+  (lambda (env variables values docstrings)
+    (cons
+      'environment
+      (cons (make-frame variables values docstrings) (cdr env)))))
+
+(define-native
   search-frame
   (lambda (frame var)
     (search-for-binding var (car frame) (cadr frame) 0)))
@@ -10436,6 +10411,27 @@
               bindings
               (cdr variables)
               (+ i 1))))))
+
+(define-native
+  lookup-value-by-lexical-address
+  (lambda (depth offset frames fail k)
+    (let ((bindings 'undefined))
+      (set! bindings (frame-bindings (list-ref frames depth)))
+      (set! value2_reg fail)
+      (set! value1_reg
+        (binding-value (vector-ref bindings offset)))
+      (set! k_reg k)
+      (set! pc apply-cont2))))
+
+(define-native
+  lookup-binding-by-lexical-address
+  (lambda (depth offset frames fail k)
+    (let ((bindings 'undefined))
+      (set! bindings (frame-bindings (list-ref frames depth)))
+      (set! value2_reg fail)
+      (set! value1_reg (vector-ref bindings offset))
+      (set! k_reg k)
+      (set! pc apply-cont2))))
 
 (define *use-lexical-address* #t)
 

@@ -1,3 +1,34 @@
+## Release 2.1.9 (Jul 25, 2026)
+
+	* Verified PyPy 7.3.15 compatibility: full test suite passes
+	  unmodified, no code changes needed. The JIT compiles Scheme
+	  closures to Python source via compile()/exec() -- a Python-language
+	  builtin, not a CPython API -- so PyPy's own tracing JIT stacks with
+	  it rather than competing (~2.1-2.4x on non-tail recursion, ~60x on
+	  tail loops, steady-state). See README-PERFORMANCE.md's "Running
+	  under PyPy".
+	* Made `calysto_scheme/__init__.py`'s Jupyter-kernel import and
+	  Scheme.py's `yasi` import lazy -- both previously ran on every
+	  `from calysto_scheme import scheme` regardless of whether the
+	  kernel or REPL pretty-printing was ever used. Cuts steady-state
+	  import time ~24x on CPython (0.216s -> 0.009s) and ~25x on PyPy
+	  (0.567s -> 0.022s).
+	* Replaced the environment cons-chain's O(depth) walk for
+	  lexical-address lookup with a persistent vector (32-way trie, tail
+	  buffer), giving O(1) access past a depth-8 threshold -- found via
+	  PyPy's own JIT trace log, which showed `search_frame`/
+	  `lookup_value_by_lexical_address` among the hottest functions in
+	  the classic trampoline. Eliminates O(depth) scaling for deeply
+	  nested `let`s/closures; threshold-gated to avoid a ~13-15%
+	  regression measured on shallow naive recursion like `fib` (down to
+	  ~5-10%, and only under `(use-jit #f)` -- JIT'd code is unaffected).
+	  `extend`, `make-empty-environment`, `make-initial-environment`,
+	  `lookup-value-by-lexical-address`, `lookup-binding-by-lexical-address`,
+	  and `set-first-frame!` in `environments-cps.ss` are now
+	  `define-native`. See README-PERFORMANCE.md's Phase 10 for the full
+	  account, including two real bugs found while implementing it. 7 new
+	  pinned regression tests in `tests/test_env_lexaddr_vec.py`.
+
 ## Release 2.1.6 (Jul 23, 2026)
 
 	* Added `(use-jit [BOOLEAN])`, a new primitive mirroring
