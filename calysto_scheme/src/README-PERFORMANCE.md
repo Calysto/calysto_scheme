@@ -1737,6 +1737,78 @@ Caveats:
 
 ---
 
+## Running under CPython's own JIT (`PYTHON_JIT=1`)
+
+CPython 3.13 added an experimental tier-2 JIT (continued in 3.14); it's
+compiled in but off by default even in builds that support it — confirmed
+here via a conda `py314` env running CPython 3.14.1 (Anaconda build):
+`sys._jit.is_available()` → `True`, `sys._jit.is_enabled()` → `False`
+until `PYTHON_JIT=1` is set in the environment, at which point it flips to
+`True`. No source changes are needed either way — like the PyPy section
+above, this is purely a question of which runtime executes the Python
+source this project's own JIT already generates via `compile()`/`exec()`.
+
+### How CPython's tier-2 JIT differs from PyPy's
+
+PyPy's JIT is a general tracing JIT: it watches *any* hot function,
+recursive calls included, and can compile a trace through them. CPython's
+tier-2 JIT is narrower by design — it sits on top of the specializing
+adaptive interpreter and only compiles machine code for loops it detects
+as **repeated backward jumps in bytecode**. A hot function that recurses
+via ordinary calls (no backward jump in its own bytecode) never triggers
+it, no matter how many times it's called.
+
+### Measured: `scripts/benchmark.py`, 5 runs per config, averaged
+
+| Benchmark | JIT off | JIT on | ratio |
+|---|---|---|---|
+| `fib(30)`, non-tail recursion | 0.0711s | 0.0707s | 1.00× |
+| **tail-recursive counting loop, 3M iters** | **0.1032s** | **0.0805s** | **1.28×** |
+| mutual tail-recursion, 50K | 0.7203s | 0.7259s | 0.99× |
+| closures allocated per call, 20000 | 0.8886s | 0.8979s | 0.99× |
+| nested closures, 5000 | 0.2639s | 0.2598s | 1.02× |
+| HOF (parameter called as operator), 5000 | 0.3042s | 0.3057s | 1.00× |
+| `map` + closure, 20000 elts | 0.1014s | 0.1061s | 0.96× |
+| stateful loop (forced trampoline), 20000 | 0.5197s | 0.5543s | 0.94× |
+
+Only the tail-recursive counting-loop benchmark shows a repeatable win; the
+rest are within this document's normal ~±5% run-to-run noise band. Confirmed
+the loop result isn't a fluke by scaling it independently (a standalone
+`count-to` tail loop, not the shared benchmark harness):
+
+| Iterations | JIT off | JIT on | ratio |
+|---|---|---|---|
+| 3,000,000 | 0.0969s | 0.0760s | 1.28× |
+| 10,000,000 | 0.3409s | 0.2501s | 1.36× |
+| 30,000,000 | 1.0257s | 0.8306s | 1.24× |
+
+### Why only the tail loop benefits
+
+Phase 4 (above) already flattens self-tail-recursive Scheme functions into
+a real Python `while True:` loop in the JIT-generated source — that loop's
+backward jump is the *only* shape in this benchmark suite that CPython's
+tier-2 JIT can detect and trace. `fib`, mutual recursion, per-call
+closures, HOF, and `map` all compile (via this project's own AST-to-Python
+JIT) into ordinary recursive Python function calls with no backward jump
+of their own — nothing for CPython's tracer to grab onto, so its JIT adds
+tracing overhead for no payoff on those shapes (occasionally net negative,
+per the table). The forced-trampoline benchmark also sees no benefit: its
+`while pc:` dispatch loop is a real bytecode loop, but the call target
+varies every iteration (megamorphic), which is exactly what a specializing
+JIT can't specialize.
+
+**Bottom line:** unlike PyPy — a full alternate interpreter whose tracing
+JIT stacks a general-purpose second optimization on top of this project's
+JIT — CPython's own experimental JIT only pays off on the one code shape
+in this codebase that happens to compile to a literal loop (Phase 4's
+tail-call flattening), and even there the gain (~1.2–1.4×) is far smaller
+than PyPy's (~60× on the equivalent tail loop, see above). It's still an
+opt-in, off-by-default feature upstream as of 3.14 — worth re-checking as
+CPython's tier-2 JIT matures and widens what it can trace, but not
+something this project should assume or design around today.
+
+---
+
 ## Potential further improvements
 
 Measured (not estimated) on this machine, see methodology after the table.

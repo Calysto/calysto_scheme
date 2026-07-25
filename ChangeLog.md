@@ -28,6 +28,14 @@
 	  `define-native`. See README-PERFORMANCE.md's Phase 10 for the full
 	  account, including two real bugs found while implementing it. 7 new
 	  pinned regression tests in `tests/test_env_lexaddr_vec.py`.
+	* Measured CPython 3.14's experimental tier-2 JIT (`PYTHON_JIT=1`,
+	  opt-in and off by default) against the benchmark suite: unlike
+	  PyPy's general tracing JIT above, it only speeds up the one shape
+	  that compiles to a literal Python loop -- the tail-call-flattened
+	  loop from Phase 4 (~1.2-1.4x) -- since it only traces loops with a
+	  backward jump in bytecode, and non-tail recursion (fib, closures,
+	  HOF, mutual recursion) never forms one. No code changes; see
+	  README-PERFORMANCE.md's "Running under CPython's own JIT".
 
 ## Release 2.1.6 (Jul 23, 2026)
 
