@@ -18,13 +18,28 @@ import sys
 import os
 import io
 
-try:
-    import yasi
-    yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
-    opts = yasi.parse_args([])
-    opts.dialect = "scheme"
-except:
-    yasi = None
+## yasi is only used by ready_to_eval()'s REPL-continuation check, so it's
+## imported lazily (see _get_yasi()) instead of at module load -- importing
+## it eagerly here cost every program that just wants to run Scheme code
+## a real, measured chunk of process-startup time for a feature most of
+## them never touch.
+_yasi_module = None
+_yasi_opts = None
+_yasi_load_attempted = False
+
+def _get_yasi():
+    global _yasi_module, _yasi_opts, _yasi_load_attempted
+    if not _yasi_load_attempted:
+        _yasi_load_attempted = True
+        try:
+            import yasi
+            yasi.IF_LIKE = [] ## removed "if" so indents then-part and else-part the same
+            _yasi_opts = yasi.parse_args([])
+            _yasi_opts.dialect = "scheme"
+            _yasi_module = yasi
+        except:
+            _yasi_module = None
+    return _yasi_module, _yasi_opts
 
 
 # To trick some systems into believing input is interactive:
@@ -3128,6 +3143,7 @@ def unbox(item):
     return item.item
 
 def ready_to_eval(text):
+    yasi, opts = _get_yasi()
     if yasi:
         data = yasi.indent_code(text + "\n(", opts) ## where does next expression go?
         if data["indented_code"][-1] == "(":
