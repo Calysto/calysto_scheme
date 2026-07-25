@@ -1410,6 +1410,142 @@ bytecode) that runs without interpreter overhead.
 
 ---
 
+## Running under PyPy
+
+### How the JIT runs under PyPy — it doesn't target CPython at all
+
+`_jit_compile_proc` (`Scheme.py:1372`) doesn't compile to a VM or a bytecode
+format. It walks the Scheme closure's AST and assembles a plain **Python
+source string** — literally building up lines like `"def _jit_fn(n):"`,
+`"    while True:"`, etc. (`Scheme.py:1394–1416`) — then hands that string to
+the built-in `compile(fn_src, '<scheme-jit>', 'exec')` followed by
+`exec(...)` (`Scheme.py:1419`). No bytecode manipulation, no `ast` module, no
+CPython C-API calls: string concatenation, then two language builtins.
+
+`compile()`/`exec()` are part of the Python *language* — every conforming
+implementation provides them — not a CPython-specific API, and nothing in
+this code path branches on which Python is running it. So the JIT compiles
+to **Python source text**, and target-specific compilation happens one level
+down, invisibly, inside whichever `exec()` receives that text:
+
+- Under CPython, `compile()` produces CPython bytecode; `exec()` runs it in
+  CPython's bytecode interpreter.
+- Under PyPy, the identical call — same string, same code path — produces
+  PyPy's own internal representation instead, run by PyPy's interpreter.
+
+This is also why PyPy's own tracing JIT can speed up the generated code
+further: a function produced by `exec()` is completely ordinary from the
+runtime's point of view, indistinguishable from one defined statically in a
+`.py` file. Once `_jit_fn` is called enough times to cross PyPy's hotness
+threshold, PyPy traces and compiles it to machine code exactly like any
+other hot function — a second, independent optimization stacked on top of
+this project's own AST-to-Python restructuring, with neither side aware the
+other exists.
+
+### Measured: full test suite and benchmarks under PyPy 7.3.15
+
+Verified by actually installing PyPy 7.3.15 (Python 3.9-compatible) in an
+isolated virtualenv and running this project's test suite and benchmark
+scripts against it, unmodified — no code changes were needed anywhere in
+`Scheme.py`/`interpreter-cps.ss`/`translate_rm.py`.
+
+- **Correctness:** full pytest suite (442 tests, including the JIT
+  differential fuzzers and `amb`/`choose` backtracking edge cases) passes
+  unmodified under PyPy.
+- **Dependencies:** `metakernel`, `yasi`, and the transitive Jupyter stack
+  (`jupyter_client`, `ipykernel`, `pyzmq`) all installed and imported
+  cleanly — `pyzmq` shipped a prebuilt PyPy wheel
+  (`pp39-pypy39_pp73-manylinux...`). `numpy` (only needed for
+  notebook/`%plot` features, not the core interpreter) was not exercised by
+  this pass and remains untested on PyPy.
+
+**JIT enabled** (steady-state, measured in-process with `current-time` after
+a warmup call, same methodology as the cross-version table above):
+
+| Benchmark | CPython | PyPy | PyPy vs. CPython |
+|---|---|---|---|
+| `fib(32)`, non-tail recursion | ~0.19–0.22s | ~0.08–0.10s | **~2.1–2.4×** |
+| tail loop, 30,000,000 iters | ~1.14s | ~0.019s | **~60×** |
+
+**`(use-jit #f)`** — forcing every call onto the plain register-machine
+trampoline, Phase 2/JIT bypassed entirely — measured single-shot:
+
+| Benchmark | CPython, JIT off | PyPy, JIT off | PyPy vs. CPython (trampoline) |
+|---|---|---|---|
+| `fib(26)` | 7.564s | 0.797s | **~9.5×** |
+| tail loop, 2,000,000 iters | 51.414s | 3.771s | **~13.6×** |
+
+For scale, the same two benchmarks with the JIT enabled:
+
+| Benchmark | CPython, JIT on | PyPy, JIT on |
+|---|---|---|
+| `fib(26)` | 0.0109s | 0.0141s (single-shot warmup noise; see the fib(32) steady-state row above for the honest ratio) |
+| tail loop, 2,000,000 iters | 0.0658s | 0.0037s (**~17.6×** vs. CPython, JIT on) |
+
+**Interpretation:** PyPy is dramatically better than CPython at running the
+*plain trampoline* (9.5–13.6×) — expected, since the trampoline is exactly
+the polymorphic, heap-allocating, generic-dispatch interpreter loop PyPy's
+tracing JIT specializes best. But this project's own JIT still wins by a
+landslide over PyPy-on-trampoline: PyPy's trampoline `fib(26)` (0.797s) is
+still ~57× slower than PyPy running the *JIT'd* version (0.014s); on the
+tail loop, PyPy-trampoline (3.77s) is over 1000× slower than PyPy-JIT'd
+(0.0037s). The two optimizations aren't substitutes for each other — PyPy
+helps the slow path a lot, but this project's JIT removing that path's
+overhead structurally is still categorically bigger, and the two stack for
+a combined win larger than either alone (see the tail-loop JIT-on row above:
+~17.6× on top of gains already in the hundreds-to-thousands-fold range over
+the original interpreter).
+
+### PyPy + JIT vs. the original v1.4.8
+
+To answer "how much faster is all of this, combined, than where the project
+started": `v1.4.8` (the pre-JIT baseline; no performance-relevant changes
+exist between `v1.4.6`, `v1.4.7`, and `v1.4.8`, so this baseline applies to
+all three) was checked out into its own `git worktree` and measured directly,
+in-process, with the same `current-time` methodology used throughout this
+document — not reused from the older cross-version table above, since
+machine/environment differences make numbers from different sessions
+unsafe to combine directly.
+
+Two of the four sizes below (`fib(32)`; the 30,000,000-iteration loop) would
+take `v1.4.8` an estimated 10–55 minutes each to actually run. Rather than
+block on that, those two rows are **extrapolated** from a per-call/
+per-iteration rate measured at a smaller, fast-to-run size on the same
+`v1.4.8` checkout — marked explicitly, following this document's existing
+practice of labeling calculated estimates separately from timed runs (see
+"Methodology" below).
+
+| Benchmark | v1.4.8 | v2.1.8 + CPython JIT | v2.1.8 + PyPy JIT | PyPy+JIT speedup over v1.4.8 |
+|---|---|---|---|---|
+| `fib(20)` | 2.348s (measured) | 0.00096s (measured) | too small/noisy — PyPy's own JIT never warms up in 21,891 calls | ~2,454× (CPython+JIT figure) |
+| `fib(26)` | 35.517s (measured) | 0.0109s | 0.0141s | **~2,519×** |
+| `fib(32)` | **~637s** (extrapolated: 7,049,155 calls × 90.4µs/call, rate from the `fib(26)` measurement) | ~0.19–0.22s | ~0.08–0.10s | **~7,080×** |
+| tail loop, 2,000,000 iters | **~222s** (extrapolated: 2,000,000 × 111µs/iter, rate from a 200,000-iteration measurement) | 0.0658s | 0.0037s | **~60,000×** |
+| tail loop, 30,000,000 iters | **~3,331s / ~55.5 min** (extrapolated, same rate) | 1.14s | 0.019s | **~175,300×** |
+
+**Bottom line: roughly 2,500× to 175,000×, depending on the shape of code.**
+Non-tail recursion (`fib`) lands in the low-thousands×, since even PyPy's
+JIT can't eliminate the per-call closure/continuation cost this project's
+own JIT removes structurally. Tail loops land at tens-of-thousands to
+~175,000×, because that's exactly the shape both this project's tail-call
+flattening *and* PyPy's tracing JIT are individually strongest at, and they
+stack multiplicatively rather than substitute for one another.
+
+Caveats:
+- The `fib(32)`/30M-loop `v1.4.8` numbers are calculated projections, not
+  timed runs. The linearity assumption is solid for the tail loop (already
+  validated at two points in the cross-version table above: 3,000 vs. 6,000
+  iterations scaled linearly) and reasonable for `fib` (constant per-call
+  dispatch cost regardless of which Fibonacci number is being computed), but
+  they remain extrapolations.
+- `fib(20)`/`fib(26)`'s PyPy figures are single-shot (first call), not
+  steady-state after a warmup call — small enough that PyPy's own JIT may
+  not have fully engaged, which is why `fib(20)`'s PyPy number isn't
+  reportable at all. The `fib(32)` row is the trustworthy one for
+  PyPy-on-recursion, since it's steady-state after warmup.
+
+---
+
 ## Potential further improvements
 
 Measured (not estimated) on this machine, see methodology after the table.
@@ -1425,7 +1561,7 @@ paths in `scheme.py` — not projected from the fib table.
 | ~~JIT: allow a parameter used in operator position~~ | **Done — see Phase 6 above.** `(define (apply-twice f x) (f (f x)))`-shaped functions now JIT-compile; ~0.39s → ~0.19s on a 4,800-call benchmark (work time drops to immeasurably small, consistent with other JIT gains here). Surfaced and fixed a related missed-optimization bug in `_jit_call` itself | ~~Low~~ |
 | ~~JIT: drop the forward-ref-cell indirection for self-recursive (non-tail) calls~~ | **Done — see Phase 7 above.** `fib`-shaped naive recursion **~2.3–2.8×** across three scales (`fib(20)`, `fib(30)`, `fib(37)`); tail/mutual-recursion/closure/HOF/`map`/`set!` benchmarks unaffected, as expected | ~~Low~~ |
 | ~~Interpreter: Phase 2's fallback re-executes a closure's entire body, including already-completed side effects, instead of resuming or staying on the trampoline from the point of failure~~ | **Done — see Phase 8 above.** `_is_phase2_safe` gates `apply_proc`'s Phase-2 attempt on a static, transitive proof of safety instead of discovering failure mid-execution; the old silent retry is gone (a soundness gap in the checker would now crash loudly instead). Costs Phase 5/6's speedup for dynamic-dispatch shapes (~1.1–1.85× slower, measured); naive/tail/mutual recursion unaffected. Recovering that speed safely is tracked as a separate follow-up, not bundled with the correctness fix | ~~Medium–High~~ |
-| Run on PyPy | 5–20× additional on top of existing gains (measured ~2.5×–10× on real workloads) — a user/deployment decision, not pursued further here | Zero code changes |
+| ~~Run on PyPy~~ | **Measured — see "Running under PyPy" above.** Full test suite (442 tests) passes unmodified under PyPy 7.3.15; JIT-on steady-state gains **~2.1–2.4×** (`fib`, non-tail recursion) to **~60×** (tail loops); a user/deployment decision, not a code change | ~~Zero code changes~~ |
 
 **Bonus finding, not in the original list:** `(use-stack-trace #f)` — an
 *already-shipped*, zero-code-change toggle — gives **~10–13%** wall-clock and
