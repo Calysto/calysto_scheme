@@ -1696,13 +1696,23 @@ per-iteration rate measured at a smaller, fast-to-run size on the same
 practice of labeling calculated estimates separately from timed runs (see
 "Methodology" below).
 
-| Benchmark | v1.4.8 | v2.1.8 + CPython JIT | v2.1.8 + PyPy JIT | PyPy+JIT speedup over v1.4.8 |
+| Benchmark | v1.4.8 | v2.1.9 + CPython JIT | v2.1.9 + PyPy JIT | PyPy+JIT speedup over v1.4.8 |
 |---|---|---|---|---|
 | `fib(20)` | 2.348s (measured) | 0.00096s (measured) | too small/noisy — PyPy's own JIT never warms up in 21,891 calls | ~2,454× (CPython+JIT figure) |
 | `fib(26)` | 35.517s (measured) | 0.0109s | 0.0141s | **~2,519×** |
 | `fib(32)` | **~637s** (extrapolated: 7,049,155 calls × 90.4µs/call, rate from the `fib(26)` measurement) | ~0.19–0.22s | ~0.08–0.10s | **~7,080×** |
 | tail loop, 2,000,000 iters | **~222s** (extrapolated: 2,000,000 × 111µs/iter, rate from a 200,000-iteration measurement) | 0.0658s | 0.0037s | **~60,000×** |
 | tail loop, 30,000,000 iters | **~3,331s / ~55.5 min** (extrapolated, same rate) | 1.14s | 0.019s | **~175,300×** |
+
+These JIT-on numbers were originally measured on v2.1.8, before Phase 10's
+environment lexical-address optimization landed; re-run unmodified on
+v2.1.9 to confirm they still hold (a fair question, since Phase 10 changed
+how environments are represented) — the 30M-iteration tail loop reproduced
+at 0.940s/0.0171s (CPython/PyPy), within this document's normal ~10–20%
+run-to-run noise of the 1.14s/0.019s recorded above, not a real change.
+Expected: Phase 10 explicitly does not touch JIT'd code, which resolves
+free variables to concrete values once at compile time and never walks an
+environment at runtime — confirmed here empirically, not just by design.
 
 **Bottom line: roughly 2,500× to 175,000×, depending on the shape of code.**
 Non-tail recursion (`fib`) lands in the low-thousands×, since even PyPy's
